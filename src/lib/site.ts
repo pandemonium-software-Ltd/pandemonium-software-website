@@ -2,7 +2,7 @@ export const site = {
   name: "Pandemonium Software Ltd",
   shortName: "Pandemonium",
   tagline: "Software Ltd",
-  url: "https://pandemonium-software-website.vercel.app",
+  url: "https://pandemonium-software-website.pages.dev",
   description:
     "Professional websites for UK trades and small businesses. Proudly Oxfordshire-based, serving the UK. No hassle, no tech headaches, just a site that brings in work.",
   contactEmail: "benpandher@proton.me",

@@ -121,7 +121,7 @@ export default function EnquiryForm() {
       "What I'm after:",
       form.message.trim(),
       "",
-      "— Sent from pandemonium-software-website.vercel.app",
+      "— Sent from pandemonium-software-website.pages.dev",
     ].filter(Boolean) as string[];
 
     const mailto = `mailto:${site.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
