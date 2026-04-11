@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PricingCalculator from "@/components/PricingCalculator";
+import OptionalExtras from "@/components/OptionalExtras";
 import FoundingMemberStrip from "@/components/FoundingMemberStrip";
 import Faq from "@/components/Faq";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Pricing — Flat-fee websites for Oxfordshire tradesmen",
+  title: "Pricing — Flat-fee websites for UK trades and small businesses",
   description:
-    "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £149 setup and £19 per month. No surprises.",
+    "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £129 setup and £19 per month. No surprises.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "Pricing — Pandemonium Software Ltd",
     description:
-      "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £149 setup and £19 per month.",
+      "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £129 setup and £19 per month.",
     url: `${site.url}/pricing`,
   },
 };
@@ -44,6 +45,8 @@ export default function PricingPage() {
           </div>
 
           <PricingCalculator />
+
+          <OptionalExtras />
 
           <div className="mt-14 rounded-2xl bg-cream-100 p-8 md:p-10">
             <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">

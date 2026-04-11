@@ -18,16 +18,18 @@ const MODULES: Module[] = [
   {
     id: "base",
     name: "Base website",
-    setup: 149,
+    setup: 129,
     monthly: 19,
     blurb:
       "Everything you need to look professional online. Mobile-optimised, hosted properly, and looked after for you.",
     mandatory: true,
     includes: [
-      "Professional mobile-optimised website",
-      "Hosting, security and maintenance",
+      "Five pages: Home, Services, Gallery, About, Contact",
+      "Professional mobile-optimised design",
+      "Your own domain, your own hosting — you own it, always",
+      "GDPR-compliant privacy policy, built in",
       "Monthly performance report",
-      "Minor content changes (up to 30 minutes / month)",
+      "Minor content changes (up to 30 minutes a month)",
       "Oxfordshire-based support",
     ],
   },
@@ -37,7 +39,7 @@ const MODULES: Module[] = [
     setup: 39,
     monthly: 4,
     blurb:
-      "Let customers book jobs directly from your website. Connects to your calendar, sends automatic confirmations, reduces phone tag.",
+      "Let customers book jobs directly from your website. Syncs with your calendar, sends automatic confirmations and reminders, cuts phone tag.",
   },
   {
     id: "enquiry",
@@ -45,7 +47,7 @@ const MODULES: Module[] = [
     setup: 39,
     monthly: 4,
     blurb:
-      "Capture enquiries through a proper contact form. Spam-protected, goes straight to your email, never miss a lead.",
+      "A branded contact form on your site with spam protection. Enquiries land straight in your inbox — never miss a lead.",
   },
   {
     id: "newsletter",
@@ -53,7 +55,7 @@ const MODULES: Module[] = [
     setup: 39,
     monthly: 6,
     blurb:
-      "Collect customer emails and send monthly offers or seasonal reminders. Keeps your business top of mind for repeat work.",
+      "Collect customer emails and send monthly offers or seasonal reminders. I draft each campaign for you to review — no writer's block, just review and send.",
   },
 ];
 
