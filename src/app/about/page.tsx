@@ -116,10 +116,10 @@ export default function AboutPage() {
                 See what&apos;s included
               </Link>
               <Link
-                href={site.contactPath}
+                href={site.enquiryPath}
                 className="btn-secondary ml-3"
               >
-                Contact us now
+                Start your enquiry
               </Link>
             </p>
           </div>

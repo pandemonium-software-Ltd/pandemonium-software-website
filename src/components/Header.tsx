@@ -34,10 +34,10 @@ export default function Header() {
             </Link>
           ))}
           <Link
-            href={site.contactPath}
+            href={site.enquiryPath}
             className="btn-primary !py-2.5 !text-[0.95rem]"
           >
-            Contact us now
+            Start your enquiry
           </Link>
         </nav>
 
@@ -95,11 +95,11 @@ export default function Header() {
               </Link>
             ))}
             <Link
-              href={site.contactPath}
+              href={site.enquiryPath}
               onClick={() => setOpen(false)}
               className="btn-primary mt-2 w-full"
             >
-              Contact us now
+              Start your enquiry
             </Link>
           </nav>
         </div>

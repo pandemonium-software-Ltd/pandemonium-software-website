@@ -60,7 +60,7 @@ export default function PricingPage() {
                 </p>
               </div>
               <Link
-                href={site.contactPath}
+                href={site.enquiryPath}
                 className="btn-primary justify-self-start md:justify-self-end"
               >
                 Get started
@@ -127,19 +127,33 @@ export default function PricingPage() {
                   ),
                 },
                 {
-                  q: "Who owns everything?",
+                  q: "Who owns my website?",
                   a: (
                     <>
                       <p>
-                        You do. Always. That means your domain name, your
-                        written content, your photos, your Google Business
-                        listing, and the website files themselves.
+                        You do. Completely. Always. That means your domain
+                        name, your written content, your photos, your Google
+                        Business listing, your Cloudflare Pages hosting
+                        account, and the website files themselves. Everything.
                       </p>
                       <p className="mt-3">
-                        If you ever decide to leave us, we hand everything
-                        over — no hostage fees, no silly handover charges.
+                        If you ever decide to leave us, we hand over any
+                        credentials we were holding and the site carries on
+                        running — no hostage fees, no silly handover charges.
                       </p>
                     </>
+                  ),
+                },
+                {
+                  q: "What if I need changes later?",
+                  a: (
+                    <p>
+                      Your monthly fee includes 30 minutes of content changes
+                      per month — a new phone number, a swapped photo, a
+                      fresh testimonial, a price update. Bigger changes like
+                      new pages or redesigns we quote separately and fairly
+                      before any work starts.
+                    </p>
                   ),
                 },
                 {
@@ -165,26 +179,72 @@ export default function PricingPage() {
                   ),
                 },
                 {
-                  q: "What’s included in the monthly?",
+                  q: "Why a monthly fee?",
                   a: (
                     <>
                       <p>Your monthly fee covers:</p>
                       <ul className="mt-3 ml-5 list-disc space-y-1.5 text-[1.05rem]">
-                        <li>Hosting</li>
-                        <li>Maintenance</li>
-                        <li>Security updates</li>
-                        <li>Monthly performance report</li>
+                        <li>Maintenance, security and dependency updates</li>
+                        <li>A monthly performance report, in plain English</li>
                         <li>
-                          Minor content changes (up to 30 minutes per month)
+                          30 minutes of content changes per month
                         </li>
-                        <li>Oxfordshire-based support</li>
+                        <li>
+                          Oversight of your hosting (which runs on your own
+                          free Cloudflare Pages account)
+                        </li>
+                        <li>UK-based support from a real person</li>
                       </ul>
                       <p className="mt-4">
-                        Anything bigger than a 30-minute job — a new page,
-                        a section redesign, a custom feature — we quote for
-                        separately and fairly before any work starts.
+                        Anything bigger than a 30-minute content job — a new
+                        page, a section redesign, a custom feature — we quote
+                        for separately and fairly before any work starts.
                       </p>
                     </>
+                  ),
+                },
+                {
+                  q: "What about hosting costs?",
+                  a: (
+                    <>
+                      <p>
+                        None. Your website runs on Cloudflare Pages under
+                        your own account, which is{" "}
+                        <strong>free forever for business use</strong>. No
+                        hidden hosting bills sneaking up on you in month six.
+                      </p>
+                      <p className="mt-3">
+                        We set it up for you during the Onboarding Hub and
+                        you keep the account. If you ever part ways with us,
+                        your site carries on running exactly the same.
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  q: "What if I'm not in Oxfordshire?",
+                  a: (
+                    <p>
+                      No problem. Oxfordshire is our home — it&apos;s where
+                      we live, where our first clients are, and where our
+                      local knowledge runs deep. But the work happens over
+                      email, so where you&apos;re based in the UK makes no
+                      practical difference. A plumber in Truro gets the same
+                      site as a plumber in Thame.
+                    </p>
+                  ),
+                },
+                {
+                  q: "Can I cancel anytime?",
+                  a: (
+                    <p>
+                      Yes — 30 days&apos; written notice, by email, and
+                      you&apos;re out. No exit fees, no &quot;but wait&quot;
+                      calls. You keep your website, your domain, your
+                      Cloudflare Pages account, and everything in them. We
+                      hand over any credentials we were holding and part on
+                      good terms.
+                    </p>
                   ),
                 },
                 {
@@ -202,7 +262,7 @@ export default function PricingPage() {
                         oxford-garden-co-demo.vercel.app
                       </a>
                       . Your site won&apos;t be a copy — we&apos;ll build
-                      something that fits your trade and your area — but
+                      something that fits your business and your area — but
                       it&apos;ll be at the same level of quality.
                     </p>
                   ),

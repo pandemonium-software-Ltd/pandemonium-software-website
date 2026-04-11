@@ -24,13 +24,13 @@ const MODULES: Module[] = [
       "Everything you need to look professional online. Mobile-optimised, hosted properly, and looked after for you.",
     mandatory: true,
     includes: [
-      "Five pages: Home, Services, Gallery, About, Contact",
-      "Professional mobile-optimised design",
-      "Your own domain, your own hosting — you own it, always",
-      "GDPR-compliant privacy policy, built in",
-      "Monthly performance report",
-      "Minor content changes (up to 30 minutes a month)",
-      "Oxfordshire-based support",
+      "Professional mobile-first website, built to look great on phones",
+      "Hosted on your own free Cloudflare Pages account — no hidden bills",
+      "Security, maintenance and dependency updates done for you",
+      "Monthly performance report, in plain English",
+      "30 minutes of content changes per month, included",
+      "Guided self-setup through our Onboarding Hub — short videos at every step",
+      "UK-based support from a real person",
     ],
   },
   {
@@ -248,7 +248,7 @@ export default function PricingCalculator() {
           </p>
 
           <Link
-            href={site.contactPath}
+            href={site.enquiryPath}
             className="btn-primary mt-6 w-full !bg-white !text-navy-900 hover:!bg-ember-400 hover:!text-white"
           >
             Get started

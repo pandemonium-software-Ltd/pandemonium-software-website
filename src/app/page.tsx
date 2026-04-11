@@ -31,8 +31,8 @@ export default function HomePage() {
               <Link href="/pricing" className="btn-primary">
                 See what&apos;s included
               </Link>
-              <Link href={site.contactPath} className="btn-secondary">
-                Contact us now
+              <Link href={site.enquiryPath} className="btn-secondary">
+                Start your enquiry
               </Link>
             </div>
             <p className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-navy-600">
@@ -103,22 +103,22 @@ export default function HomePage() {
             <StepCard
               number="1"
               title="Tell us about your business"
-              body="A quick chat — in person, over the phone, or on a call. You tell us what you do and who you want to reach."
+              body="Fill in a short enquiry. A couple of plain-English questions — no jargon, no pressure, no phone-tag. We reply within one working day."
             />
             <StepCard
               number="2"
               title="We build it in two weeks"
-              body="From the day we have your photos and details, we have your site ready for review within two working weeks."
+              body="Once you&rsquo;ve finished the Onboarding Hub, your site is ready for review within two working weeks. That&rsquo;s a promise, not a hope."
             />
             <StepCard
               number="3"
-              title="We hand it over"
-              body="We set up your domain, show you round the site, and make sure everything works on your phone and your mate's phone."
+              title="You complete a guided self-setup"
+              body="Our Onboarding Hub walks you through the few clicks we need from you — logo, photos, your own hosting account. Short videos at every step."
             />
             <StepCard
               number="4"
-              title="You own everything forever"
-              body="Your site, your content, your Google listing. Cancel any time with 30 days' notice and you still keep it all."
+              title="Your site goes live and starts bringing in work"
+              body="We hand it over, show you round, and make sure everything works on your phone and your mate&rsquo;s phone. It&rsquo;s yours from day one."
             />
           </ol>
         </div>
@@ -219,10 +219,10 @@ export default function HomePage() {
               See what&apos;s included
             </Link>
             <Link
-              href={site.contactPath}
+              href={site.enquiryPath}
               className="btn inline-flex border-2 border-white/70 bg-transparent text-white hover:bg-white hover:text-navy-900 focus-visible:ring-white/40"
             >
-              Contact us now
+              Start your enquiry
             </Link>
           </div>
         </div>

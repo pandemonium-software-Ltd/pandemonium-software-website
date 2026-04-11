@@ -71,10 +71,10 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href={site.contactPath}
+                  href={site.enquiryPath}
                   className="text-cream-200/90 transition-colors hover:text-ember-400"
                 >
-                  Contact us now
+                  Start your enquiry
                 </Link>
               </li>
             </ul>

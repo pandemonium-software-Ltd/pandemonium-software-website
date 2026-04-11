@@ -3,24 +3,24 @@ import EnquiryForm from "@/components/EnquiryForm";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Contact us — Tell us about your business",
+  title: "Start your enquiry — Tell us about your business",
   description:
-    "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email us directly — we reply within one working day.",
-  alternates: { canonical: "/contact" },
+    "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email us directly — we reply within one working day. Proudly Oxfordshire-based, serving small businesses across the UK.",
+  alternates: { canonical: "/enquiry" },
   openGraph: {
-    title: "Contact us — Pandemonium Software Ltd",
+    title: "Start your enquiry — Pandemonium Software Ltd",
     description:
       "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email us directly.",
-    url: `${site.url}/contact`,
+    url: `${site.url}/enquiry`,
   },
 };
 
-export default function ContactPage() {
+export default function EnquiryPage() {
   return (
     <>
       <section className="bg-cream-100/60 pb-12 pt-14 md:pb-16 md:pt-20">
         <div className="container-content max-w-3xl text-center">
-          <span className="eyebrow">Contact us</span>
+          <span className="eyebrow">Start your enquiry</span>
           <h1 className="heading-1">Tell us about your business.</h1>
           <p className="prose-body mx-auto mt-6 max-w-2xl">
             Drop us a line and we&apos;ll reply within one working day. No
@@ -54,7 +54,7 @@ export default function ContactPage() {
               </a>
               <p className="mt-5 text-sm text-navy-600">
                 Based in {site.location.city}, {site.location.region}. We
-                work with trades across the county.
+                work with small businesses across the UK.
               </p>
             </div>
 

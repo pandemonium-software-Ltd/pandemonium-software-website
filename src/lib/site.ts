@@ -6,7 +6,7 @@ export const site = {
   description:
     "Professional websites for UK trades and small businesses. Proudly Oxfordshire-based, serving the UK. No hassle, no tech headaches, just a site that brings in work.",
   contactEmail: "benpandher@proton.me",
-  contactPath: "/contact",
+  enquiryPath: "/enquiry",
   demoUrl: "https://oxford-garden-co-demo.vercel.app",
   location: {
     city: "Oxford",
@@ -21,7 +21,7 @@ export const site = {
   footerNav: [
     { label: "Pricing", href: "/pricing" },
     { label: "About", href: "/about" },
-    { label: "Contact", href: "/contact" },
+    { label: "Start your enquiry", href: "/enquiry" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
   ],
