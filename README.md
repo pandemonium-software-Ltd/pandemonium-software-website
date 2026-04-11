@@ -13,7 +13,7 @@ This is **not** a client site template. For the reusable trades site template, s
 - **React 18**
 - **Tailwind CSS 3**
 - Fonts: Fraunces (serif) + Inter (sans), via `next/font/google`
-- **Cloudflare Pages** (static hosting — matches the Playbook's client-site stack)
+- **Cloudflare Workers** (Static Assets) — serving `./out` via `wrangler.jsonc`
 
 ## Pages
 
@@ -51,21 +51,37 @@ To preview the built output locally:
 npx serve out
 ```
 
-## Deploying to Cloudflare Pages
+## Deploying to Cloudflare Workers
 
 Git integration handles deployment automatically: push to `main` and
-Cloudflare Pages picks up the change, runs `npm run build`, and publishes
-`./out/`.
+Cloudflare clones the repo, runs `npm run build`, then runs `npx wrangler
+deploy` which reads [`wrangler.jsonc`](./wrangler.jsonc) and uploads `./out/`
+as [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/).
 
 Manual deploy (if needed):
 
 ```bash
-npx wrangler pages deploy out --project-name pandemonium-software-website
+npm run build
+npx wrangler deploy
 ```
 
-Security headers live in [`public/_headers`](./public/_headers) — Cloudflare
-Pages' native format — not `next.config.mjs`, because `output: 'export'` is a
-no-op for Next.js's `headers()` function.
+### Why Workers Static Assets, not Pages / OpenNext
+
+Cloudflare's framework auto-detection will try to deploy a Next.js app
+with the OpenNext SSR adapter. OpenNext only supports Next.js 15.5+ and
+16.2+, and we're pinned to Next.js 14.2.x for security parity with the
+`trades-website-template` (Playbook Section 12). More importantly, this
+site is a pure static export — there's no SSR code to run.
+
+`wrangler.jsonc` short-circuits all of that. It declares the project as
+a Worker with `assets.directory: ./out` and no `main` script, so wrangler
+just uploads the `out/` folder verbatim. The deployed "Worker" is a
+0.34 KiB asset manifest — no server code at all.
+
+Security headers live in [`public/_headers`](./public/_headers) —
+respected by both Cloudflare Pages and Workers Static Assets — not
+`next.config.mjs`, because `output: 'export'` is a no-op for Next.js's
+`headers()` function.
 
 ## Design tokens
 
@@ -81,7 +97,7 @@ no-op for Next.js's `headers()` function.
 - Plausible analytics
 - Real client testimonials and photography
 - Real business email address (currently `benpandher@proton.me`)
-- Custom domain (currently using a `.pages.dev` subdomain)
+- Custom domain (currently using a `.workers.dev` subdomain)
 
 ## Licence
 

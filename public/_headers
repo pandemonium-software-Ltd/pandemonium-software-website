@@ -1,4 +1,6 @@
-# Cloudflare Pages headers file
+# Cloudflare headers file — works for both Workers Static Assets
+# and Cloudflare Pages.
+# https://developers.cloudflare.com/workers/static-assets/headers/
 # https://developers.cloudflare.com/pages/configuration/headers/
 #
 # Keep these in sync with the security posture previously set in

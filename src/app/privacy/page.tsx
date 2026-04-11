@@ -23,8 +23,8 @@ export default function PrivacyPage() {
             This is the privacy policy for <strong>Pandemonium Software Ltd</strong>
             — the company behind this website. It explains what personal
             information we collect from visitors to{" "}
-            <strong>pandemonium-software-website.pages.dev</strong>, why we
-            collect it, and what your rights are.
+            <strong>pandemonium-software-website.benpandher.workers.dev</strong>,
+            why we collect it, and what your rights are.
           </p>
           <p>
             We&apos;ve written this in plain English on purpose. If anything
@@ -71,10 +71,10 @@ export default function PrivacyPage() {
           <h3>Things your browser tells us</h3>
           <ul>
             <li>
-              <strong>Basic hosting logs:</strong> our host (Cloudflare
-              Pages) records things like IP address, browser type and the
-              page you visited. This is standard for any website and is used
-              for security and keeping the site running.
+              <strong>Basic hosting logs:</strong> our host (Cloudflare)
+              records things like IP address, browser type and the page you
+              visited. This is standard for any website and is used for
+              security and keeping the site running.
             </li>
             <li>
               <strong>Cookies:</strong> this site uses only strictly
@@ -109,9 +109,9 @@ export default function PrivacyPage() {
           </p>
           <ul>
             <li>
-              <strong>Cloudflare, Inc.</strong> — hosts this website on
-              Cloudflare Pages and keeps basic edge logs for security and
-              anti-abuse purposes.
+              <strong>Cloudflare, Inc.</strong> — hosts this website as a
+              Cloudflare Worker serving static assets, and keeps basic edge
+              logs for security and anti-abuse purposes.
             </li>
             <li>
               <strong>Resend</strong> — sends transactional emails (for
