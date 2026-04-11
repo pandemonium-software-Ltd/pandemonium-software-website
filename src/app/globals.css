@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background-color: theme("colors.cream.50");
+  color: theme("colors.navy.900");
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
+}
+
+/* Respectable focus states */
+:focus-visible {
+  outline: 2px solid theme("colors.ember.500");
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* Skip to content link */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  background: theme("colors.navy.900");
+  color: white;
+  padding: 0.75rem 1.25rem;
+  z-index: 100;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  font-weight: 600;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+
+@layer components {
+  .container-content {
+    @apply mx-auto w-full max-w-content px-6 md:px-10;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-4;
+    min-height: 48px;
+  }
+
+  .btn-primary {
+    @apply btn bg-ember-500 text-white shadow-lift hover:bg-ember-600 focus-visible:ring-ember-300;
+  }
+  .btn-primary:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    @apply btn border-2 border-navy-900 bg-transparent text-navy-900 hover:bg-navy-900 hover:text-white focus-visible:ring-navy-300;
+  }
+
+  .btn-ghost {
+    @apply btn bg-cream-100 text-navy-900 hover:bg-cream-200 focus-visible:ring-navy-300;
+  }
+
+  .link {
+    @apply underline decoration-ember-400 decoration-2 underline-offset-4 transition-colors hover:decoration-ember-600;
+  }
+
+  .section {
+    @apply py-20 md:py-28;
+  }
+
+  .heading-1 {
+    @apply font-serif text-4xl font-semibold leading-tight tracking-tight text-navy-900 md:text-5xl lg:text-6xl;
+  }
+  .heading-2 {
+    @apply font-serif text-3xl font-semibold leading-tight tracking-tight text-navy-900 md:text-4xl lg:text-5xl;
+  }
+  .heading-3 {
+    @apply font-serif text-2xl font-semibold leading-snug tracking-tight text-navy-900 md:text-3xl;
+  }
+  .heading-4 {
+    @apply font-serif text-xl font-semibold leading-snug text-navy-900 md:text-2xl;
+  }
+
+  .eyebrow {
+    @apply mb-4 inline-block text-sm font-semibold uppercase tracking-[0.14em] text-ember-600;
+  }
+
+  .prose-body {
+    @apply text-lg leading-relaxed text-navy-800 md:text-xl;
+  }
+
+  .card {
+    @apply rounded-2xl bg-white p-8 shadow-card ring-1 ring-navy-100;
+  }
+}
+
+/* Typography for long content (privacy, terms) */
+.long-form h2 {
+  @apply heading-3 mt-12 mb-4;
+}
+.long-form h3 {
+  @apply heading-4 mt-8 mb-3;
+}
+.long-form p {
+  @apply mb-5 text-lg leading-relaxed text-navy-800;
+}
+.long-form ul {
+  @apply mb-6 ml-6 list-disc space-y-2 text-lg text-navy-800;
+}
+.long-form ol {
+  @apply mb-6 ml-6 list-decimal space-y-2 text-lg text-navy-800;
+}
+.long-form a {
+  @apply link;
+}
+.long-form strong {
+  @apply font-semibold text-navy-900;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
