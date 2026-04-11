@@ -1,0 +1,129 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { site } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "About — Ben Pandher and Pandemonium Software Ltd",
+  description:
+    "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind Pandemonium Software Ltd.",
+  alternates: { canonical: "/about" },
+  openGraph: {
+    title: "About — Pandemonium Software Ltd",
+    description:
+      "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind Pandemonium Software Ltd.",
+    url: `${site.url}/about`,
+  },
+};
+
+export default function AboutPage() {
+  return (
+    <>
+      <section className="bg-cream-100/60 pb-12 pt-14 md:pb-16 md:pt-20">
+        <div className="container-content max-w-4xl text-center">
+          <span className="eyebrow">About</span>
+          <h1 className="heading-1">Hello, I&apos;m Ben.</h1>
+          <p className="prose-body mx-auto mt-6 max-w-2xl">
+            I built Pandemonium Software Ltd because Oxfordshire tradesmen
+            deserve a professional website without the usual tech hassle.
+          </p>
+        </div>
+      </section>
+
+      <section className="pb-24 pt-10">
+        <div className="container-content grid gap-14 lg:grid-cols-[1fr_1.4fr] lg:items-start">
+          {/* Portrait placeholder */}
+          <div className="mx-auto w-full max-w-sm lg:sticky lg:top-28">
+            <div className="aspect-[4/5] overflow-hidden rounded-3xl bg-navy-900 shadow-lift">
+              <svg
+                viewBox="0 0 400 500"
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-full w-full"
+                role="img"
+                aria-label="Friendly portrait placeholder"
+              >
+                <defs>
+                  <linearGradient id="aboutBg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#172a42" />
+                    <stop offset="1" stopColor="#0a1422" />
+                  </linearGradient>
+                </defs>
+                <rect width="400" height="500" fill="url(#aboutBg)" />
+                <circle cx="200" cy="210" r="80" fill="#f4efe3" />
+                <path
+                  d="M80 500 C 80 370, 320 370, 320 500 Z"
+                  fill="#f4efe3"
+                />
+                <circle cx="172" cy="205" r="6" fill="#0f1d30" />
+                <circle cx="228" cy="205" r="6" fill="#0f1d30" />
+                <path
+                  d="M178 240 Q 200 258 222 240"
+                  stroke="#0f1d30"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  fill="none"
+                />
+                <circle cx="340" cy="80" r="28" fill="#f97316" />
+              </svg>
+            </div>
+            <p className="mt-4 text-center text-sm text-navy-600">
+              Photo of Ben coming soon.
+            </p>
+          </div>
+
+          {/* Story */}
+          <div className="long-form max-w-prose">
+            <p>
+              I&apos;m an Oxfordshire-based software developer. Before
+              starting Pandemonium Software Ltd, I spent years building
+              software for real businesses — the kind of work where a
+              broken button costs someone real money and nobody has patience
+              for jargon.
+            </p>
+
+            <p>
+              Along the way, I noticed something. The tradesmen I knew —
+              the plumbers, electricians, builders and gardeners who keep
+              Oxfordshire running — were getting a terrible deal from the
+              web. They either had no website at all, or a tired one built a
+              decade ago, or they were paying 30% of every job to lead
+              platforms like Checkatrade and MyBuilder.
+            </p>
+
+            <p>
+              So I built this. A small, focused business that does one
+              thing really well: professional websites for Oxfordshire
+              tradesmen, at a fair flat fee, with no lock-in and no lead
+              fees. You own everything, forever.
+            </p>
+
+            <p>
+              I keep the business deliberately small. That means when you
+              ring or email, you get me — not a sales rep, not a support
+              ticket, not a chat bot. It also means I only take on as much
+              work as I can build properly.
+            </p>
+
+            <p>
+              I&apos;m not trying to be a big agency. I&apos;m trying to
+              be the developer your mate should have told you about.
+            </p>
+
+            <p className="mt-10">
+              <Link href="/pricing" className="btn-primary">
+                See what&apos;s included
+              </Link>
+              <a
+                href={site.bookingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary ml-3"
+              >
+                Book a free chat
+              </a>
+            </p>
+          </div>
+        </div>
+      </section>
+    </>
+  );
+}
