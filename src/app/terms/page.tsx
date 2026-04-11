@@ -21,11 +21,12 @@ export default function TermsPage() {
         <div className="mt-10 rounded-2xl border-l-4 border-ember-500 bg-ember-50 p-6 text-[1.05rem] text-navy-800">
           <p className="font-semibold text-navy-900">Plain language, on purpose.</p>
           <p className="mt-2">
-            This is a simplified working agreement covering how we do
-            business together. Before we take on a formal paid client, we
-            may ask our solicitor to review a fuller version of these terms.
-            This page is accurate about what we will and won&apos;t do —
-            it&apos;s just not a 40-page legal document.
+            These are simplified terms. We may update them from time to
+            time, and we&apos;ll give current clients notice of any
+            material changes by email. A full solicitor review is pending
+            as the business grows. This page is accurate about what we
+            will and won&apos;t do — it&apos;s just not a 40-page legal
+            document.
           </p>
         </div>
 
@@ -45,40 +46,44 @@ export default function TermsPage() {
 
           <h2>2. What we provide</h2>
           <p>
-            We build a website for your business. The exact scope depends
-            on which modules you&apos;ve picked on our pricing page — as a
-            minimum, it always includes a five-page mobile-friendly website
-            (Home, Services, Gallery, About, Contact), hosting on your own
-            account, a proper domain setup, a GDPR-compliant privacy policy
-            generated from your details, and ongoing support for minor
-            content updates (up to 30 minutes per month).
+            We build a professional, mobile-first website for your
+            business. The exact scope depends on which modules you&apos;ve
+            picked on our pricing page — as a minimum, it always includes
+            a mobile-optimised website hosted on your own free Cloudflare
+            Pages account, ongoing security and dependency updates, a
+            monthly performance report, 30 minutes of content changes per
+            month, and UK-based support from a real person.
           </p>
           <p>
             We don&apos;t provide legal, tax, insurance or accounting
-            advice, and we aren&apos;t a marketing agency. If you need any of
-            those, we can point you towards someone we trust.
+            advice, and we aren&apos;t a marketing agency. If you need
+            any of those, we can point you towards someone we trust.
           </p>
 
           <h2>3. Build time (our two-week SLA)</h2>
           <p>
             Our standard build time is <strong>two working weeks</strong>.
-            The clock starts on the day you&apos;ve given us everything we
-            need — your business details, photos, logos, content and any
-            accounts we need access to. We call that &quot;complete asset
-            delivery&quot;.
+            The clock starts the day you <strong>complete the
+            Onboarding Hub</strong> — not the day you pay. This is a
+            deliberate choice: the Hub captures everything we need to
+            build a proper site (logo, photos, colours, services,
+            business details, your hosting account) so we never have to
+            chase you once the clock is running.
           </p>
           <p>
-            If we&apos;re waiting on you for information, the clock pauses.
-            That&apos;s fair to both sides — we can&apos;t build a page
-            without knowing what goes on it.
+            If we&apos;re waiting on you during the Hub, the clock
+            doesn&apos;t start. That&apos;s fair to both sides — we
+            can&apos;t build a page without knowing what goes on it, and
+            you shouldn&apos;t be rushed.
           </p>
 
           <h2>4. Setup fees</h2>
           <p>
-            The setup fee is payable up front, at the same time as your
-            first monthly payment, and is{" "}
-            <strong>non-refundable after 48 hours</strong>. That gives you a
-            cooling-off period to change your mind with no questions asked.
+            The £129 setup fee (or £99 for Founding Members) is payable up
+            front, at the same time as your first monthly payment, and is
+            {" "}<strong>non-refundable after 48 hours</strong>. That gives
+            you a cooling-off period to change your mind with no questions
+            asked.
           </p>
           <p>
             After 48 hours, we will have started working on your project
@@ -109,28 +114,39 @@ export default function TermsPage() {
 
           <h2>7. Ownership</h2>
           <p>
-            <strong>You own your content, your domain and your
-            accounts</strong>, full stop. That includes the text, photos,
-            logo files, Google Business listing and any accounts we set up in
-            your name.
+            <strong>You own your website content, your domain, your
+            hosting account, and all connected service accounts</strong>,
+            full stop. That includes the website files, the text, photos,
+            logo files, Google Business listing, your Cloudflare Pages
+            hosting account, and any other accounts we set up in your
+            name.
           </p>
           <p>
-            You also own the website files themselves once built. We may
-            retain rights to any behind-the-scenes tooling, deployment
-            scripts or shared components we&apos;ve built across multiple
-            client sites — but nothing that would stop you running, hosting
-            or modifying your site elsewhere.
+            We may retain rights to any behind-the-scenes tooling,
+            deployment scripts or shared components we&apos;ve built
+            across multiple client sites — but nothing that would stop
+            you running, hosting or modifying your site elsewhere.
           </p>
 
-          <h2>8. Case study permission</h2>
+          <h2>8. No territorial exclusivity</h2>
+          <p>
+            We don&apos;t offer geographic or trade exclusivity. If we
+            already work with a plumber in your town, we&apos;re free to
+            take on another one. Every client&apos;s content, branding
+            and marketing is their own and we never share information
+            between clients.
+          </p>
+
+          <h2>9. Case study permission</h2>
           <p>
             We&apos;d love to show off a good result, so we may{" "}
             <strong>ask</strong> to feature your finished site on our own
-            site as a case study. We will always ask first, and you can say
-            no without any hard feelings or impact on your service.
+            site as a case study. Permission is always requested and
+            never mandatory. You can say no without any hard feelings or
+            impact on your service.
           </p>
 
-          <h2>9. Post-launch support</h2>
+          <h2>10. Post-launch support</h2>
           <p>After your site is live:</p>
           <ul>
             <li>
@@ -151,7 +167,7 @@ export default function TermsPage() {
             </li>
           </ul>
 
-          <h2>10. What you agree to do</h2>
+          <h2>11. What you agree to do</h2>
           <ul>
             <li>Give us accurate information about your business.</li>
             <li>
@@ -168,7 +184,7 @@ export default function TermsPage() {
             before taking anything down.
           </p>
 
-          <h2>11. Limits of our liability</h2>
+          <h2>12. Limits of our liability</h2>
           <p>
             We&apos;ll work carefully and do our best for you — but we
             can&apos;t guarantee specific business outcomes (how many
@@ -184,13 +200,13 @@ export default function TermsPage() {
             fraud or death caused by negligence.
           </p>
 
-          <h2>12. Governing law</h2>
+          <h2>13. Governing law</h2>
           <p>
             These terms are governed by the laws of England and Wales. Any
             disputes will be handled by the courts of England and Wales.
           </p>
 
-          <h2>13. Changes to these terms</h2>
+          <h2>14. Changes to these terms</h2>
           <p>
             If we update these terms, we&apos;ll let current clients know
             by email and update the &quot;Last updated&quot; date above. If
