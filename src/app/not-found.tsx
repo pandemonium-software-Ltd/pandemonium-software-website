@@ -4,7 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Page not found",
   description:
-    "That page seems to have gone for a tea break. Let's get you back home.",
+    "This page has popped out for a tea break. Let's get you back home.",
 };
 
 export default function NotFound() {
@@ -55,7 +55,7 @@ export default function NotFound() {
 
         <span className="eyebrow">404</span>
         <h1 className="heading-1">
-          This page seems to have gone for a tea break.
+          This page has popped out for a tea break.
         </h1>
         <p className="prose-body mx-auto mt-6 max-w-xl">
           We can&apos;t find the page you were after. It might have moved, or

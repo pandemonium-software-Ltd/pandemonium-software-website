@@ -54,11 +54,21 @@ export default function PrivacyPage() {
           <ul>
             <li>
               <strong>Enquiry details:</strong> if you email us directly or
-              use the enquiry form on our contact page, we&apos;ll see your
-              name, email address, and whatever you chose to tell us about
-              your business. The enquiry form itself doesn&apos;t transmit
+              use the enquiry form on our enquiry page, we&apos;ll see your
+              name, email address, phone (if given), business details, UK
+              location, current website situation and whatever else you
+              chose to tell us. The enquiry form itself doesn&apos;t transmit
               any data to us — it opens your email app with a pre-filled
               message that you review and send yourself.
+            </li>
+            <li>
+              <strong>Intake form data (for accepted clients):</strong> once
+              you decide to work with us, we&apos;ll collect more detailed
+              information to build your site — business legal details,
+              services, brand colours, logo, photos, module selections.
+              This is held in our client management tool only for as long
+              as we&apos;re building your site, and is transferred to your
+              own accounts at handover.
             </li>
             <li>
               <strong>Payment details:</strong> if you become a paying
