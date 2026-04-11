@@ -6,7 +6,7 @@ export const site = {
   description:
     "Professional websites for Oxfordshire tradesmen. No hassle, no tech headaches, just a site that brings in work.",
   contactEmail: "benpandher@proton.me",
-  bookingUrl: "https://cal.com/pandemonium-software-ltd-67ydfj/30min",
+  contactPath: "/contact",
   demoUrl: "https://oxford-garden-co-demo.vercel.app",
   location: {
     city: "Oxford",
@@ -21,6 +21,7 @@ export const site = {
   footerNav: [
     { label: "Pricing", href: "/pricing" },
     { label: "About", href: "/about" },
+    { label: "Contact", href: "/contact" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
   ],

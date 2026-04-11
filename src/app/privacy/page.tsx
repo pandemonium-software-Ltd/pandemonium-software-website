@@ -52,14 +52,12 @@ export default function PrivacyPage() {
           <h3>Things you send us directly</h3>
           <ul>
             <li>
-              <strong>Enquiry details:</strong> if you email us or fill in a
-              contact form, we&apos;ll see your name, email address, and
-              whatever you chose to tell us about your business.
-            </li>
-            <li>
-              <strong>Booking details:</strong> if you book a call through
-              Cal.com, they&apos;ll pass us your name, email address, the
-              time you picked, and any notes you added.
+              <strong>Enquiry details:</strong> if you email us directly or
+              use the enquiry form on our contact page, we&apos;ll see your
+              name, email address, and whatever you chose to tell us about
+              your business. The enquiry form itself doesn&apos;t transmit
+              any data to us — it opens your email app with a pre-filled
+              message that you review and send yourself.
             </li>
             <li>
               <strong>Payment details:</strong> if you become a paying
@@ -115,11 +113,8 @@ export default function PrivacyPage() {
             </li>
             <li>
               <strong>Resend</strong> — sends transactional emails (for
-              example, a reply confirmation).
-            </li>
-            <li>
-              <strong>Cal.com</strong> — handles call booking when you book
-              a chat with us.
+              example, a reply confirmation). Only used if you become a
+              client.
             </li>
             <li>
               <strong>Stripe</strong> — handles card payments for paid

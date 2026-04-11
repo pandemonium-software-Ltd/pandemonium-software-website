@@ -70,14 +70,12 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a
-                  href={site.bookingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <Link
+                  href={site.contactPath}
                   className="text-cream-200/90 transition-colors hover:text-ember-400"
                 >
-                  Book a free chat
-                </a>
+                  Contact us now
+                </Link>
               </li>
             </ul>
           </div>

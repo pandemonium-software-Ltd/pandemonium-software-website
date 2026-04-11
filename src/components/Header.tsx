@@ -33,14 +33,12 @@ export default function Header() {
               {item.label}
             </Link>
           ))}
-          <a
-            href={site.bookingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href={site.contactPath}
             className="btn-primary !py-2.5 !text-[0.95rem]"
           >
-            Book a free chat
-          </a>
+            Contact us now
+          </Link>
         </nav>
 
         <button
@@ -96,15 +94,13 @@ export default function Header() {
                 {item.label}
               </Link>
             ))}
-            <a
-              href={site.bookingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={site.contactPath}
               onClick={() => setOpen(false)}
               className="btn-primary mt-2 w-full"
             >
-              Book a free chat
-            </a>
+              Contact us now
+            </Link>
           </nav>
         </div>
       )}

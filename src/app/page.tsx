@@ -28,14 +28,9 @@ export default function HomePage() {
               <Link href="/pricing" className="btn-primary">
                 See what&apos;s included
               </Link>
-              <a
-                href={site.bookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-secondary"
-              >
-                Book a free chat
-              </a>
+              <Link href={site.contactPath} className="btn-secondary">
+                Contact us now
+              </Link>
             </div>
             <p className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-navy-600">
               <span className="inline-flex items-center gap-2">
@@ -220,14 +215,12 @@ export default function HomePage() {
             <Link href="/pricing" className="btn-primary">
               See what&apos;s included
             </Link>
-            <a
-              href={site.bookingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={site.contactPath}
               className="btn inline-flex border-2 border-white/70 bg-transparent text-white hover:bg-white hover:text-navy-900 focus-visible:ring-white/40"
             >
-              Book a free chat
-            </a>
+              Contact us now
+            </Link>
           </div>
         </div>
       </section>

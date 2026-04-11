@@ -112,14 +112,12 @@ export default function AboutPage() {
               <Link href="/pricing" className="btn-primary">
                 See what&apos;s included
               </Link>
-              <a
-                href={site.bookingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href={site.contactPath}
                 className="btn-secondary ml-3"
               >
-                Book a free chat
-              </a>
+                Contact us now
+              </Link>
             </p>
           </div>
         </div>
