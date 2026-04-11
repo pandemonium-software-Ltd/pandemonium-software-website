@@ -125,7 +125,7 @@ export default function PricingPage() {
                   ),
                 },
                 {
-                  q: "Why a monthly fee? Can&apos;t I just pay once?",
+                  q: "Why a monthly fee? Can’t I just pay once?",
                   a: (
                     <>
                       <p>
