@@ -36,8 +36,8 @@ const MODULES: Module[] = [
   {
     id: "enquiry",
     name: "Enquiry Form",
-    setup: 60,
-    monthly: 10,
+    setup: 40,
+    monthly: 2.5,
     blurb:
       "A simple form customers can fill in to tell you about a job — photos and all. Messages come straight to your email, clean and spam-filtered.",
     who: "Great for builders, gardeners and anyone who prices bigger jobs on request.",
@@ -54,7 +54,13 @@ const MODULES: Module[] = [
 ];
 
 function formatGBP(n: number) {
-  return n.toLocaleString("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
+  const hasPence = Math.round(n * 100) % 100 !== 0;
+  return n.toLocaleString("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    minimumFractionDigits: hasPence ? 2 : 0,
+    maximumFractionDigits: hasPence ? 2 : 0,
+  });
 }
 
 export default function PricingCalculator() {
