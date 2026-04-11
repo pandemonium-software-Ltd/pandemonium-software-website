@@ -34,9 +34,9 @@ export default function TermsPage() {
           <p>
             <strong>Pandemonium Software Ltd</strong> ({site.location.city},{" "}
             {site.location.region}, United Kingdom) builds websites for UK
-            tradesmen. In these terms, &quot;we&quot; and &quot;us&quot; means
-            Pandemonium Software Ltd, and &quot;you&quot; means the business
-            or person who hires us.
+            trades and small businesses. In these terms, &quot;we&quot; and
+            {" "}&quot;us&quot; means Pandemonium Software Ltd, and
+            {" "}&quot;you&quot; means the business or person who hires us.
           </p>
           <p>
             You can reach us at{" "}
@@ -45,11 +45,13 @@ export default function TermsPage() {
 
           <h2>2. What we provide</h2>
           <p>
-            We build a website for your trade business. The exact scope
-            depends on which modules you&apos;ve picked on our pricing page
-            — as a minimum, it always includes a mobile-friendly website,
-            hosting, a proper domain setup, and ongoing support for minor
-            content updates.
+            We build a website for your business. The exact scope depends
+            on which modules you&apos;ve picked on our pricing page — as a
+            minimum, it always includes a five-page mobile-friendly website
+            (Home, Services, Gallery, About, Contact), hosting on your own
+            account, a proper domain setup, a GDPR-compliant privacy policy
+            generated from your details, and ongoing support for minor
+            content updates (up to 30 minutes per month).
           </p>
           <p>
             We don&apos;t provide legal, tax, insurance or accounting

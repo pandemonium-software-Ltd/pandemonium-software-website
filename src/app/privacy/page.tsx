@@ -36,10 +36,11 @@ export default function PrivacyPage() {
           <h2>1. Who we are</h2>
           <p>
             Pandemonium Software Ltd is a small software business based in
-            Oxfordshire, United Kingdom. We build websites for UK tradesmen.
-            For the purposes of UK GDPR and the Data Protection Act 2018, we
-            are the <strong>data controller</strong> for any personal
-            information you give us through this website.
+            Oxfordshire, United Kingdom. We build websites for UK trades
+            and small businesses. For the purposes of UK GDPR and the Data
+            Protection Act 2018, we are the <strong>data controller</strong>
+            {" "}for any personal information you give us through this
+            website.
           </p>
           <p>
             You can reach our data contact at{" "}
@@ -135,7 +136,7 @@ export default function PrivacyPage() {
           <ul>
             <li>
               <strong>Enquiries that don&apos;t become projects:</strong> we
-              delete them after 12 months.
+              delete them 24 months after our last contact with you.
             </li>
             <li>
               <strong>Client records:</strong> we keep them for as long as

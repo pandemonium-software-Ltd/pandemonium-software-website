@@ -18,8 +18,8 @@ export default function Footer() {
               </span>
             </div>
             <p className="mt-4 max-w-sm text-[0.95rem] leading-relaxed text-cream-200/80">
-              Professional websites for Oxfordshire tradesmen. Built properly,
-              priced fairly, and yours to keep.
+              Professional websites for UK trades and small businesses.
+              Built properly, priced fairly, and yours to keep.
             </p>
             <p className="mt-6 inline-flex items-center gap-2 text-sm text-cream-300/70">
               <svg
@@ -34,7 +34,7 @@ export default function Footer() {
                 <path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z" />
                 <circle cx="12" cy="9" r="2.5" />
               </svg>
-              Proudly Oxfordshire-based
+              Proudly Oxfordshire-based, serving the UK
             </p>
           </div>
 

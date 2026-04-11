@@ -4,7 +4,7 @@ export const site = {
   tagline: "Software Ltd",
   url: "https://pandemonium-software-website.vercel.app",
   description:
-    "Professional websites for Oxfordshire tradesmen. No hassle, no tech headaches, just a site that brings in work.",
+    "Professional websites for UK trades and small businesses. Proudly Oxfordshire-based, serving the UK. No hassle, no tech headaches, just a site that brings in work.",
   contactEmail: "benpandher@proton.me",
   contactPath: "/contact",
   demoUrl: "https://oxford-garden-co-demo.vercel.app",

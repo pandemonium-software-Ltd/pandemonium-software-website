@@ -13,16 +13,19 @@ export default function HomePage() {
         />
         <div className="container-content grid items-center gap-14 lg:grid-cols-[1.15fr_1fr]">
           <div>
-            <span className="eyebrow">Websites for Oxfordshire tradesmen</span>
+            <span className="eyebrow">
+              Websites for UK trades and small businesses
+            </span>
             <h1 className="heading-1">
-              Professional websites for Oxfordshire tradesmen. No hassle, no
-              tech headaches, just a site that brings in work.
+              Professional websites for UK trades and small businesses. No
+              hassle, no tech headaches, just a site that brings in work.
             </h1>
             <p className="prose-body mt-6 max-w-[42rem]">
-              We build a smart, mobile-friendly website for your trade
-              business in two weeks. You get a proper online home, a clear
-              way for customers to find you, and you keep ownership of
-              everything — forever. No lock-in, no lead fees, no jargon.
+              We build a smart, mobile-friendly website for your business in
+              two weeks. You get a proper online home, a clear way for
+              customers to find you, and you keep ownership of everything —
+              forever. No lock-in, no lead fees, no jargon. Proudly
+              Oxfordshire-based, serving the UK.
             </p>
             <div className="mt-10 flex flex-wrap items-center gap-4">
               <Link href="/pricing" className="btn-primary">
@@ -56,8 +59,7 @@ export default function HomePage() {
           <div className="mx-auto max-w-3xl text-center">
             <span className="eyebrow">What you get</span>
             <h2 className="heading-2">
-              Everything a busy tradesman needs. Nothing a busy tradesman
-              doesn&apos;t.
+              Everything a busy small business needs. Nothing it doesn&apos;t.
             </h2>
             <p className="prose-body mt-5">
               A proper website is more than a few pages and a phone number.
@@ -74,7 +76,7 @@ export default function HomePage() {
             <FeatureCard
               icon={<MapIcon />}
               title="Local Google presence"
-              body="We set things up so locals searching for a plumber, electrician or builder in your patch can actually find you. Real SEO basics, no tricks."
+              body="We set things up so locals searching for what you do in your patch can actually find you. Real SEO basics, no tricks."
             />
             <FeatureCard
               icon={<KeyIcon />}
@@ -133,15 +135,16 @@ export default function HomePage() {
               </h2>
               <p className="prose-body mt-5">
                 We&apos;re a small, focused business building websites for
-                Oxfordshire trades. Not a big agency, not a call-centre, not a
-                website builder pretending to be a service. Just one person who
-                knows how to build good websites and a handful of trusted
-                tradesmen clients.
+                UK trades and small businesses. Not a big agency, not a
+                call-centre, not a website builder pretending to be a service.
+                Just one person who knows how to build good websites and a
+                handful of trusted clients.
               </p>
               <ul className="mt-8 space-y-4 text-lg text-navy-800">
                 <TrustItem>
-                  <strong>Oxfordshire only.</strong> We focus on the patch we
-                  know best, so your site speaks to the right people.
+                  <strong>Oxfordshire-based, serving the UK.</strong> Our
+                  home is Oxfordshire, but we work with businesses anywhere
+                  in the UK.
                 </TrustItem>
                 <TrustItem>
                   <strong>Family-run feel.</strong> You talk to the person

@@ -23,8 +23,9 @@ export default function AboutPage() {
           <span className="eyebrow">About</span>
           <h1 className="heading-1">Hello, I&apos;m Ben.</h1>
           <p className="prose-body mx-auto mt-6 max-w-2xl">
-            I built Pandemonium Software Ltd because Oxfordshire tradesmen
-            deserve a professional website without the usual tech hassle.
+            I built Pandemonium Software Ltd because UK trades and small
+            businesses deserve a professional website without the usual
+            tech hassle.
           </p>
         </div>
       </section>
@@ -81,19 +82,21 @@ export default function AboutPage() {
             </p>
 
             <p>
-              Along the way, I noticed something. The tradesmen I knew —
-              the plumbers, electricians, builders and gardeners who keep
-              Oxfordshire running — were getting a terrible deal from the
-              web. They either had no website at all, or a tired one built a
-              decade ago, or they were paying 30% of every job to lead
-              platforms like Checkatrade and MyBuilder.
+              Along the way, I noticed something. The small business owners
+              I knew — the plumbers, electricians, builders, gardeners,
+              photographers and therapists who keep Oxfordshire running —
+              were getting a terrible deal from the web. They either had no
+              website at all, or a tired one built a decade ago, or they
+              were paying 30% of every job to lead platforms like Checkatrade
+              and MyBuilder.
             </p>
 
             <p>
               So I built this. A small, focused business that does one
-              thing really well: professional websites for Oxfordshire
-              tradesmen, at a fair flat fee, with no lock-in and no lead
-              fees. You own everything, forever.
+              thing really well: professional websites for UK trades and
+              small businesses, at a fair flat fee, with no lock-in and no
+              lead fees. Proudly Oxfordshire-based, serving the UK. You own
+              everything, forever.
             </p>
 
             <p>
