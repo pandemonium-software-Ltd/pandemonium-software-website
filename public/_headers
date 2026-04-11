@@ -1,0 +1,13 @@
+# Cloudflare Pages headers file
+# https://developers.cloudflare.com/pages/configuration/headers/
+#
+# Keep these in sync with the security posture previously set in
+# next.config.mjs. Paths with no qualifier apply globally.
+
+/*
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  X-XSS-Protection: 1; mode=block
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload

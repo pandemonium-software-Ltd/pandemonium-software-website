@@ -1,24 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  poweredByHeader: false,
-  compress: true,
-  async headers() {
-    return [
-      {
-        source: "/:path*",
-        headers: [
-          { key: "X-Frame-Options", value: "SAMEORIGIN" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
-          },
-        ],
-      },
-    ];
+  // Static HTML export — produces /out with plain HTML/CSS/JS for
+  // deployment to Cloudflare Pages. No Node.js runtime required.
+  output: "export",
+  // next/image requires a loader; we use inline SVGs only, so turning
+  // off built-in image optimisation keeps the static export working.
+  images: {
+    unoptimized: true,
   },
+  // Security headers are defined in public/_headers (Cloudflare Pages
+  // native format) because next.config's headers() is a no-op for
+  // static exports.
 };
 
 export default nextConfig;
