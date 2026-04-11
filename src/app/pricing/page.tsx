@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import PricingCalculator from "@/components/PricingCalculator";
+import FoundingMemberStrip from "@/components/FoundingMemberStrip";
 import Faq from "@/components/Faq";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Pricing — Transparent, flat-fee websites",
+  title: "Pricing — Flat-fee websites for Oxfordshire tradesmen",
   description:
-    "Simple flat pricing for Oxfordshire tradesmen websites. Pick what you need, see your total live, no surprises. From £150 setup and £25 per month.",
+    "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £149 setup and £19 per month. No surprises.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "Pricing — Pandemonium Software Ltd",
     description:
-      "Simple flat pricing for Oxfordshire tradesmen websites. Pick what you need, see your total live, no surprises.",
+      "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £149 setup and £19 per month.",
     url: `${site.url}/pricing`,
   },
 };
@@ -38,6 +39,10 @@ export default function PricingPage() {
       {/* Calculator */}
       <section className="pb-20 md:pb-28">
         <div className="container-content">
+          <div className="mb-10">
+            <FoundingMemberStrip />
+          </div>
+
           <PricingCalculator />
 
           <div className="mt-14 rounded-2xl bg-cream-100 p-8 md:p-10">
@@ -51,7 +56,10 @@ export default function PricingPage() {
                   touch within one working day to set things up.
                 </p>
               </div>
-              <Link href="/intake" className="btn-primary justify-self-start md:justify-self-end">
+              <Link
+                href={site.contactPath}
+                className="btn-primary justify-self-start md:justify-self-end"
+              >
                 Get started
               </Link>
             </div>
@@ -73,6 +81,26 @@ export default function PricingPage() {
           <div className="mx-auto mt-14 max-w-4xl">
             <Faq
               items={[
+                {
+                  q: "Why so cheap compared to a custom website?",
+                  a: (
+                    <>
+                      <p>
+                        Because we use a proven template and reuse what
+                        works. Most small trade websites need the same
+                        things — a mobile-friendly layout, your services,
+                        your photos, a way to get in touch, and a proper
+                        Google presence.
+                      </p>
+                      <p className="mt-3">
+                        Building that from scratch every time would cost
+                        you thousands. Starting from a solid base and
+                        tailoring it to your business means we can charge a
+                        flat fee and still do a proper job.
+                      </p>
+                    </>
+                  ),
+                },
                 {
                   q: "Is there a contract?",
                   a: (
@@ -106,38 +134,52 @@ export default function PricingPage() {
                       </p>
                       <p className="mt-3">
                         If you ever decide to leave us, we hand everything
-                        over — no hostage fees, no silly handover charges, no
-                        &quot;approval process&quot; nonsense.
+                        over — no hostage fees, no silly handover charges.
                       </p>
                     </>
                   ),
                 },
                 {
-                  q: "What if I need changes later?",
+                  q: "What if I want to add a module later?",
                   a: (
                     <p>
-                      Minor content changes — new phone number, new photo,
-                      updated prices, a fresh testimonial — we do within 48
-                      hours and it&apos;s included in your monthly fee. Major
-                      changes like new pages or a complete redesign we
-                      quote separately and fairly.
+                      Easy. Any module can be added at any time for the same
+                      setup fee and monthly price shown on this page. Just
+                      drop us an email — the new module is usually live
+                      within a couple of working days.
                     </p>
                   ),
                 },
                 {
-                  q: "Why a monthly fee? Can’t I just pay once?",
+                  q: "Can I remove a module?",
+                  a: (
+                    <p>
+                      Yes. You can cancel any individual module with 30
+                      days&apos; notice and your monthly price drops
+                      accordingly. You keep the rest of your site running as
+                      normal.
+                    </p>
+                  ),
+                },
+                {
+                  q: "What’s included in the monthly?",
                   a: (
                     <>
-                      <p>
-                        The monthly fee covers hosting, security updates,
-                        software updates, backups, ongoing support, and
-                        those little content changes we just mentioned. It&apos;s
-                        what keeps the site running properly.
-                      </p>
-                      <p className="mt-3">
-                        We&apos;d rather be honest about an ongoing cost
-                        than pretend a website is a one-off purchase and then
-                        nickel-and-dime you every time something breaks.
+                      <p>Your monthly fee covers:</p>
+                      <ul className="mt-3 ml-5 list-disc space-y-1.5 text-[1.05rem]">
+                        <li>Hosting</li>
+                        <li>Maintenance</li>
+                        <li>Security updates</li>
+                        <li>Monthly performance report</li>
+                        <li>
+                          Minor content changes (up to 30 minutes per month)
+                        </li>
+                        <li>Oxfordshire-based support</li>
+                      </ul>
+                      <p className="mt-4">
+                        Anything bigger than a 30-minute job — a new page,
+                        a section redesign, a custom feature — we quote for
+                        separately and fairly before any work starts.
                       </p>
                     </>
                   ),

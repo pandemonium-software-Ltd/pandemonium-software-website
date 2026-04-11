@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { site } from "@/lib/site";
 
 type Module = {
   id: string;
@@ -9,47 +10,50 @@ type Module = {
   setup: number;
   monthly: number;
   blurb: string;
-  who: string;
   mandatory?: boolean;
+  includes?: string[];
 };
 
 const MODULES: Module[] = [
   {
     id: "base",
     name: "Base website",
-    setup: 150,
-    monthly: 25,
+    setup: 149,
+    monthly: 19,
     blurb:
-      "A clean, mobile-friendly website with your services, your photos, your contact details and a clear way to get in touch. Hosted properly, kept updated, and included in every package.",
-    who: "Everyone. This is your proper online home.",
+      "Everything you need to look professional online. Mobile-optimised, hosted properly, and looked after for you.",
     mandatory: true,
+    includes: [
+      "Professional mobile-optimised website",
+      "Hosting, security and maintenance",
+      "Monthly performance report",
+      "Minor content changes (up to 30 minutes / month)",
+      "Oxfordshire-based support",
+    ],
   },
   {
     id: "booking",
     name: "Online Booking",
-    setup: 60,
-    monthly: 10,
+    setup: 39,
+    monthly: 4,
     blurb:
-      "Let customers book a time slot on your calendar without phoning you. Sync it with your Google or Apple calendar so you never get double-booked.",
-    who: "Great for plumbers, electricians, locksmiths and anyone doing short appointments.",
+      "Let customers book jobs directly from your website. Connects to your calendar, sends automatic confirmations, reduces phone tag.",
   },
   {
     id: "enquiry",
-    name: "Enquiry Form",
-    setup: 40,
-    monthly: 2.5,
+    name: "Enquiry System",
+    setup: 39,
+    monthly: 4,
     blurb:
-      "A simple form customers can fill in to tell you about a job — photos and all. Messages come straight to your email, clean and spam-filtered.",
-    who: "Great for builders, gardeners and anyone who prices bigger jobs on request.",
+      "Capture enquiries through a proper contact form. Spam-protected, goes straight to your email, never miss a lead.",
   },
   {
     id: "newsletter",
     name: "Newsletter & Offers",
-    setup: 60,
-    monthly: 12,
+    setup: 39,
+    monthly: 6,
     blurb:
-      "Collect emails from past customers and send them the occasional update or seasonal offer. We set it up and show you how to send a message in two minutes.",
-    who: "Great for trades with repeat customers — boilers, gardens, chimney sweeping, servicing.",
+      "Collect customer emails and send monthly offers or seasonal reminders. Keeps your business top of mind for repeat work.",
   },
 ];
 
@@ -88,6 +92,7 @@ export default function PricingCalculator() {
     { setup: 0, monthly: 0 },
   );
 
+  const firstYear = totals.setup + totals.monthly * 12;
   const anyExtras = MODULES.some((m) => !m.mandatory && selected[m.id]);
 
   return (
@@ -139,9 +144,29 @@ export default function PricingCalculator() {
                         <p className="mt-2 text-[0.95rem] leading-relaxed text-navy-700">
                           {m.blurb}
                         </p>
-                        <p className="mt-3 text-sm italic text-navy-500">
-                          {m.who}
-                        </p>
+                        {m.includes && (
+                          <ul className="mt-4 space-y-1.5 text-[0.9rem] text-navy-600">
+                            {m.includes.map((line) => (
+                              <li key={line} className="flex items-start gap-2">
+                                <svg
+                                  className="mt-1 h-3.5 w-3.5 flex-none text-ember-500"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M5 12 L10 17 L19 7"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     </div>
 
@@ -177,7 +202,7 @@ export default function PricingCalculator() {
               <div>
                 <p className="text-sm text-cream-200/70">Setup fee</p>
                 <p className="text-[11px] uppercase tracking-wider text-cream-300/60">
-                  One-off
+                  One-off · paid today
                 </p>
               </div>
               <p className="font-serif text-3xl font-semibold text-white md:text-4xl">
@@ -189,7 +214,7 @@ export default function PricingCalculator() {
               <div>
                 <p className="text-sm text-cream-200/70">Monthly fee</p>
                 <p className="text-[11px] uppercase tracking-wider text-cream-300/60">
-                  Ongoing
+                  Billed monthly · starts today
                 </p>
               </div>
               <p className="font-serif text-3xl font-semibold text-white md:text-4xl">
@@ -203,26 +228,25 @@ export default function PricingCalculator() {
 
             <div className="rounded-2xl bg-ember-500 p-5">
               <p className="text-xs font-semibold uppercase tracking-wider text-ember-100">
-                What you&apos;ll pay today
+                Total first-year cost
               </p>
               <p className="mt-2 font-serif text-3xl font-semibold text-white md:text-[2.2rem]">
-                {formatGBP(totals.setup + totals.monthly)}
+                {formatGBP(firstYear)}
               </p>
               <p className="mt-2 text-[13px] leading-snug text-ember-50">
-                That&apos;s the setup fee plus your first monthly payment,
-                taken on the same day we get started.
+                Setup fee plus twelve monthly payments. No hidden extras.
               </p>
             </div>
           </div>
 
           <p className="mt-6 text-[13px] leading-snug text-cream-300/75">
-            Your monthly subscription begins on day one, so your first
-            payment and setup fee come out together. After that, you&apos;re
-            on a simple monthly plan with 30 days&apos; notice to cancel.
+            Your setup fee and first monthly payment come out together on day
+            one. After that, you&apos;re on a simple monthly plan with 30
+            days&apos; notice to cancel.
           </p>
 
           <Link
-            href="/intake"
+            href={site.contactPath}
             className="btn-primary mt-6 w-full !bg-white !text-navy-900 hover:!bg-ember-400 hover:!text-white"
           >
             Get started
