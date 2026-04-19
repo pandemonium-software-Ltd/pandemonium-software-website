@@ -1,26 +1,21 @@
-// Cloudflare Workers config — Static Assets only, no server script.
+// Cloudflare Workers config — Next.js SSR via @opennextjs/cloudflare.
 //
-// This site is a Next.js 14 static export. `npm run build` produces a
-// fully static `out/` directory, and this config tells Cloudflare to
-// serve that directory verbatim.
+// Build: `opennextjs-cloudflare build` produces .open-next/ with:
+//   - worker.js: the SSR entrypoint
+//   - assets/: static files (CSS, JS, images, _headers)
 //
-// Important: we deliberately do NOT use Cloudflare's framework
-// auto-detection or the OpenNext adapter. OpenNext requires
-// Next.js >= 15.5, and we're pinned to Next.js 14.2.x for security
-// parity with the trades-website-template (Playbook Section 12).
-//
-// By having an `assets`-only wrangler config with no `main` field,
-// `npx wrangler deploy` will just upload `./out` and skip all the
-// Next.js/OpenNext wiring.
-//
-// Docs: https://developers.cloudflare.com/workers/static-assets/
+// The `main` field points to the worker script. `assets.directory`
+// points to the static asset directory. Both are outputs of the
+// OpenNext build — don't create them manually.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pandemonium-software-website",
+  "main": ".open-next/worker.js",
   "compatibility_date": "2026-04-11",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "./out",
-    "not_found_handling": "404-page"
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
   },
   "observability": {
     "enabled": true
