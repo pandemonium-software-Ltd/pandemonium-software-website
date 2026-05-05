@@ -216,7 +216,7 @@ const serviceSchema = z.object({
 const servicesSchema = z.object({
   services: z
     .array(serviceSchema)
-    .min(3, "Please add at least 3 services.")
+    .min(1, "Please add at least 1 service.")
     .max(10, "Template displays up to 10 services."),
   differentiator: z.string().trim().min(1).max(1000),
 });

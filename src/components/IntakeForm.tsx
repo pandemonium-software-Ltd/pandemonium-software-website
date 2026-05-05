@@ -18,15 +18,29 @@
 
 // RHF's `valueAsNumber: true` turns an empty input into NaN, which
 // zod's .optional() rejects. Use this in `setValueAs` for any optional
-// numeric field so empty → undefined and zod treats it as not-supplied.
+// numeric field so empty / blank / non-numeric → undefined.
 const optionalNumber = (v: unknown): number | undefined => {
-  if (v === "" || v === null || v === undefined) return undefined;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isNaN(n) ? undefined : n;
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed === "") return undefined;
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (typeof v === "number") {
+    return Number.isFinite(v) ? v : undefined;
+  }
+  return undefined;
 };
 
 import { useMemo, useState } from "react";
-import { useForm, useFieldArray, type Control, type FieldErrors } from "react-hook-form";
+import {
+  useForm,
+  useFieldArray,
+  Controller,
+  type Control,
+  type FieldErrors,
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   phase3Schema,
@@ -153,13 +167,9 @@ function buildDefaultValues(
         ),
     },
     services: {
-      services:
-        saved.services?.services ??
-        [
-          { name: "", description: "", featured: false },
-          { name: "", description: "", featured: false },
-          { name: "", description: "", featured: false },
-        ],
+      services: saved.services?.services ?? [
+        { name: "", description: "", featured: false },
+      ],
       differentiator: saved.services?.differentiator ?? "",
     },
     brand: {
@@ -281,11 +291,13 @@ export default function IntakeForm({
   }
 
   function jumpTo(idx: number) {
-    if (idx < stepIdx) {
-      setStepIdx(idx);
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+    // Free navigation — any step is clickable. Section data stays in
+    // RHF state across hops; it's only persisted to Notion when the
+    // user clicks "Save and continue", so jumping around freely never
+    // loses their typing for the current session.
+    setStepIdx(idx);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
@@ -342,7 +354,7 @@ export default function IntakeForm({
           <ServicesSection register={register} errors={errors} control={control} />
         )}
         {currentStep.key === "brand" && (
-          <BrandSection register={register} errors={errors} watch={watch} />
+          <BrandSection register={register} errors={errors} control={control} />
         )}
         {currentStep.key === "modules" && (
           <ModulesSection register={register} errors={errors} watch={watch} />
@@ -422,15 +434,14 @@ function Stepper({
             <button
               type="button"
               onClick={() => jumpTo(idx)}
-              disabled={!isDone}
               aria-current={isCurrent ? "step" : undefined}
               className={[
-                "flex w-full items-center gap-2 rounded-xl border-2 px-3 py-2 text-left text-xs transition-colors",
+                "flex w-full cursor-pointer items-center gap-2 rounded-xl border-2 px-3 py-2 text-left text-xs transition-colors",
                 isCurrent
                   ? "border-navy-900 bg-navy-900 text-white"
                   : isDone
-                    ? "cursor-pointer border-navy-300 bg-white text-navy-700 hover:border-navy-500"
-                    : "cursor-not-allowed border-navy-100 bg-cream-50 text-navy-400",
+                    ? "border-navy-300 bg-white text-navy-700 hover:border-navy-500"
+                    : "border-navy-100 bg-cream-50 text-navy-500 hover:border-navy-300 hover:text-navy-700",
               ].join(" ")}
             >
               <span
@@ -620,35 +631,45 @@ function ContactDetailsSection({ register, errors }: SectionProps) {
           {WEEKDAYS.map((d) => (
             <div
               key={d.key}
-              className="grid grid-cols-[100px_auto_1fr_1fr] items-center gap-3 rounded-lg border border-navy-100 bg-cream-50/50 px-3 py-2"
+              className="rounded-lg border border-navy-100 bg-cream-50/50 px-3 py-2.5 sm:grid sm:grid-cols-[100px_auto_1fr_1fr] sm:items-center sm:gap-3"
             >
-              <span className="text-sm font-medium text-navy-900">
-                {d.label}
-              </span>
-              <label className="inline-flex items-center gap-2 text-sm text-navy-700">
+              {/* Mobile: day + open checkbox on one row.
+                  Desktop (sm:contents): each child joins the parent grid. */}
+              <div className="flex items-center justify-between sm:contents">
+                <span className="text-sm font-medium text-navy-900">
+                  {d.label}
+                </span>
+                <label className="inline-flex items-center gap-2 text-sm text-navy-700">
+                  <input
+                    type="checkbox"
+                    {...register(
+                      `contactDetails.openingHours.${d.key}.open` as const,
+                    )}
+                    className="h-4 w-4 rounded border-2 border-navy-300 text-navy-900"
+                  />
+                  Open
+                </label>
+              </div>
+              {/* Mobile: time inputs on a second row, equal-width.
+                  Desktop (sm:contents): each input joins the parent grid. */}
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-0 sm:contents">
                 <input
-                  type="checkbox"
+                  type="time"
+                  aria-label={`${d.label} open from`}
                   {...register(
-                    `contactDetails.openingHours.${d.key}.open` as const,
+                    `contactDetails.openingHours.${d.key}.from` as const,
                   )}
-                  className="h-4 w-4 rounded border-2 border-navy-300 text-navy-900"
+                  className="w-full rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
                 />
-                Open
-              </label>
-              <input
-                type="time"
-                {...register(
-                  `contactDetails.openingHours.${d.key}.from` as const,
-                )}
-                className="rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
-              />
-              <input
-                type="time"
-                {...register(
-                  `contactDetails.openingHours.${d.key}.to` as const,
-                )}
-                className="rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
-              />
+                <input
+                  type="time"
+                  aria-label={`${d.label} open until`}
+                  {...register(
+                    `contactDetails.openingHours.${d.key}.to` as const,
+                  )}
+                  className="w-full rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
+                />
+              </div>
             </div>
           ))}
         </div>
@@ -688,8 +709,8 @@ function ServicesSection({
           <span aria-hidden="true" className="text-ember-600">*</span>
         </h3>
         <p className="text-sm text-navy-500">
-          Add at least 3, up to 10. The first 3 will be featured. Star any
-          others you want highlighted too.
+          At least 1, up to 10. The first 3 are featured most prominently;
+          star any others you want highlighted too.
         </p>
 
         <div className="mt-4 space-y-4">
@@ -702,13 +723,15 @@ function ServicesSection({
                 <span className="text-sm font-semibold text-navy-900">
                   Service #{idx + 1}
                 </span>
-                {fields.length > 3 && (
+                {fields.length > 1 && (
                   <button
                     type="button"
                     onClick={() => remove(idx)}
-                    className="text-sm text-ember-700 hover:underline"
+                    aria-label={`Remove service #${idx + 1}`}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-navy-200 bg-white text-base leading-none text-navy-600 transition-colors hover:border-ember-500 hover:text-ember-700"
+                    title="Remove this service"
                   >
-                    Remove
+                    ×
                   </button>
                 )}
               </div>
@@ -779,29 +802,40 @@ function ServicesSection({
 function BrandSection({
   register,
   errors,
-  watch,
-}: SectionProps & { watch: ReturnType<typeof useForm<Phase3Data>>["watch"] }) {
+  control,
+}: SectionProps & { control: Control<Phase3Data> }) {
   const e = errors.brand;
-  const primary = watch("brand.primaryColour");
-  const secondary = watch("brand.secondaryColour");
   return (
     <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2">
-        <ColourField
-          id="br-primaryColour"
-          label="Primary brand colour"
-          required
-          {...register("brand.primaryColour")}
-          value={primary}
-          error={e?.primaryColour?.message}
+        <Controller
+          control={control}
+          name="brand.primaryColour"
+          render={({ field }) => (
+            <ColourPicker
+              id="br-primaryColour"
+              label="Primary brand colour"
+              required
+              value={field.value ?? ""}
+              onChange={field.onChange}
+              error={e?.primaryColour?.message}
+              hint="click the swatch to pick from a colour wheel"
+            />
+          )}
         />
-        <ColourField
-          id="br-secondaryColour"
-          label="Secondary colour"
-          {...register("brand.secondaryColour")}
-          value={secondary}
-          error={e?.secondaryColour?.message}
-          hint="optional"
+        <Controller
+          control={control}
+          name="brand.secondaryColour"
+          render={({ field }) => (
+            <ColourPicker
+              id="br-secondaryColour"
+              label="Secondary colour"
+              value={field.value ?? ""}
+              onChange={field.onChange}
+              error={e?.secondaryColour?.message}
+              hint="optional"
+            />
+          )}
         />
       </div>
 
@@ -1199,9 +1233,15 @@ function CheckboxBlock({
         {...register}
         className="mt-1 h-5 w-5 flex-none rounded border-2 border-navy-300 text-navy-900"
       />
-      <div className="flex-1">
+      {/* min-w-0 lets the flex child shrink below its content's intrinsic
+          width; overflow-wrap:anywhere ensures long URLs (like the /terms
+          link in the body) break mid-word on narrow screens instead of
+          pushing past the container edge. */}
+      <div className="min-w-0 flex-1">
         <span className="font-semibold text-navy-900">{label}</span>
-        <p className="mt-1 text-sm text-navy-700">{body}</p>
+        <p className="mt-1 text-sm text-navy-700 [overflow-wrap:anywhere]">
+          {body}
+        </p>
         {error && <p className="mt-2 text-sm text-ember-700">{error}</p>}
       </div>
     </label>
@@ -1363,17 +1403,30 @@ function SelectField({
   );
 }
 
-function ColourField({
+// Colour picker component used via RHF Controller. Two synced inputs:
+// a native <input type="color"> swatch (opens the OS colour wheel) and
+// a hex text field for users who want to paste a brand-book value.
+function ColourPicker({
   id,
   label,
   required,
   hint,
   value,
+  onChange,
   error,
-  ...rest
-}: BaseFieldProps & {
-  value?: string;
-} & FieldRegisterReturn) {
+}: {
+  id: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  value: string;
+  onChange: (val: string) => void;
+  error?: string;
+}) {
+  const isValidHex = /^#[0-9a-fA-F]{6}$/.test(value);
+  // The colour input requires a valid hex; fall back to navy-900 so the
+  // swatch always renders something while the text input is incomplete.
+  const swatchValue = isValidHex ? value : "#1d3a5f";
   return (
     <div>
       <label
@@ -1392,17 +1445,20 @@ function ColourField({
         )}
       </label>
       <div className="flex items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="h-12 w-12 flex-none rounded-xl border-2 border-navy-200"
-          style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(value ?? "") ? value : "#ffffff" }}
+        <input
+          type="color"
+          aria-label={`${label} colour wheel`}
+          value={swatchValue}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-12 w-14 flex-none cursor-pointer rounded-xl border-2 border-navy-200 bg-white p-0.5"
         />
         <input
           id={id}
           type="text"
           placeholder="#1d3a5f"
           maxLength={7}
-          {...rest}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
           className={[
             "w-full rounded-xl border-2 bg-white px-4 py-3 font-mono text-base text-navy-900 placeholder:text-navy-400 focus:border-navy-900 focus:outline-none",
             error ? "border-ember-500" : "border-navy-200",
