@@ -650,25 +650,44 @@ function ContactDetailsSection({ register, errors }: SectionProps) {
                   Open
                 </label>
               </div>
-              {/* Mobile: time inputs on a second row, equal-width.
+              {/* Mobile: From/To labels next to full-width inputs, stacked.
+                  iOS Safari's <input type="time"> ignores `w-full` when
+                  two share a row — stacking guarantees the controls fit
+                  the viewport regardless of intrinsic min-width.
                   Desktop (sm:contents): each input joins the parent grid. */}
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:mt-0 sm:contents">
-                <input
-                  type="time"
-                  aria-label={`${d.label} open from`}
-                  {...register(
-                    `contactDetails.openingHours.${d.key}.from` as const,
-                  )}
-                  className="w-full rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
-                />
-                <input
-                  type="time"
-                  aria-label={`${d.label} open until`}
-                  {...register(
-                    `contactDetails.openingHours.${d.key}.to` as const,
-                  )}
-                  className="w-full rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
-                />
+              <div className="mt-2 flex flex-col gap-2 sm:mt-0 sm:contents">
+                <div className="flex items-center gap-2 sm:contents">
+                  <span
+                    aria-hidden="true"
+                    className="w-12 shrink-0 text-xs font-medium text-navy-500 sm:hidden"
+                  >
+                    From
+                  </span>
+                  <input
+                    type="time"
+                    aria-label={`${d.label} open from`}
+                    {...register(
+                      `contactDetails.openingHours.${d.key}.from` as const,
+                    )}
+                    className="min-w-0 flex-1 rounded-md border-2 border-navy-200 bg-white px-3 py-2 text-sm focus:border-navy-900 focus:outline-none sm:w-full sm:flex-none sm:py-1.5"
+                  />
+                </div>
+                <div className="flex items-center gap-2 sm:contents">
+                  <span
+                    aria-hidden="true"
+                    className="w-12 shrink-0 text-xs font-medium text-navy-500 sm:hidden"
+                  >
+                    To
+                  </span>
+                  <input
+                    type="time"
+                    aria-label={`${d.label} open until`}
+                    {...register(
+                      `contactDetails.openingHours.${d.key}.to` as const,
+                    )}
+                    className="min-w-0 flex-1 rounded-md border-2 border-navy-200 bg-white px-3 py-2 text-sm focus:border-navy-900 focus:outline-none sm:w-full sm:flex-none sm:py-1.5"
+                  />
+                </div>
               </div>
             </div>
           ))}
