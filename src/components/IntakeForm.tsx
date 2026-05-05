@@ -1,0 +1,1402 @@
+"use client";
+
+// Phase 3 intake wizard.
+//
+// Seven sections of phase3Schema rendered as a step-by-step wizard.
+// Each "Next" click validates just the current section (RHF trigger),
+// saves it to Notion via /api/intake (isFinal: false), and advances.
+//
+// Final step has "Submit & continue to payment" which:
+//   - validates the FULL schema
+//   - POSTs with isFinal: true → server calculates fees + writes them
+//     back, sends Ben a Phase 3 notification, returns a redirect
+//   - browser follows the redirect to /payment/[token]
+//
+// All sections share a single useForm so RHF can validate the whole
+// merged document on final submit. Per-section saves use getValues()
+// to pull just that section's data and POST it as a partial patch.
+
+import { useMemo, useState } from "react";
+import { useForm, useFieldArray, type Control, type FieldErrors } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  phase3Schema,
+  type Phase3Data,
+  type Phase3Partial,
+  VIBE_OPTIONS,
+} from "@/lib/schemas";
+import {
+  BASE_SETUP_GBP,
+  BASE_MONTHLY_GBP,
+  MODULE_BOOKING_SETUP_GBP,
+  MODULE_BOOKING_MONTHLY_GBP,
+  MODULE_ENQUIRY_SETUP_GBP,
+  MODULE_ENQUIRY_MONTHLY_GBP,
+  MODULE_NEWSLETTER_SETUP_GBP,
+  MODULE_NEWSLETTER_MONTHLY_GBP,
+  GBP_ADDON_ONE_OFF_GBP,
+  calculateFees,
+} from "@/lib/fees";
+import { site } from "@/lib/site";
+
+// ---------- Step definitions ----------
+
+type StepKey =
+  | "businessBasics"
+  | "contactDetails"
+  | "services"
+  | "brand"
+  | "modules"
+  | "socialProof"
+  | "legal";
+
+const STEPS: { key: StepKey; title: string; short: string }[] = [
+  { key: "businessBasics", title: "Business basics", short: "Basics" },
+  { key: "contactDetails", title: "Contact details", short: "Contact" },
+  { key: "services", title: "Your services", short: "Services" },
+  { key: "brand", title: "Look and feel", short: "Brand" },
+  { key: "modules", title: "Modules and pricing", short: "Modules" },
+  { key: "socialProof", title: "Social proof", short: "Proof" },
+  { key: "legal", title: "Legal and consent", short: "Legal" },
+];
+
+const WEEKDAYS = [
+  { key: "monday", label: "Monday" },
+  { key: "tuesday", label: "Tuesday" },
+  { key: "wednesday", label: "Wednesday" },
+  { key: "thursday", label: "Thursday" },
+  { key: "friday", label: "Friday" },
+  { key: "saturday", label: "Saturday" },
+  { key: "sunday", label: "Sunday" },
+] as const;
+
+const VIBE_DETAILS: Record<
+  (typeof VIBE_OPTIONS)[number],
+  { title: string; tagline: string }
+> = {
+  traditional: {
+    title: "Traditional",
+    tagline: "Classic, established, navy + cream. Reassures regulars.",
+  },
+  modern: {
+    title: "Modern",
+    tagline: "Clean lines, generous whitespace, lots of mobile.",
+  },
+  premium: {
+    title: "Premium",
+    tagline: "Dark backgrounds, refined accents. For high-ticket trades.",
+  },
+  friendly: {
+    title: "Friendly",
+    tagline: "Warm colours, rounded edges, approachable copy.",
+  },
+};
+
+// ---------- Defaults ----------
+
+type IntakeDefaults = {
+  contactDetails?: {
+    contactName?: string;
+    publicEmail?: string;
+    phoneDisplay?: string;
+    phoneTel?: string;
+  };
+  businessBasics?: {
+    tradingName?: string;
+    legalName?: string;
+  };
+  modules?: {
+    moduleBooking?: boolean;
+    moduleEnquiry?: boolean;
+    moduleNewsletter?: boolean;
+    gbpAddon?: boolean;
+  };
+};
+
+function buildDefaultValues(
+  saved: Phase3Partial,
+  seed: IntakeDefaults,
+): Partial<Phase3Data> {
+  return {
+    businessBasics: {
+      legalName: saved.businessBasics?.legalName ?? seed.businessBasics?.legalName ?? "",
+      tradingName: saved.businessBasics?.tradingName ?? seed.businessBasics?.tradingName ?? "",
+      legalForm: saved.businessBasics?.legalForm ?? "Sole trader",
+      companiesHouseNumber: saved.businessBasics?.companiesHouseNumber ?? "",
+      vatNumber: saved.businessBasics?.vatNumber ?? "",
+      yearEstablished: saved.businessBasics?.yearEstablished,
+      elevatorPitch: saved.businessBasics?.elevatorPitch ?? "",
+    },
+    contactDetails: {
+      contactName: saved.contactDetails?.contactName ?? seed.contactDetails?.contactName ?? "",
+      phoneDisplay: saved.contactDetails?.phoneDisplay ?? seed.contactDetails?.phoneDisplay ?? "",
+      phoneTel: saved.contactDetails?.phoneTel ?? seed.contactDetails?.phoneTel ?? "",
+      publicEmail: saved.contactDetails?.publicEmail ?? seed.contactDetails?.publicEmail ?? "",
+      address: saved.contactDetails?.address ?? "",
+      serviceArea: saved.contactDetails?.serviceArea ?? "",
+      openingHours:
+        saved.contactDetails?.openingHours ??
+        Object.fromEntries(
+          WEEKDAYS.map((d) => [
+            d.key,
+            { open: d.key !== "sunday", from: "09:00", to: "17:00" },
+          ]),
+        ),
+    },
+    services: {
+      services:
+        saved.services?.services ??
+        [
+          { name: "", description: "", featured: false },
+          { name: "", description: "", featured: false },
+          { name: "", description: "", featured: false },
+        ],
+      differentiator: saved.services?.differentiator ?? "",
+    },
+    brand: {
+      primaryColour: saved.brand?.primaryColour ?? "#1d3a5f",
+      secondaryColour: saved.brand?.secondaryColour,
+      vibe: saved.brand?.vibe ?? "traditional",
+      logoFileName: saved.brand?.logoFileName ?? "",
+    },
+    modules: {
+      baseSelected: true,
+      moduleBooking: saved.modules?.moduleBooking ?? seed.modules?.moduleBooking ?? false,
+      moduleEnquiry: saved.modules?.moduleEnquiry ?? seed.modules?.moduleEnquiry ?? false,
+      moduleNewsletter: saved.modules?.moduleNewsletter ?? seed.modules?.moduleNewsletter ?? false,
+      gbpAddon: saved.modules?.gbpAddon ?? seed.modules?.gbpAddon ?? false,
+    },
+    socialProof: {
+      testimonials: saved.socialProof?.testimonials ?? [],
+      associations: saved.socialProof?.associations ?? "",
+      yearsExperience: saved.socialProof?.yearsExperience,
+      awards: saved.socialProof?.awards ?? "",
+    },
+    // The legal block is intentionally cast: the schema types
+    // isDataController + acceptsTerms as the literal `true`, but in
+    // the form they start un-checked until the user actively ticks them.
+    // RHF allows boolean here at runtime — the cast just silences TS.
+    legal: {
+      isDataController: (saved.legal?.isDataController ?? false) as true,
+      acceptsTerms: (saved.legal?.acceptsTerms ?? false) as true,
+      marketingConsent: saved.legal?.marketingConsent ?? false,
+    },
+  };
+}
+
+// ---------- Main component ----------
+
+export default function IntakeForm({
+  token,
+  prospectName,
+  savedPartial,
+  seedDefaults,
+}: {
+  token: string;
+  prospectName: string;
+  savedPartial: Phase3Partial;
+  seedDefaults: IntakeDefaults;
+}) {
+  const [stepIdx, setStepIdx] = useState(0);
+  const [busy, setBusy] = useState<"idle" | "saving" | "submitting">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const defaultValues = useMemo(
+    () => buildDefaultValues(savedPartial, seedDefaults),
+    [savedPartial, seedDefaults],
+  );
+
+  const methods = useForm<Phase3Data>({
+    resolver: zodResolver(phase3Schema),
+    mode: "onTouched",
+    defaultValues: defaultValues as Phase3Data,
+  });
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    getValues,
+    watch,
+    control,
+    formState: { errors },
+  } = methods;
+
+  const currentStep = STEPS[stepIdx];
+
+  async function saveSection(key: StepKey): Promise<boolean> {
+    setBusy("saving");
+    setError(null);
+    try {
+      const sectionData = getValues(key);
+      const res = await fetch("/api/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, isFinal: false, [key]: sectionData }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setError(
+          body?.error ?? "Couldn't save your progress. Try again in a moment.",
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      setError(
+        "Couldn't reach the server. Check your connection and try again.",
+      );
+      return false;
+    } finally {
+      setBusy("idle");
+    }
+  }
+
+  async function next() {
+    const valid = await trigger(currentStep.key);
+    if (!valid) return;
+    const saved = await saveSection(currentStep.key);
+    if (!saved) return;
+    setStepIdx((i) => Math.min(i + 1, STEPS.length - 1));
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function back() {
+    setStepIdx((i) => Math.max(i - 1, 0));
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function jumpTo(idx: number) {
+    if (idx < stepIdx) {
+      setStepIdx(idx);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  }
+
+  const onFinalSubmit = handleSubmit(async (data) => {
+    setBusy("submitting");
+    setError(null);
+    try {
+      const res = await fetch("/api/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, isFinal: true, ...data }),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { success?: boolean; redirect?: string; error?: string }
+        | null;
+      if (!res.ok || !body?.success) {
+        setError(
+          body?.error ??
+            "Couldn't submit your intake. Please try again, or email me directly.",
+        );
+        return;
+      }
+      window.location.href = body.redirect ?? `/payment/${token}`;
+    } catch {
+      setError("Couldn't reach the server. Check your connection.");
+    } finally {
+      setBusy("idle");
+    }
+  });
+
+  const isLast = stepIdx === STEPS.length - 1;
+
+  return (
+    <form onSubmit={onFinalSubmit} noValidate className="space-y-8">
+      <Stepper currentIdx={stepIdx} jumpTo={jumpTo} />
+
+      <div className="card bg-white">
+        <header className="mb-6 border-b border-navy-100 pb-4">
+          <span className="eyebrow">
+            Step {stepIdx + 1} of {STEPS.length}
+          </span>
+          <h2 className="mt-2 font-serif text-2xl font-semibold text-navy-900 md:text-3xl">
+            {currentStep.title}
+          </h2>
+        </header>
+
+        {currentStep.key === "businessBasics" && (
+          <BusinessBasicsSection register={register} errors={errors} />
+        )}
+        {currentStep.key === "contactDetails" && (
+          <ContactDetailsSection register={register} errors={errors} />
+        )}
+        {currentStep.key === "services" && (
+          <ServicesSection register={register} errors={errors} control={control} />
+        )}
+        {currentStep.key === "brand" && (
+          <BrandSection register={register} errors={errors} watch={watch} />
+        )}
+        {currentStep.key === "modules" && (
+          <ModulesSection register={register} errors={errors} watch={watch} />
+        )}
+        {currentStep.key === "socialProof" && (
+          <SocialProofSection register={register} errors={errors} control={control} />
+        )}
+        {currentStep.key === "legal" && (
+          <LegalSection register={register} errors={errors} prospectName={prospectName} />
+        )}
+      </div>
+
+      {error && (
+        <div
+          role="alert"
+          className="rounded-xl border-2 border-ember-500 bg-white p-4 text-sm text-ember-700"
+        >
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <button
+          type="button"
+          onClick={back}
+          disabled={stepIdx === 0 || busy !== "idle"}
+          className="btn-secondary disabled:opacity-40"
+        >
+          ← Back
+        </button>
+        {!isLast ? (
+          <button
+            type="button"
+            onClick={next}
+            disabled={busy !== "idle"}
+            className="btn-primary"
+          >
+            {busy === "saving" ? "Saving…" : "Save and continue →"}
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={busy !== "idle"}
+            className="btn-primary"
+          >
+            {busy === "submitting"
+              ? "Submitting…"
+              : "Submit and continue to payment"}
+          </button>
+        )}
+      </div>
+
+      <p className="text-center text-sm text-navy-500">
+        Your progress is saved each time you click Continue. Close the tab and
+        come back any time.
+      </p>
+    </form>
+  );
+}
+
+// ---------- Stepper ----------
+
+function Stepper({
+  currentIdx,
+  jumpTo,
+}: {
+  currentIdx: number;
+  jumpTo: (idx: number) => void;
+}) {
+  return (
+    <ol className="flex flex-wrap gap-2">
+      {STEPS.map((s, idx) => {
+        const isCurrent = idx === currentIdx;
+        const isDone = idx < currentIdx;
+        return (
+          <li key={s.key} className="flex-1 min-w-[100px]">
+            <button
+              type="button"
+              onClick={() => jumpTo(idx)}
+              disabled={!isDone}
+              aria-current={isCurrent ? "step" : undefined}
+              className={[
+                "flex w-full items-center gap-2 rounded-xl border-2 px-3 py-2 text-left text-xs transition-colors",
+                isCurrent
+                  ? "border-navy-900 bg-navy-900 text-white"
+                  : isDone
+                    ? "cursor-pointer border-navy-300 bg-white text-navy-700 hover:border-navy-500"
+                    : "cursor-not-allowed border-navy-100 bg-cream-50 text-navy-400",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "flex h-5 w-5 flex-none items-center justify-center rounded-full text-[10px] font-semibold",
+                  isCurrent
+                    ? "bg-ember-500 text-white"
+                    : isDone
+                      ? "bg-navy-200 text-navy-900"
+                      : "bg-cream-200 text-navy-500",
+                ].join(" ")}
+              >
+                {isDone ? "✓" : idx + 1}
+              </span>
+              <span className="truncate font-medium">{s.short}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// ---------- Section: Business basics ----------
+
+type SectionProps = {
+  register: ReturnType<typeof useForm<Phase3Data>>["register"];
+  errors: FieldErrors<Phase3Data>;
+};
+
+function BusinessBasicsSection({ register, errors }: SectionProps) {
+  const e = errors.businessBasics;
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field
+          id="bb-legalName"
+          label="Legal business name"
+          required
+          {...register("businessBasics.legalName")}
+          error={e?.legalName?.message}
+          maxLength={200}
+          hint="as registered with HMRC or Companies House"
+        />
+        <Field
+          id="bb-tradingName"
+          label="Trading name"
+          {...register("businessBasics.tradingName")}
+          error={e?.tradingName?.message}
+          maxLength={200}
+          hint="optional — only if different to your legal name"
+        />
+      </div>
+
+      <SelectField
+        id="bb-legalForm"
+        label="Legal form"
+        required
+        {...register("businessBasics.legalForm")}
+        error={e?.legalForm?.message}
+        options={["Sole trader", "Limited company", "Partnership", "Other"]}
+      />
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field
+          id="bb-companiesHouseNumber"
+          label="Companies House number"
+          {...register("businessBasics.companiesHouseNumber")}
+          error={e?.companiesHouseNumber?.message}
+          maxLength={20}
+          hint="optional — only if you're a Limited company"
+        />
+        <Field
+          id="bb-vatNumber"
+          label="VAT number"
+          {...register("businessBasics.vatNumber")}
+          error={e?.vatNumber?.message}
+          maxLength={20}
+          hint="optional"
+        />
+      </div>
+
+      <Field
+        id="bb-yearEstablished"
+        label="Year established"
+        type="number"
+        {...register("businessBasics.yearEstablished", { valueAsNumber: true })}
+        error={e?.yearEstablished?.message}
+        hint="optional"
+      />
+
+      <Textarea
+        id="bb-elevatorPitch"
+        label="Elevator pitch"
+        required
+        {...register("businessBasics.elevatorPitch")}
+        error={e?.elevatorPitch?.message}
+        maxLength={280}
+        rows={3}
+        hint="one or two sentences. What do you do, who for, where?"
+        placeholder="e.g. I'm an Oxford-based gas-safe heating engineer. I install and service boilers for homes within 30 miles of the city."
+      />
+    </div>
+  );
+}
+
+// ---------- Section: Contact details ----------
+
+function ContactDetailsSection({ register, errors }: SectionProps) {
+  const e = errors.contactDetails;
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field
+          id="cd-contactName"
+          label="Main contact name"
+          required
+          {...register("contactDetails.contactName")}
+          error={e?.contactName?.message}
+          maxLength={100}
+        />
+        <Field
+          id="cd-publicEmail"
+          label="Email shown on the site"
+          type="email"
+          required
+          {...register("contactDetails.publicEmail")}
+          error={e?.publicEmail?.message}
+          maxLength={254}
+          hint="customers will email this"
+        />
+      </div>
+
+      <div className="grid gap-5 md:grid-cols-2">
+        <Field
+          id="cd-phoneDisplay"
+          label="Phone (display format)"
+          required
+          {...register("contactDetails.phoneDisplay")}
+          error={e?.phoneDisplay?.message}
+          maxLength={30}
+          hint='e.g. "0773 456 7890"'
+        />
+        <Field
+          id="cd-phoneTel"
+          label="Phone (digits only, for tap-to-call)"
+          required
+          {...register("contactDetails.phoneTel")}
+          error={e?.phoneTel?.message}
+          maxLength={30}
+          hint='e.g. "+447734567890"'
+        />
+      </div>
+
+      <Textarea
+        id="cd-address"
+        label="Business address"
+        required
+        {...register("contactDetails.address")}
+        error={e?.address?.message}
+        maxLength={500}
+        rows={2}
+        hint="even if you don't take walk-ins, Google likes to see one"
+      />
+
+      <Textarea
+        id="cd-serviceArea"
+        label="Service area"
+        required
+        {...register("contactDetails.serviceArea")}
+        error={e?.serviceArea?.message}
+        maxLength={500}
+        rows={2}
+        placeholder="e.g. Oxford, Witney, Bicester, and 30 miles around"
+      />
+
+      <fieldset>
+        <legend className="mb-3 block text-sm font-semibold text-navy-900">
+          Opening hours
+        </legend>
+        <p className="mb-3 text-xs text-navy-500">
+          Tick the days you&apos;re open and set hours. Untick days you&apos;re closed.
+        </p>
+        <div className="space-y-2">
+          {WEEKDAYS.map((d) => (
+            <div
+              key={d.key}
+              className="grid grid-cols-[100px_auto_1fr_1fr] items-center gap-3 rounded-lg border border-navy-100 bg-cream-50/50 px-3 py-2"
+            >
+              <span className="text-sm font-medium text-navy-900">
+                {d.label}
+              </span>
+              <label className="inline-flex items-center gap-2 text-sm text-navy-700">
+                <input
+                  type="checkbox"
+                  {...register(
+                    `contactDetails.openingHours.${d.key}.open` as const,
+                  )}
+                  className="h-4 w-4 rounded border-2 border-navy-300 text-navy-900"
+                />
+                Open
+              </label>
+              <input
+                type="time"
+                {...register(
+                  `contactDetails.openingHours.${d.key}.from` as const,
+                )}
+                className="rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
+              />
+              <input
+                type="time"
+                {...register(
+                  `contactDetails.openingHours.${d.key}.to` as const,
+                )}
+                className="rounded-md border-2 border-navy-200 bg-white px-3 py-1.5 text-sm focus:border-navy-900 focus:outline-none"
+              />
+            </div>
+          ))}
+        </div>
+      </fieldset>
+    </div>
+  );
+}
+
+// ---------- Section: Services ----------
+
+function ServicesSection({
+  register,
+  errors,
+  control,
+}: SectionProps & { control: Control<Phase3Data> }) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "services.services",
+  });
+  const e = errors.services;
+  return (
+    <div className="space-y-5">
+      <Textarea
+        id="sv-differentiator"
+        label="What makes you different from the competition?"
+        required
+        {...register("services.differentiator")}
+        error={e?.differentiator?.message}
+        maxLength={1000}
+        rows={3}
+        placeholder="One or two sentences a customer would actually understand. e.g. 'Family-run since 2007 — most of our work comes from word of mouth.'"
+      />
+
+      <div>
+        <h3 className="font-serif text-lg font-semibold text-navy-900">
+          Services you offer{" "}
+          <span aria-hidden="true" className="text-ember-600">*</span>
+        </h3>
+        <p className="text-sm text-navy-500">
+          Add at least 3, up to 10. The first 3 will be featured. Star any
+          others you want highlighted too.
+        </p>
+
+        <div className="mt-4 space-y-4">
+          {fields.map((f, idx) => (
+            <div
+              key={f.id}
+              className="rounded-xl border-2 border-navy-200 bg-cream-50/50 p-4"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-semibold text-navy-900">
+                  Service #{idx + 1}
+                </span>
+                {fields.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => remove(idx)}
+                    className="text-sm text-ember-700 hover:underline"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <div className="space-y-3">
+                <Field
+                  id={`sv-${idx}-name`}
+                  label="Service name"
+                  required
+                  {...register(`services.services.${idx}.name`)}
+                  error={e?.services?.[idx]?.name?.message}
+                  maxLength={100}
+                />
+                <Textarea
+                  id={`sv-${idx}-description`}
+                  label="Short description"
+                  required
+                  {...register(`services.services.${idx}.description`)}
+                  error={e?.services?.[idx]?.description?.message}
+                  maxLength={500}
+                  rows={2}
+                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    id={`sv-${idx}-startingPrice`}
+                    label='Starting price (£)'
+                    type="number"
+                    {...register(`services.services.${idx}.startingPrice`, {
+                      valueAsNumber: true,
+                    })}
+                    error={e?.services?.[idx]?.startingPrice?.message}
+                    hint="optional"
+                  />
+                  <label className="mt-7 inline-flex select-none items-center gap-2 self-start text-sm text-navy-700">
+                    <input
+                      type="checkbox"
+                      {...register(`services.services.${idx}.featured`)}
+                      className="h-4 w-4 rounded border-2 border-navy-300 text-navy-900"
+                    />
+                    Feature this service prominently
+                  </label>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {fields.length < 10 && (
+          <button
+            type="button"
+            onClick={() =>
+              append({ name: "", description: "", featured: false })
+            }
+            className="mt-4 btn-secondary"
+          >
+            + Add another service
+          </button>
+        )}
+        {typeof e?.services?.message === "string" && (
+          <p className="mt-2 text-sm text-ember-700">{e.services.message}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Section: Brand ----------
+
+function BrandSection({
+  register,
+  errors,
+  watch,
+}: SectionProps & { watch: ReturnType<typeof useForm<Phase3Data>>["watch"] }) {
+  const e = errors.brand;
+  const primary = watch("brand.primaryColour");
+  const secondary = watch("brand.secondaryColour");
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-5 md:grid-cols-2">
+        <ColourField
+          id="br-primaryColour"
+          label="Primary brand colour"
+          required
+          {...register("brand.primaryColour")}
+          value={primary}
+          error={e?.primaryColour?.message}
+        />
+        <ColourField
+          id="br-secondaryColour"
+          label="Secondary colour"
+          {...register("brand.secondaryColour")}
+          value={secondary}
+          error={e?.secondaryColour?.message}
+          hint="optional"
+        />
+      </div>
+
+      <fieldset>
+        <legend className="mb-3 block text-sm font-semibold text-navy-900">
+          Site vibe{" "}
+          <span aria-hidden="true" className="text-ember-600">*</span>
+        </legend>
+        <p className="mb-3 text-xs text-navy-500">
+          Pick the one that fits your customers best — I&apos;ll work within
+          this preset.
+        </p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {VIBE_OPTIONS.map((v) => {
+            const detail = VIBE_DETAILS[v];
+            return (
+              <label
+                key={v}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400"
+              >
+                <input
+                  type="radio"
+                  value={v}
+                  {...register("brand.vibe")}
+                  className="mt-1 h-4 w-4 flex-none border-2 border-navy-300 text-navy-900"
+                />
+                <div>
+                  <span className="font-semibold text-navy-900">
+                    {detail.title}
+                  </span>
+                  <p className="mt-1 text-sm text-navy-700">{detail.tagline}</p>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        {e?.vibe?.message && (
+          <p className="mt-2 text-sm text-ember-700">{e.vibe.message}</p>
+        )}
+      </fieldset>
+
+      <Field
+        id="br-logoFileName"
+        label="Logo file name"
+        {...register("brand.logoFileName")}
+        error={e?.logoFileName?.message}
+        maxLength={200}
+        hint="optional — actual logo upload happens in the Onboarding Hub after payment"
+      />
+    </div>
+  );
+}
+
+// ---------- Section: Modules ----------
+
+function ModulesSection({
+  register,
+  errors,
+  watch,
+}: SectionProps & { watch: ReturnType<typeof useForm<Phase3Data>>["watch"] }) {
+  const e = errors.modules;
+  const moduleBooking = watch("modules.moduleBooking");
+  const moduleEnquiry = watch("modules.moduleEnquiry");
+  const moduleNewsletter = watch("modules.moduleNewsletter");
+  const gbpAddon = watch("modules.gbpAddon");
+
+  const fees = calculateFees({
+    moduleBooking: !!moduleBooking,
+    moduleEnquiry: !!moduleEnquiry,
+    moduleNewsletter: !!moduleNewsletter,
+    gbpAddon: !!gbpAddon,
+  });
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-navy-700">
+        Tick whichever modules you want. Each can be added or removed later
+        with 30 days&apos; notice. Live pricing updates as you tick.
+      </p>
+
+      <div className="space-y-3">
+        <input type="hidden" value="true" {...register("modules.baseSelected")} />
+        <ModuleRow
+          label="Base website"
+          tagline="Mobile-friendly site, your domain, hosting on your free Cloudflare account."
+          setup={`£${BASE_SETUP_GBP}`}
+          monthly={`£${BASE_MONTHLY_GBP}/mo`}
+          locked
+          checked
+        />
+        <ModuleRow
+          label="Online Booking"
+          tagline="Customers book a slot themselves via Cal.com."
+          setup={`+£${MODULE_BOOKING_SETUP_GBP}`}
+          monthly={`+£${MODULE_BOOKING_MONTHLY_GBP}/mo`}
+          register={register("modules.moduleBooking")}
+        />
+        <ModuleRow
+          label="Enquiry Form"
+          tagline="Email enquiries hit your inbox without exposing your address."
+          setup={`+£${MODULE_ENQUIRY_SETUP_GBP}`}
+          monthly={`+£${MODULE_ENQUIRY_MONTHLY_GBP}/mo`}
+          register={register("modules.moduleEnquiry")}
+        />
+        <ModuleRow
+          label="Newsletter"
+          tagline="Email your customers monthly. I send it for you."
+          setup={`+£${MODULE_NEWSLETTER_SETUP_GBP}`}
+          monthly={`+£${MODULE_NEWSLETTER_MONTHLY_GBP}/mo`}
+          register={register("modules.moduleNewsletter")}
+        />
+        <ModuleRow
+          label="Google Business Profile Setup/Audit"
+          tagline="One-off setup or audit so locals find you."
+          setup={`£${GBP_ADDON_ONE_OFF_GBP}`}
+          monthly="no monthly fee"
+          register={register("modules.gbpAddon")}
+        />
+      </div>
+
+      <div className="rounded-2xl border-2 border-navy-900 bg-cream-50 p-5">
+        <p className="text-sm font-semibold uppercase tracking-wider text-navy-700">
+          Your live total
+        </p>
+        <div className="mt-2 grid gap-1 text-navy-900 sm:grid-cols-2">
+          <p className="font-serif text-2xl">
+            <strong>£{fees.setup}</strong>{" "}
+            <span className="text-base font-normal text-navy-700">setup</span>
+          </p>
+          <p className="font-serif text-2xl">
+            <strong>£{fees.monthly}</strong>
+            <span className="text-base font-normal text-navy-700">/month</span>
+          </p>
+        </div>
+        <p className="mt-2 text-xs text-navy-600">
+          Setup + first month charged together at payment. Cancel any time
+          with 30 days&apos; notice.
+        </p>
+      </div>
+
+      {(e?.moduleBooking?.message ||
+        e?.moduleEnquiry?.message ||
+        e?.moduleNewsletter?.message) && (
+        <p className="text-sm text-ember-700">Pick at least the base.</p>
+      )}
+    </div>
+  );
+}
+
+function ModuleRow({
+  label,
+  tagline,
+  setup,
+  monthly,
+  register,
+  locked,
+  checked,
+}: {
+  label: string;
+  tagline: string;
+  setup: string;
+  monthly: string;
+  register?: ReturnType<ReturnType<typeof useForm<Phase3Data>>["register"]>;
+  locked?: boolean;
+  checked?: boolean;
+}) {
+  return (
+    <label
+      className={[
+        "flex items-start gap-3 rounded-xl border-2 p-4 transition-colors",
+        locked
+          ? "cursor-not-allowed border-navy-100 bg-cream-50"
+          : "cursor-pointer border-navy-200 bg-white hover:border-navy-400",
+      ].join(" ")}
+    >
+      <input
+        type="checkbox"
+        {...(register ?? {})}
+        disabled={locked}
+        defaultChecked={checked}
+        className="mt-0.5 h-5 w-5 flex-none rounded border-2 border-navy-300 text-navy-900 disabled:opacity-60"
+      />
+      <div className="flex-1">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="font-semibold text-navy-900">{label}</span>
+          <span className="text-sm text-navy-600">
+            {setup}, {monthly}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-navy-700">{tagline}</p>
+        {locked && (
+          <p className="mt-1 text-xs italic text-navy-500">
+            Always included.
+          </p>
+        )}
+      </div>
+    </label>
+  );
+}
+
+// ---------- Section: Social proof ----------
+
+function SocialProofSection({
+  register,
+  errors,
+  control,
+}: SectionProps & { control: Control<Phase3Data> }) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "socialProof.testimonials",
+  });
+  const e = errors.socialProof;
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-navy-700">
+        Whatever you&apos;ve got. Optional — but the more, the more your site
+        sells you while you&apos;re working.
+      </p>
+
+      <div>
+        <h3 className="font-serif text-lg font-semibold text-navy-900">
+          Customer testimonials
+          <span className="ml-2 text-sm font-normal text-navy-500">
+            (up to 3)
+          </span>
+        </h3>
+        <div className="mt-4 space-y-4">
+          {fields.map((f, idx) => (
+            <div
+              key={f.id}
+              className="rounded-xl border-2 border-navy-200 bg-cream-50/50 p-4"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-sm font-semibold text-navy-900">
+                  Testimonial #{idx + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(idx)}
+                  className="text-sm text-ember-700 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    id={`sp-${idx}-name`}
+                    label="Customer name"
+                    {...register(`socialProof.testimonials.${idx}.name`)}
+                    error={e?.testimonials?.[idx]?.name?.message}
+                    maxLength={100}
+                  />
+                  <Field
+                    id={`sp-${idx}-location`}
+                    label="Location"
+                    {...register(`socialProof.testimonials.${idx}.location`)}
+                    error={e?.testimonials?.[idx]?.location?.message}
+                    maxLength={100}
+                    hint='e.g. "Oxford"'
+                  />
+                </div>
+                <Textarea
+                  id={`sp-${idx}-quote`}
+                  label="Their words"
+                  {...register(`socialProof.testimonials.${idx}.quote`)}
+                  error={e?.testimonials?.[idx]?.quote?.message}
+                  maxLength={500}
+                  rows={3}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        {fields.length < 3 && (
+          <button
+            type="button"
+            onClick={() =>
+              append({ name: "", location: "", quote: "" })
+            }
+            className="mt-4 btn-secondary"
+          >
+            + Add a testimonial
+          </button>
+        )}
+      </div>
+
+      <Textarea
+        id="sp-associations"
+        label="Trade associations or accreditations"
+        {...register("socialProof.associations")}
+        error={e?.associations?.message}
+        maxLength={500}
+        rows={2}
+        hint="optional — e.g. Gas Safe, NICEIC, FMB"
+      />
+
+      <Field
+        id="sp-yearsExperience"
+        label="Years of experience"
+        type="number"
+        {...register("socialProof.yearsExperience", { valueAsNumber: true })}
+        error={e?.yearsExperience?.message}
+        hint="optional"
+      />
+
+      <Textarea
+        id="sp-awards"
+        label="Awards or recognition"
+        {...register("socialProof.awards")}
+        error={e?.awards?.message}
+        maxLength={500}
+        rows={2}
+        hint="optional"
+      />
+    </div>
+  );
+}
+
+// ---------- Section: Legal ----------
+
+function LegalSection({
+  register,
+  errors,
+  prospectName,
+}: SectionProps & { prospectName: string }) {
+  const e = errors.legal;
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-navy-700">
+        Two boxes I need {prospectName.split(/\s+/)[0] ?? "you"} to tick before
+        I can build your site. Plain English; no fine print.
+      </p>
+
+      <CheckboxBlock
+        id="lg-isDataController"
+        label="I confirm I'm the data controller for my own site"
+        body="That means GDPR-wise, you own your customers' data — I'm just the developer. Standard for this kind of arrangement."
+        register={register("legal.isDataController")}
+        error={e?.isDataController?.message}
+      />
+
+      <CheckboxBlock
+        id="lg-acceptsTerms"
+        label="I accept the Terms of Service"
+        body={
+          <>
+            You can read them in full at{" "}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="link">
+              {site.url}/terms
+            </a>
+            . Highlights: 30-day notice to cancel, you own everything,
+            48-hour refund window on the setup fee.
+          </>
+        }
+        register={register("legal.acceptsTerms")}
+        error={e?.acceptsTerms?.message}
+      />
+
+      <CheckboxBlock
+        id="lg-marketingConsent"
+        label="It's OK to email me with occasional product updates"
+        body="Optional. Means I can drop you a line when I add a new module or change pricing. Easy to unsubscribe any time. Off by default."
+        register={register("legal.marketingConsent")}
+      />
+    </div>
+  );
+}
+
+function CheckboxBlock({
+  id,
+  label,
+  body,
+  register,
+  error,
+}: {
+  id: string;
+  label: string;
+  body: React.ReactNode;
+  register: ReturnType<ReturnType<typeof useForm<Phase3Data>>["register"]>;
+  error?: string;
+}) {
+  return (
+    <label
+      className={[
+        "flex cursor-pointer items-start gap-3 rounded-xl border-2 bg-white p-4",
+        error ? "border-ember-500" : "border-navy-200 hover:border-navy-400",
+      ].join(" ")}
+    >
+      <input
+        id={id}
+        type="checkbox"
+        {...register}
+        className="mt-1 h-5 w-5 flex-none rounded border-2 border-navy-300 text-navy-900"
+      />
+      <div className="flex-1">
+        <span className="font-semibold text-navy-900">{label}</span>
+        <p className="mt-1 text-sm text-navy-700">{body}</p>
+        {error && <p className="mt-2 text-sm text-ember-700">{error}</p>}
+      </div>
+    </label>
+  );
+}
+
+// ---------- Generic field components ----------
+
+type FieldRegisterReturn = ReturnType<
+  ReturnType<typeof useForm<Phase3Data>>["register"]
+>;
+
+type BaseFieldProps = {
+  id: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string;
+  maxLength?: number;
+  placeholder?: string;
+};
+
+function Field({
+  id,
+  label,
+  required,
+  type = "text",
+  hint,
+  error,
+  maxLength,
+  placeholder,
+  ...rest
+}: BaseFieldProps & {
+  type?: string;
+} & FieldRegisterReturn) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-2 block text-sm font-semibold text-navy-900"
+      >
+        {label}
+        {required && (
+          <>
+            {" "}
+            <span aria-hidden="true" className="text-ember-600">*</span>
+          </>
+        )}
+        {hint && (
+          <span className="font-normal text-navy-500"> ({hint})</span>
+        )}
+      </label>
+      <input
+        id={id}
+        type={type}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        {...rest}
+        className={[
+          "w-full rounded-xl border-2 bg-white px-4 py-3 text-base text-navy-900 placeholder:text-navy-400 focus:border-navy-900 focus:outline-none",
+          error ? "border-ember-500" : "border-navy-200",
+        ].join(" ")}
+      />
+      {error && <p className="mt-2 text-sm text-ember-700">{error}</p>}
+    </div>
+  );
+}
+
+function Textarea({
+  id,
+  label,
+  required,
+  hint,
+  error,
+  maxLength,
+  placeholder,
+  rows = 4,
+  ...rest
+}: BaseFieldProps & {
+  rows?: number;
+} & FieldRegisterReturn) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-2 block text-sm font-semibold text-navy-900"
+      >
+        {label}
+        {required && (
+          <>
+            {" "}
+            <span aria-hidden="true" className="text-ember-600">*</span>
+          </>
+        )}
+        {hint && (
+          <span className="font-normal text-navy-500"> ({hint})</span>
+        )}
+      </label>
+      <textarea
+        id={id}
+        rows={rows}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        {...rest}
+        className={[
+          "w-full rounded-xl border-2 bg-white px-4 py-3 text-base text-navy-900 placeholder:text-navy-400 focus:border-navy-900 focus:outline-none",
+          error ? "border-ember-500" : "border-navy-200",
+        ].join(" ")}
+      />
+      {error && <p className="mt-2 text-sm text-ember-700">{error}</p>}
+    </div>
+  );
+}
+
+function SelectField({
+  id,
+  label,
+  required,
+  hint,
+  error,
+  options,
+  ...rest
+}: BaseFieldProps & {
+  options: readonly string[];
+} & FieldRegisterReturn) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-2 block text-sm font-semibold text-navy-900"
+      >
+        {label}
+        {required && (
+          <>
+            {" "}
+            <span aria-hidden="true" className="text-ember-600">*</span>
+          </>
+        )}
+        {hint && (
+          <span className="font-normal text-navy-500"> ({hint})</span>
+        )}
+      </label>
+      <select
+        id={id}
+        {...rest}
+        className={[
+          "w-full rounded-xl border-2 bg-white px-4 py-3 text-base text-navy-900 focus:border-navy-900 focus:outline-none",
+          error ? "border-ember-500" : "border-navy-200",
+        ].join(" ")}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      {error && <p className="mt-2 text-sm text-ember-700">{error}</p>}
+    </div>
+  );
+}
+
+function ColourField({
+  id,
+  label,
+  required,
+  hint,
+  value,
+  error,
+  ...rest
+}: BaseFieldProps & {
+  value?: string;
+} & FieldRegisterReturn) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-2 block text-sm font-semibold text-navy-900"
+      >
+        {label}
+        {required && (
+          <>
+            {" "}
+            <span aria-hidden="true" className="text-ember-600">*</span>
+          </>
+        )}
+        {hint && (
+          <span className="font-normal text-navy-500"> ({hint})</span>
+        )}
+      </label>
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="h-12 w-12 flex-none rounded-xl border-2 border-navy-200"
+          style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(value ?? "") ? value : "#ffffff" }}
+        />
+        <input
+          id={id}
+          type="text"
+          placeholder="#1d3a5f"
+          maxLength={7}
+          {...rest}
+          className={[
+            "w-full rounded-xl border-2 bg-white px-4 py-3 font-mono text-base text-navy-900 placeholder:text-navy-400 focus:border-navy-900 focus:outline-none",
+            error ? "border-ember-500" : "border-navy-200",
+          ].join(" ")}
+        />
+      </div>
+      {error && <p className="mt-2 text-sm text-ember-700">{error}</p>}
+    </div>
+  );
+}
