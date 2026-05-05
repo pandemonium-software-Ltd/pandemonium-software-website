@@ -55,8 +55,8 @@ export default function PricingPage() {
                   Ready when you are.
                 </h2>
                 <p className="mt-3 text-[1.05rem] leading-relaxed text-navy-700">
-                  Tell us a bit about your business and we&apos;ll be in
-                  touch within one working day to set things up.
+                  Tell me a bit about your business and I&apos;ll be in touch
+                  within 4 hours (working hours) to set things up.
                 </p>
               </div>
               <Link

@@ -3,14 +3,14 @@ import EnquiryForm from "@/components/EnquiryForm";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Start your enquiry — Tell us about your business",
+  title: "Start your enquiry — Tell me about your business",
   description:
-    "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email us directly — we reply within one working day. Proudly Oxfordshire-based, serving small businesses across the UK.",
+    "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email me directly — I reply within 4 hours (working hours). Oxfordshire-based, serving small businesses across the UK.",
   alternates: { canonical: "/enquiry" },
   openGraph: {
     title: "Start your enquiry — Pandemonium Software Ltd",
     description:
-      "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email us directly.",
+      "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email me directly.",
     url: `${site.url}/enquiry`,
   },
 };
@@ -21,10 +21,11 @@ export default function EnquiryPage() {
       <section className="bg-cream-100/60 pb-12 pt-14 md:pb-16 md:pt-20">
         <div className="container-content max-w-3xl text-center">
           <span className="eyebrow">Start your enquiry</span>
-          <h1 className="heading-1">Tell us about your business.</h1>
+          <h1 className="heading-1">Tell me about your business.</h1>
           <p className="prose-body mx-auto mt-6 max-w-2xl">
-            Drop us a line and we&apos;ll reply within one working day. No
-            sales patter, no pushy calls — just a proper email from a human.
+            Fill in a few details below and I&apos;ll email you within 4 hours
+            (working hours). No sales patter, no chase-ups — just a proper
+            email from a human.
           </p>
         </div>
       </section>
@@ -38,9 +39,9 @@ export default function EnquiryPage() {
                 Just want to email?
               </h2>
               <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
-                Write to us at the address below. Tell us what you do, where
-                you are and roughly what you&apos;re after. We&apos;ll get
-                back to you within one working day.
+                Write to me at the address below. Tell me what you do, where
+                you are and roughly what you&apos;re after. I&apos;ll reply
+                within 4 hours (working hours).
               </p>
               <a
                 href={`mailto:${site.contactEmail}`}
@@ -53,7 +54,7 @@ export default function EnquiryPage() {
                 <span className="font-medium">{site.contactEmail}</span>
               </a>
               <p className="mt-5 text-sm text-navy-600">
-                Based in {site.location.city}, {site.location.region}. We
+                Based in {site.location.city}, {site.location.region}. I
                 work with small businesses across the UK.
               </p>
             </div>
@@ -63,15 +64,15 @@ export default function EnquiryPage() {
               <ol className="mt-3 space-y-2">
                 <li className="flex gap-3">
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ember-500 text-xs font-semibold text-white">1</span>
-                  <span>You send us a note, either with the form or by email.</span>
+                  <span>You send the form (or email me directly).</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ember-500 text-xs font-semibold text-white">2</span>
-                  <span>We reply within one working day with a couple of follow-up questions.</span>
+                  <span>I reply within 4 hours (working hours) with a short follow-up form.</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ember-500 text-xs font-semibold text-white">3</span>
-                  <span>We agree the details over email, then get building.</span>
+                  <span>If we&apos;re a good fit, I send a fixed quote and we agree the details over email.</span>
                 </li>
               </ol>
             </div>
@@ -80,10 +81,11 @@ export default function EnquiryPage() {
           {/* Enquiry form */}
           <div className="card bg-white">
             <h2 className="font-serif text-2xl font-semibold text-navy-900 md:text-3xl">
-              Send us an enquiry
+              Send me an enquiry
             </h2>
             <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
-              Fill in a few details and we&apos;ll come back to you by email.
+              Fill in a few details and I&apos;ll come back to you by email
+              within 4 hours (working hours).
             </p>
             <div className="mt-8">
               <EnquiryForm />

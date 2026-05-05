@@ -55,20 +55,23 @@ export default function PrivacyPage() {
             <li>
               <strong>Enquiry details:</strong> if you email us directly or
               use the enquiry form on our enquiry page, we&apos;ll see your
-              name, email address, phone (if given), business details, UK
-              location, current website situation and whatever else you
-              chose to tell us. The enquiry form itself doesn&apos;t transmit
-              any data to us — it opens your email app with a pre-filled
-              message that you review and send yourself.
+              name, email address, phone, business details, UK location and
+              current website situation. When you submit the enquiry form,
+              these details are saved to our private Notion workspace (a
+              project-management tool) and we get a notification email so
+              we can reply. We don&apos;t share these details with anyone
+              else, and we delete them after 24 months if you don&apos;t
+              become a client (see Section 5).
             </li>
             <li>
-              <strong>Intake form data (for accepted clients):</strong> once
-              you decide to work with us, we&apos;ll collect more detailed
-              information to build your site — business legal details,
-              services, brand colours, logo, photos, module selections.
-              This is held in our client management tool only for as long
-              as we&apos;re building your site, and is transferred to your
-              own accounts at handover.
+              <strong>Qualification and intake form data (for accepted
+              clients):</strong> once you decide to work with us,
+              we&apos;ll collect more detailed information through follow-up
+              forms — business legal details, services, brand colours,
+              logo, photos, module selections. This is held in the same
+              private Notion workspace only for as long as we&apos;re
+              building your site, and is transferred to your own accounts at
+              handover.
             </li>
             <li>
               <strong>Payment details:</strong> if you become a paying
