@@ -24,23 +24,28 @@ import type {
 
 // ---------- Hard blocker IDs ----------
 
+// NOTE: blocker IDs are kept in this exact wording because they're written
+// as Notion select option names. Avoid colons in the SBx names — the
+// pre-seeded Notion options use single-space separators ("SB1 ...") and
+// must match byte-for-byte or Notion auto-creates duplicate options.
+
 export const HARD_BLOCKERS = {
-  HB1_MULTI_BOOKABLE_STAFF: "HB1: Scheduling requires multiple independently-bookable people",
-  HB2_ECOMMERCE: "HB2: E-commerce or online product purchasing required",
-  HB3_MULTILINGUAL: "HB3: Multilingual or multi-region site required",
-  HB4_UNSUPPORTED_INTEGRATION: "HB4: Integration with software outside our supported list",
-  HB5_TIGHT_TIMELINE: "HB5: Go-live date is less than 14 days from submission",
-  HB6_OUT_OF_TEMPLATE: "HB6: Required feature not deliverable by our template",
+  HB1_MULTI_BOOKABLE_STAFF: "HB1 Scheduling requires multiple independently-bookable people",
+  HB2_ECOMMERCE: "HB2 E-commerce or online product purchasing required",
+  HB3_MULTILINGUAL: "HB3 Multilingual or multi-region site required",
+  HB4_UNSUPPORTED_INTEGRATION: "HB4 Integration with software outside our supported list",
+  HB5_TIGHT_TIMELINE: "HB5 Go-live date is less than 14 days from submission",
+  HB6_OUT_OF_TEMPLATE: "HB6 Required feature not deliverable by our template",
 } as const;
 
 export const SOFT_BLOCKERS = {
-  SB1_CUSTOM_LAYOUT: "SB1: Custom layout work beyond the four vibe presets",
-  SB2_TOO_MANY_SERVICES: "SB2: More than 10 services to list",
-  SB3_ACCESSIBILITY_BEYOND_AA: "SB3: Accessibility requirements beyond WCAG AA",
-  SB4_BAD_PREVIOUS_EXPERIENCE: "SB4: Previous bad experience with a web designer",
-  SB5_CONTRADICTORY: "SB5: Contradictory responses in qualification form",
-  SB6_TECHNICAL_QUESTIONS: "SB6: Persistent technical implementation questions",
-  SB7_OUT_OF_SCOPE_DELIVERABLE: "SB7: Out-of-scope feature that could potentially be delivered",
+  SB1_CUSTOM_LAYOUT: "SB1 Custom layout work beyond the four vibe presets",
+  SB2_TOO_MANY_SERVICES: "SB2 More than 10 services to list",
+  SB3_ACCESSIBILITY_BEYOND_AA: "SB3 Accessibility requirements beyond WCAG AA",
+  SB4_BAD_PREVIOUS_EXPERIENCE: "SB4 Previous bad experience with a web designer",
+  SB5_CONTRADICTORY: "SB5 Contradictory responses in qualification form",
+  SB6_TECHNICAL_QUESTIONS: "SB6 Persistent technical implementation questions",
+  SB7_OUT_OF_SCOPE_DELIVERABLE: "SB7 Out-of-scope feature that could potentially be delivered",
 } as const;
 
 // ---------- Helpers ----------
