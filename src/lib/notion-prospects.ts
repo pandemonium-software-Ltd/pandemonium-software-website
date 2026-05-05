@@ -1,7 +1,11 @@
 // Notion CRUD for the Prospects database.
 //
-// Schema (must match the Notion database exactly — Cowork creates
-// the schema during Phase B Checkpoint 2):
+// Uses notionFetch (REST) rather than @notionhq/client — see notion.ts
+// for the rationale. Property payloads are constructed in Notion's
+// standard JSON shape, exactly as the SDK would have built them.
+//
+// Schema (must match the Notion database exactly — Cowork created the
+// schema via DDL in Phase B Checkpoint 2):
 //
 // Title         Name (text, prospect's full name)
 // Email         email
@@ -27,7 +31,7 @@
 // Founding Member  checkbox
 // Notes  rich_text
 
-import { getNotion } from "./notion";
+import { notionFetch } from "./notion";
 import { getServerEnv } from "./env";
 import type { Phase1Data, Phase2Data, CompatibilityOutcome } from "./schemas";
 
@@ -99,6 +103,20 @@ function multiSelectProp(names: string[]) {
   return { multi_select: names.map((name) => ({ name })) };
 }
 
+// --- Notion API response shapes (only the bits we read) ---
+
+type NotionPage = {
+  id: string;
+  url?: string;
+  properties: Record<string, unknown>;
+};
+
+type NotionQueryResponse = {
+  results: NotionPage[];
+  next_cursor: string | null;
+  has_more: boolean;
+};
+
 // --- Create ---
 
 export async function createProspect(
@@ -106,31 +124,33 @@ export async function createProspect(
   token: string,
 ): Promise<{ pageId: string; notionUrl: string }> {
   const env = getServerEnv();
-  const notion = getNotion();
   const now = new Date().toISOString();
 
-  const page = await notion.pages.create({
-    parent: { database_id: env.NOTION_PROSPECTS_DB_ID },
-    properties: {
-      Name: title(phase1.name),
-      Email: { email: phase1.email },
-      Phone: { phone_number: phase1.phone },
-      "Business Name": rt(phase1.business),
-      "Business Type": selectProp(phase1.businessType),
-      "UK Location": rt(phase1.location),
-      "Current Website Situation": selectProp(phase1.websiteSituation),
-      "Phase 1 Submitted At": { date: { start: now } },
-      "Phase 1 Unique Token": rt(token),
-      Status: selectProp("Phase 1 Complete"),
-      "Founding Member": { checkbox: false },
-      "Soft Blockers Triggered": multiSelectProp([]),
-      "Module Selections": multiSelectProp([]),
+  const page = await notionFetch<NotionPage>("/pages", {
+    method: "POST",
+    body: {
+      parent: { database_id: env.NOTION_PROSPECTS_DB_ID },
+      properties: {
+        Name: title(phase1.name),
+        Email: { email: phase1.email },
+        Phone: { phone_number: phase1.phone },
+        "Business Name": rt(phase1.business),
+        "Business Type": selectProp(phase1.businessType),
+        "UK Location": rt(phase1.location),
+        "Current Website Situation": selectProp(phase1.websiteSituation),
+        "Phase 1 Submitted At": { date: { start: now } },
+        "Phase 1 Unique Token": rt(token),
+        Status: selectProp("Phase 1 Complete"),
+        "Founding Member": { checkbox: false },
+        "Soft Blockers Triggered": multiSelectProp([]),
+        "Module Selections": multiSelectProp([]),
+      },
     },
   });
 
   return {
     pageId: page.id,
-    notionUrl: "url" in page ? (page.url as string) : "",
+    notionUrl: page.url ?? "",
   };
 }
 
@@ -140,39 +160,44 @@ export async function getProspectByToken(
   token: string,
 ): Promise<ProspectRecord | null> {
   const env = getServerEnv();
-  const notion = getNotion();
 
-  const result = await notion.databases.query({
-    database_id: env.NOTION_PROSPECTS_DB_ID,
-    filter: {
-      property: "Phase 1 Unique Token",
-      rich_text: { equals: token },
+  const result = await notionFetch<NotionQueryResponse>(
+    `/databases/${env.NOTION_PROSPECTS_DB_ID}/query`,
+    {
+      method: "POST",
+      body: {
+        filter: {
+          property: "Phase 1 Unique Token",
+          rich_text: { equals: token },
+        },
+        page_size: 1,
+      },
     },
-    page_size: 1,
-  });
+  );
 
   const page = result.results[0];
-  if (!page || !("properties" in page)) return null;
-  return pageToProspect(page as NotionPage);
+  if (!page) return null;
+  return pageToProspect(page);
 }
 
 // --- List all (admin) ---
 
 export async function listAllProspects(): Promise<ProspectRecord[]> {
   const env = getServerEnv();
-  const notion = getNotion();
 
-  const result = await notion.databases.query({
-    database_id: env.NOTION_PROSPECTS_DB_ID,
-    sorts: [{ property: "Phase 1 Submitted At", direction: "descending" }],
-    page_size: 100,
-  });
+  const result = await notionFetch<NotionQueryResponse>(
+    `/databases/${env.NOTION_PROSPECTS_DB_ID}/query`,
+    {
+      method: "POST",
+      body: {
+        sorts: [{ property: "Phase 1 Submitted At", direction: "descending" }],
+        page_size: 100,
+      },
+    },
+  );
 
   return result.results
-    .filter((p): p is typeof p & { properties: Record<string, unknown> } =>
-      "properties" in p,
-    )
-    .map((p) => pageToProspect(p as NotionPage))
+    .map((p) => pageToProspect(p))
     .filter((p): p is ProspectRecord => p !== null);
 }
 
@@ -183,7 +208,6 @@ export async function updateProspectPhase2(
   phase2: Phase2Data,
   outcome: CompatibilityOutcome,
 ): Promise<void> {
-  const notion = getNotion();
   const now = new Date().toISOString();
 
   const statusMap: Record<CompatibilityOutcome["outcome"], ProspectStatus> = {
@@ -203,18 +227,22 @@ export async function updateProspectPhase2(
     clarification_needed: "Clarification Needed",
   };
 
-  await notion.pages.update({
-    page_id: pageId,
-    properties: {
-      Status: selectProp(statusMap[outcome.outcome]),
-      "Phase 2 Submitted At": { date: { start: now } },
-      "Phase 2 Data": rt(JSON.stringify(phase2)),
-      "Compatibility Result": selectProp(
-        compatibilityResultMap[outcome.outcome],
-      ),
-      "Compatibility Reasoning": rt(outcome.reasoning),
-      "Hard Blocker Triggered": rt(outcome.hardBlockerTriggered ?? ""),
-      "Soft Blockers Triggered": multiSelectProp(outcome.softBlockersTriggered),
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        Status: selectProp(statusMap[outcome.outcome]),
+        "Phase 2 Submitted At": { date: { start: now } },
+        "Phase 2 Data": rt(JSON.stringify(phase2)),
+        "Compatibility Result": selectProp(
+          compatibilityResultMap[outcome.outcome],
+        ),
+        "Compatibility Reasoning": rt(outcome.reasoning),
+        "Hard Blocker Triggered": rt(outcome.hardBlockerTriggered ?? ""),
+        "Soft Blockers Triggered": multiSelectProp(
+          outcome.softBlockersTriggered,
+        ),
+      },
     },
   });
 }
@@ -225,15 +253,21 @@ export async function updateProspectPhase3(
   pageId: string,
   phase3Partial: unknown,
   isFinal: boolean,
-  fees?: { setup: number; monthly: number; founding: boolean; modules: string[] },
+  fees?: {
+    setup: number;
+    monthly: number;
+    founding: boolean;
+    modules: string[];
+  },
 ): Promise<void> {
-  const notion = getNotion();
   const properties: Record<string, unknown> = {
     "Phase 3 Data": rt(JSON.stringify(phase3Partial)),
     Status: selectProp(isFinal ? "Phase 3 Complete" : "Phase 3 In Progress"),
   };
   if (isFinal) {
-    properties["Phase 3 Submitted At"] = { date: { start: new Date().toISOString() } };
+    properties["Phase 3 Submitted At"] = {
+      date: { start: new Date().toISOString() },
+    };
   }
   if (fees) {
     properties["Setup Fee Calculated"] = { number: fees.setup };
@@ -241,25 +275,17 @@ export async function updateProspectPhase3(
     properties["Founding Member"] = { checkbox: fees.founding };
     properties["Module Selections"] = multiSelectProp(fees.modules);
   }
-  await notion.pages.update({
-    page_id: pageId,
-    // The Notion SDK type is strict; cast is safe because we constructed
-    // each property with the SDK's helper shape.
-    properties: properties as Parameters<typeof notion.pages.update>[0]["properties"],
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: { properties },
   });
 }
 
 // --- Page → ProspectRecord parser ---
-
-// Notion SDK's response types are notoriously verbose union types.
-// We narrow by property name and access defensively. Anything missing
-// returns undefined rather than throwing.
-
-type NotionPage = {
-  id: string;
-  url?: string;
-  properties: Record<string, unknown>;
-};
+//
+// Notion property values come back in verbose union types. We narrow
+// by property name and access defensively. Anything missing returns
+// undefined rather than throwing.
 
 function pageToProspect(page: NotionPage): ProspectRecord | null {
   const p = page.properties;
@@ -274,7 +300,9 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     if (!prop || typeof prop !== "object") return "";
     const arr = (prop as { rich_text?: unknown[] }).rich_text;
     if (!Array.isArray(arr)) return "";
-    return arr.map((t) => (t as { plain_text?: string }).plain_text ?? "").join("");
+    return arr
+      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+      .join("");
   }
   function readEmail(prop: unknown): string {
     return (prop as { email?: string })?.email ?? "";
@@ -346,8 +374,10 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     compatibilityResult: readSelect(
       p["Compatibility Result"],
     ) as ProspectRecord["compatibilityResult"],
-    compatibilityReasoning: readRichText(p["Compatibility Reasoning"]) || undefined,
-    hardBlockerTriggered: readRichText(p["Hard Blocker Triggered"]) || undefined,
+    compatibilityReasoning:
+      readRichText(p["Compatibility Reasoning"]) || undefined,
+    hardBlockerTriggered:
+      readRichText(p["Hard Blocker Triggered"]) || undefined,
     softBlockersTriggered: readMultiSelect(p["Soft Blockers Triggered"]),
     moduleSelections: readMultiSelect(p["Module Selections"]),
     setupFeeCalculated: readNumber(p["Setup Fee Calculated"]),
