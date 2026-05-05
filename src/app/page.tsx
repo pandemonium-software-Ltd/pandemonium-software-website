@@ -21,7 +21,7 @@ export default function HomePage() {
               hassle, no tech headaches, just a site that brings in work.
             </h1>
             <p className="prose-body mt-6 max-w-[42rem]">
-              We build a smart, mobile-friendly website for your business in
+              I build a smart, mobile-friendly website for your business in
               two weeks. You get a proper online home, a clear way for
               customers to find you, and you keep ownership of everything —
               forever. No lock-in, no lead fees, no jargon. Proudly
@@ -63,7 +63,7 @@ export default function HomePage() {
             </h2>
             <p className="prose-body mt-5">
               A proper website is more than a few pages and a phone number.
-              Here&apos;s what&apos;s in every site we build.
+              Here&apos;s what&apos;s in every site I build.
             </p>
           </div>
 
@@ -76,7 +76,7 @@ export default function HomePage() {
             <FeatureCard
               icon={<MapIcon />}
               title="Local Google presence"
-              body="We set things up so locals searching for what you do in your patch can actually find you. Real SEO basics, no tricks."
+              body="I set things up so locals searching for what you do in your patch can actually find you. Real SEO basics, no tricks."
             />
             <FeatureCard
               icon={<KeyIcon />}
@@ -94,7 +94,7 @@ export default function HomePage() {
             <span className="eyebrow">How it works</span>
             <h2 className="heading-2">Four simple steps. Two weeks. Done.</h2>
             <p className="prose-body mt-5">
-              No endless meetings, no 40-page briefs, no chasing. We keep it
+              No endless meetings, no 40-page briefs, no chasing. I keep it
               straightforward so you can get on with your job.
             </p>
           </div>
@@ -102,23 +102,23 @@ export default function HomePage() {
           <ol className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <StepCard
               number="1"
-              title="Tell us about your business"
-              body="Fill in a short enquiry. A couple of plain-English questions — no jargon, no pressure, no phone-tag. We reply within one working day."
+              title="Tell me about your business"
+              body="Fill in a short enquiry. A couple of plain-English questions — no jargon, no pressure, no phone-tag. I reply within 4 working hours."
             />
             <StepCard
               number="2"
-              title="We build it in two weeks"
+              title="I build it in two weeks"
               body="Once you&rsquo;ve finished the Onboarding Hub, your site is ready for review within two working weeks. That&rsquo;s a promise, not a hope."
             />
             <StepCard
               number="3"
               title="You complete a guided self-setup"
-              body="Our Onboarding Hub walks you through the few clicks we need from you — logo, photos, your own hosting account. Short videos at every step."
+              body="My Onboarding Hub walks you through the few clicks I need from you — logo, photos, your own hosting account. Short videos at every step."
             />
             <StepCard
               number="4"
               title="Your site goes live and starts bringing in work"
-              body="We hand it over, show you round, and make sure everything works on your phone and your mate&rsquo;s phone. It&rsquo;s yours from day one."
+              body="I hand it over, show you round, and make sure everything works on your phone and your mate&rsquo;s phone. It&rsquo;s yours from day one."
             />
           </ol>
         </div>
@@ -129,26 +129,27 @@ export default function HomePage() {
         <div className="container-content">
           <div className="grid gap-14 lg:grid-cols-[1.1fr_1fr] lg:items-center">
             <div>
-              <span className="eyebrow">Why work with us</span>
+              <span className="eyebrow">Why work with me</span>
               <h2 className="heading-2">
                 Small, local and honest — on purpose.
               </h2>
               <p className="prose-body mt-5">
-                We&apos;re a small, focused business building websites for
-                UK trades and small businesses. Not a big agency, not a
-                call-centre, not a website builder pretending to be a service.
-                Just one person who knows how to build good websites and a
-                handful of trusted clients.
+                I&apos;m a one-person business building websites for UK
+                trades and small businesses. Not a big agency, not a
+                call-centre, not a website builder pretending to be a
+                service. Just one developer who knows how to build good
+                websites and a handful of trusted clients.
               </p>
               <ul className="mt-8 space-y-4 text-lg text-navy-800">
                 <TrustItem>
-                  <strong>Oxfordshire-based, serving the UK.</strong> Our
-                  home is Oxfordshire, but we work with businesses anywhere
+                  <strong>Oxfordshire-based, serving the UK.</strong> My
+                  home is Oxfordshire, but I work with businesses anywhere
                   in the UK.
                 </TrustItem>
                 <TrustItem>
-                  <strong>Family-run feel.</strong> You talk to the person
-                  building your site, not a sales rep passing you around.
+                  <strong>One person, end to end.</strong> You talk to the
+                  person building your site, not a sales rep passing you
+                  around.
                 </TrustItem>
                 <TrustItem>
                   <strong>You own everything.</strong> No hostage hosting, no
@@ -156,7 +157,7 @@ export default function HomePage() {
                 </TrustItem>
                 <TrustItem>
                   <strong>No lead fees.</strong> Unlike Checkatrade or
-                  MyBuilder, we don&apos;t take a cut of your work. You pay a
+                  MyBuilder, I don&apos;t take a cut of your work. You pay a
                   fair flat fee. That&apos;s it.
                 </TrustItem>
               </ul>
@@ -172,9 +173,9 @@ export default function HomePage() {
               </p>
               <blockquote className="mt-6 font-serif text-2xl leading-snug text-cream-50 md:text-[1.7rem]">
                 <span className="text-ember-400">&ldquo;</span>
-                A placeholder for the first testimonial we&apos;ll
-                proudly add here — from the first real Oxfordshire tradesman
-                whose site we launch.
+                A placeholder for the first testimonial I&apos;ll proudly
+                add here — from the first real Oxfordshire tradesman whose
+                site I launch.
                 <span className="text-ember-400">&rdquo;</span>
               </blockquote>
               <div className="mt-8 flex items-center gap-4">

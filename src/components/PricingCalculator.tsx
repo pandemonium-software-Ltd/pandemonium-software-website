@@ -29,7 +29,7 @@ const MODULES: Module[] = [
       "Security, maintenance and dependency updates done for you",
       "Monthly performance report, in plain English",
       "30 minutes of content changes per month, included",
-      "Guided self-setup through our Onboarding Hub — short videos at every step",
+      "Guided self-setup through the Onboarding Hub — short videos at every step",
       "UK-based support from a real person",
     ],
   },

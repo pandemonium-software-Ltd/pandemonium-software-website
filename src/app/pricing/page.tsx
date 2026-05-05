@@ -89,7 +89,7 @@ export default function PricingPage() {
                   a: (
                     <>
                       <p>
-                        Because we use a proven template and reuse what
+                        Because I use a proven template and reuse what
                         works. Most small trade websites need the same
                         things — a mobile-friendly layout, your services,
                         your photos, a way to get in touch, and a proper
@@ -98,7 +98,7 @@ export default function PricingPage() {
                       <p className="mt-3">
                         Building that from scratch every time would cost
                         you thousands. Starting from a solid base and
-                        tailoring it to your business means we can charge a
+                        tailoring it to your business means I can charge a
                         flat fee and still do a proper job.
                       </p>
                     </>
@@ -110,7 +110,7 @@ export default function PricingPage() {
                     <p>
                       No contract, no minimum term. You&apos;re on a simple
                       monthly plan — cancel any time with 30 days&apos; notice
-                      and you keep everything we built. We&apos;re not in the
+                      and you keep everything I built. I&apos;m not in the
                       business of trapping people.
                     </p>
                   ),
@@ -119,9 +119,9 @@ export default function PricingPage() {
                   q: "I already have a website. Can I switch?",
                   a: (
                     <p>
-                      Yes. We can migrate what&apos;s worth keeping or start
+                      Yes. I can migrate what&apos;s worth keeping or start
                       fresh — whichever gets you a better result. If
-                      you&apos;re stuck with another provider, we&apos;ll help
+                      you&apos;re stuck with another provider, I&apos;ll help
                       you figure out what you need to do to move.
                     </p>
                   ),
@@ -137,8 +137,8 @@ export default function PricingPage() {
                         account, and the website files themselves. Everything.
                       </p>
                       <p className="mt-3">
-                        If you ever decide to leave us, we hand over any
-                        credentials we were holding and the site carries on
+                        If you ever decide to leave, I hand over any
+                        credentials I was holding and the site carries on
                         running — no hostage fees, no silly handover charges.
                       </p>
                     </>
@@ -151,7 +151,7 @@ export default function PricingPage() {
                       Your monthly fee includes 30 minutes of content changes
                       per month — a new phone number, a swapped photo, a
                       fresh testimonial, a price update. Bigger changes like
-                      new pages or redesigns we quote separately and fairly
+                      new pages or redesigns I quote separately and fairly
                       before any work starts.
                     </p>
                   ),
@@ -162,7 +162,7 @@ export default function PricingPage() {
                     <p>
                       Easy. Any module can be added at any time for the same
                       setup fee and monthly price shown on this page. Just
-                      drop us an email — the new module is usually live
+                      drop me an email — the new module is usually live
                       within a couple of working days.
                     </p>
                   ),
@@ -197,7 +197,7 @@ export default function PricingPage() {
                       </ul>
                       <p className="mt-4">
                         Anything bigger than a 30-minute content job — a new
-                        page, a section redesign, a custom feature — we quote
+                        page, a section redesign, a custom feature — I quote
                         for separately and fairly before any work starts.
                       </p>
                     </>
@@ -214,9 +214,9 @@ export default function PricingPage() {
                         hidden hosting bills sneaking up on you in month six.
                       </p>
                       <p className="mt-3">
-                        We set it up for you during the Onboarding Hub and
-                        you keep the account. If you ever part ways with us,
-                        your site carries on running exactly the same.
+                        I set it up for you during the Onboarding Hub and
+                        you keep the account. If you ever part ways, your
+                        site carries on running exactly the same.
                       </p>
                     </>
                   ),
@@ -225,10 +225,10 @@ export default function PricingPage() {
                   q: "What if I'm not in Oxfordshire?",
                   a: (
                     <p>
-                      No problem. Oxfordshire is our home — it&apos;s where
-                      we live, where our first clients are, and where our
-                      local knowledge runs deep. But the work happens over
-                      email, so where you&apos;re based in the UK makes no
+                      No problem. Oxfordshire is my home — it&apos;s where
+                      I live, where my first clients are, and where my local
+                      knowledge runs deep. But the work happens over email,
+                      so where you&apos;re based in the UK makes no
                       practical difference. A plumber in Truro gets the same
                       site as a plumber in Thame.
                     </p>
@@ -241,8 +241,8 @@ export default function PricingPage() {
                       Yes — 30 days&apos; written notice, by email, and
                       you&apos;re out. No exit fees, no &quot;but wait&quot;
                       calls. You keep your website, your domain, your
-                      Cloudflare Pages account, and everything in them. We
-                      hand over any credentials we were holding and part on
+                      Cloudflare Pages account, and everything in them. I
+                      hand over any credentials I was holding and we part on
                       good terms.
                     </p>
                   ),
@@ -251,7 +251,7 @@ export default function PricingPage() {
                   q: "Can I see an example?",
                   a: (
                     <p>
-                      Of course. Have a look at our demo site built for a
+                      Of course. Have a look at my demo site built for a
                       fictional Oxfordshire garden company:{" "}
                       <a
                         href={site.demoUrl}
@@ -261,7 +261,7 @@ export default function PricingPage() {
                       >
                         oxford-garden-co-demo.vercel.app
                       </a>
-                      . Your site won&apos;t be a copy — we&apos;ll build
+                      . Your site won&apos;t be a copy — I&apos;ll build
                       something that fits your business and your area — but
                       it&apos;ll be at the same level of quality.
                     </p>

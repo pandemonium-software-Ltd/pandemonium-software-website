@@ -17,7 +17,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Full intake — Pandemonium Software",
   description:
-    "The eight-section intake form. Once you've finished it, your fixed quote is locked in and we move to payment.",
+    "The full intake form. Once you've finished it, your fixed quote is locked in and you continue to payment.",
   robots: { index: false, follow: false },
 };
 

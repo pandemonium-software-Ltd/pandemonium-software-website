@@ -58,7 +58,7 @@ export default function NotFound() {
           This page has popped out for a tea break.
         </h1>
         <p className="prose-body mx-auto mt-6 max-w-xl">
-          We can&apos;t find the page you were after. It might have moved, or
+          I can&apos;t find the page you were after. It might have moved, or
           the link might be wrong. Either way, let&apos;s get you back
           somewhere useful.
         </p>

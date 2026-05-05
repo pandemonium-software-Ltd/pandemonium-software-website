@@ -156,7 +156,7 @@ export default async function PaymentPage({
                   <p className="mt-2">
                     Stripe Checkout integration is being finalised. I&apos;ll
                     email you within 24 hours with a payment link, then
-                    we&apos;re straight into the Onboarding Hub.
+                    you&apos;re straight into the Onboarding Hub.
                   </p>
                   <p className="mt-3">
                     Questions before then?{" "}

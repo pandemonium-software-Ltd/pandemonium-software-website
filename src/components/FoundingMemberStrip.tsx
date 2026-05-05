@@ -30,7 +30,7 @@ export default function FoundingMemberStrip() {
         </div>
 
         <p className="text-[1rem] leading-relaxed text-cream-100 md:text-[1.05rem]">
-          Our first three clients get everything included for a special
+          My first three clients get everything included for a special
           founding-member rate:{" "}
           <span className="font-semibold text-white">£99 setup and £15/month, locked in for life</span>
           , in exchange for a testimonial and a short case study.{" "}

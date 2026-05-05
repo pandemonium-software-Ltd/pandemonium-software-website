@@ -6,7 +6,7 @@ export default function OptionalExtras() {
       </h3>
       <p className="mt-2 text-[1rem] text-navy-700">
         Separate from the calculator above. Mention any of these when you get
-        in touch and we&apos;ll add them to your order.
+        in touch and I&apos;ll add them to your order.
       </p>
 
       <div className="mt-6 grid gap-5 md:grid-cols-1">
@@ -18,7 +18,7 @@ export default function OptionalExtras() {
             <>
               <p>
                 Your Google Business Profile is how most locals find you.
-                We&apos;ll either set yours up from scratch (we&apos;ll send
+                I&apos;ll either set yours up from scratch (I&apos;ll send
                 you a step-by-step so you can do the final Google
                 verification) or audit your existing profile and give you a
                 prioritised list of fixes that actually move the needle.
