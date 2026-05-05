@@ -103,7 +103,7 @@ export default function HomePage() {
             <StepCard
               number="1"
               title="Tell me about your business"
-              body="Fill in a short enquiry. A couple of plain-English questions — no jargon, no pressure, no phone-tag. I reply within 4 working hours."
+              body="Fill in a short enquiry. A couple of plain-English questions — no jargon, no pressure, no phone-tag. You'll have a reply within 4 working hours."
             />
             <StepCard
               number="2"
@@ -135,10 +135,11 @@ export default function HomePage() {
               </h2>
               <p className="prose-body mt-5">
                 I&apos;m a one-person business building websites for UK
-                trades and small businesses. Not a big agency, not a
-                call-centre, not a website builder pretending to be a
-                service. Just one developer who knows how to build good
-                websites and a handful of trusted clients.
+                trades and small businesses, with an AI assistant handling
+                the routine ops. I do the building and the human review;
+                AI drafts the replies, runs the checks, and tracks
+                progress. You get fast turnaround and personal attention —
+                without me being buried in inbox triage.
               </p>
               <ul className="mt-8 space-y-4 text-lg text-navy-800">
                 <TrustItem>
@@ -147,9 +148,10 @@ export default function HomePage() {
                   in the UK.
                 </TrustItem>
                 <TrustItem>
-                  <strong>One person, end to end.</strong> You talk to the
-                  person building your site, not a sales rep passing you
-                  around.
+                  <strong>Built by hand, run with AI.</strong> I write the
+                  code and review every client message. AI does the
+                  triage, drafting and reminders so replies never sit in
+                  my inbox for days.
                 </TrustItem>
                 <TrustItem>
                   <strong>You own everything.</strong> No hostage hosting, no

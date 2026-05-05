@@ -62,7 +62,7 @@ export default function PrivacyPage() {
               tool) and I get a notification email so I can reply. I
               don&apos;t share these details with anyone else, and I delete
               them after 24 months if you don&apos;t become a client (see
-              Section 5).
+              Section 6).
             </li>
             <li>
               <strong>Qualification and intake form data (for accepted
@@ -140,8 +140,14 @@ export default function PrivacyPage() {
               card details.
             </li>
             <li>
-              <strong>Notion</strong> — where I keep notes on client
-              projects I&apos;m working on.
+              <strong>Notion</strong> — where I keep records of every
+              enquiry, qualification answer, intake form, and client
+              project. This is the primary store for the data you give me.
+            </li>
+            <li>
+              <strong>Anthropic</strong> — provides the AI model (Claude)
+              I use as my operations assistant. See Section 5 below for
+              what that AI does and doesn&apos;t do with your data.
             </li>
           </ul>
           <p>
@@ -149,7 +155,56 @@ export default function PrivacyPage() {
             swap it with anyone for marketing. Ever.
           </p>
 
-          <h2>5. How long I keep it</h2>
+          <h2>5. How I use AI in my operations</h2>
+          <p>
+            I run my operations with an AI assistant (Anthropic&apos;s
+            Claude). It helps me handle the routine work: reading incoming
+            enquiries, drafting replies against my playbook, running
+            compatibility checks, and tracking client progress.
+          </p>
+          <p>
+            What this means for your data:
+          </p>
+          <ul>
+            <li>
+              The AI processes the information you give me through the
+              enquiry, qualification and intake forms in order to draft my
+              reply or update my Notion records.
+            </li>
+            <li>
+              <strong>Every client-facing email the AI drafts is reviewed
+              by me before it sends.</strong> No automated emails go out
+              without my human approval during your initial enquiry,
+              qualification and acceptance stages.
+            </li>
+            <li>
+              No automated decision-making with legal or significant
+              effects on you (for example, no automated credit decisions or
+              legally binding contracts) takes place. I personally review
+              every accept / reject decision.
+            </li>
+            <li>
+              Anthropic&apos;s commercial API does not use your data to
+              train its models, per their{" "}
+              <a
+                href="https://www.anthropic.com/legal/commercial-terms"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                commercial terms
+              </a>
+              .
+            </li>
+            <li>
+              If you&apos;d prefer no AI processing of your enquiry, email
+              me directly at{" "}
+              <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>
+              {" "}with the subject line &quot;no AI&quot; and I&apos;ll
+              handle your enquiry by hand.
+            </li>
+          </ul>
+
+          <h2>6. How long I keep it</h2>
           <ul>
             <li>
               <strong>Enquiries that don&apos;t become projects:</strong> I
@@ -166,7 +221,7 @@ export default function PrivacyPage() {
             </li>
           </ul>
 
-          <h2>6. Your rights under UK GDPR</h2>
+          <h2>7. Your rights under UK GDPR</h2>
           <p>You have the right to:</p>
           <ul>
             <li>Ask me what personal data I hold about you.</li>
@@ -185,7 +240,7 @@ export default function PrivacyPage() {
             and tell me which one. I&apos;ll reply within 30 days.
           </p>
 
-          <h2>7. Complaints</h2>
+          <h2>8. Complaints</h2>
           <p>
             If you think I&apos;ve mishandled your data, I&apos;d like to
             hear about it first so I can put it right. But you also have
@@ -206,7 +261,7 @@ export default function PrivacyPage() {
             <li>Phone: 0303 123 1113</li>
           </ul>
 
-          <h2>8. Changes to this policy</h2>
+          <h2>9. Changes to this policy</h2>
           <p>
             I may update this policy from time to time — for example, if I
             change sub-processors or add a new service. If the change is
@@ -215,7 +270,7 @@ export default function PrivacyPage() {
             the policy last changed.
           </p>
 
-          <h2>9. Contact</h2>
+          <h2>10. Contact</h2>
           <p>
             For any privacy-related question, email{" "}
             <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>.

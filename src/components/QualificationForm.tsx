@@ -114,7 +114,7 @@ export default function QualificationForm({
         outcome: body.outcome ?? "submitted",
         message:
           body.message ??
-          "Thanks — I've got your answers. I'll come back to you within 4 working hours.",
+          "Thanks — got your answers. You'll hear back within 4 working hours.",
       });
     } catch {
       setState({
@@ -138,7 +138,8 @@ export default function QualificationForm({
           {state.message}
         </p>
         <p className="mt-4 text-sm text-navy-600">
-          If you need me before then,{" "}
+          Every reply is reviewed by me before it sends. If you need me
+          before then,{" "}
           <a href={`mailto:${site.contactEmail}`} className="link">
             {site.contactEmail}
           </a>

@@ -23,9 +23,10 @@ export default function EnquiryPage() {
           <span className="eyebrow">Start your enquiry</span>
           <h1 className="heading-1">Tell me about your business.</h1>
           <p className="prose-body mx-auto mt-6 max-w-2xl">
-            Fill in a few details below and I&apos;ll email you within 4 hours
-            (working hours). No sales patter, no chase-ups — just a proper
-            email from a human.
+            Fill in a few details below. You&apos;ll have a reply within 4
+            working hours. An AI assistant drafts every reply against my
+            playbook; I review and approve before it sends — so you get fast
+            turnaround and a real human eye on every message.
           </p>
         </div>
       </section>
@@ -39,9 +40,10 @@ export default function EnquiryPage() {
                 Just want to email?
               </h2>
               <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
-                Write to me at the address below. Tell me what you do, where
-                you are and roughly what you&apos;re after. I&apos;ll reply
-                within 4 hours (working hours).
+                Write to the address below. Tell me what you do, where you
+                are and roughly what you&apos;re after. You&apos;ll have a
+                reply within 4 working hours (drafted by AI, reviewed and
+                sent by me).
               </p>
               <a
                 href={`mailto:${site.contactEmail}`}
@@ -68,11 +70,11 @@ export default function EnquiryPage() {
                 </li>
                 <li className="flex gap-3">
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ember-500 text-xs font-semibold text-white">2</span>
-                  <span>I reply within 4 hours (working hours) with a short follow-up form.</span>
+                  <span>An AI assistant drafts a reply against my playbook; I review and approve before it sends. A short follow-up form arrives within 4 working hours.</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-ember-500 text-xs font-semibold text-white">3</span>
-                  <span>If we&apos;re a good fit, I send a fixed quote and we agree the details over email.</span>
+                  <span>If it&apos;s a good fit, you get a fixed quote and we sort the details over email.</span>
                 </li>
               </ol>
             </div>
@@ -84,8 +86,8 @@ export default function EnquiryPage() {
               Send me an enquiry
             </h2>
             <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
-              Fill in a few details and I&apos;ll come back to you by email
-              within 4 hours (working hours).
+              Fill in a few details. You&apos;ll have a reply within 4
+              working hours.
             </p>
             <div className="mt-8">
               <EnquiryForm />

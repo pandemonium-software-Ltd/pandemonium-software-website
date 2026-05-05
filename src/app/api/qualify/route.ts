@@ -49,17 +49,17 @@ const PAST_PHASE_2_STATUSES = new Set([
 
 // Prospect-facing copy per outcome. These don't reveal the rules
 // engine's verdict — just set expectations on response time. The real
-// reply (acceptance, polite no, etc.) goes via email after Ben approves
-// Cowork's draft.
+// reply (acceptance, polite no, etc.) is drafted by AI against the
+// playbook and sent only after Ben approves it.
 const OUTCOME_MESSAGE: Record<string, string> = {
   accept:
-    "Got your answers. I'll come back to you within 4 working hours with a fixed quote and a link to the full intake form. If you don't hear from me, drop me an email.",
+    "Got your answers. A reply is being drafted for me to review — you'll have a fixed quote and an intake link within 4 working hours. If nothing arrives, drop me an email.",
   soft_reject:
-    "Got your answers. I'll have a proper read and reply within 4 working hours.",
+    "Got your answers. A reply is being drafted for me to review — you'll hear back within 4 working hours.",
   flag_for_review:
-    "Got your answers. I want to read these carefully before I reply, so I'll come back to you within 24 working hours.",
+    "Got your answers. There's a couple of points I want to read personally before I reply, so it'll be within 24 working hours.",
   clarification_needed:
-    "Got your answers. A couple of them need a quick follow-up question — I'll email you within 4 working hours.",
+    "Got your answers. A couple of them need a quick follow-up question — you'll have it in your inbox within 4 working hours.",
 };
 
 export async function POST(request: Request) {
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
     outcome: outcome.outcome,
     message:
       OUTCOME_MESSAGE[outcome.outcome] ??
-      "Got your answers. I'll come back to you shortly.",
+      "Got your answers. You'll hear back shortly.",
   });
 }
 

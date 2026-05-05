@@ -77,9 +77,10 @@ export default function EnquiryForm() {
       >
         <h3 className="font-serif text-2xl font-semibold">Thanks — got it.</h3>
         <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
-          I&apos;ll read your enquiry, then reply by email within 4 hours
-          (working hours, UK time). The reply will include a short follow-up
-          form so I can give you a fixed quote and a target go-live date.
+          An AI assistant is reading your enquiry now and drafting a reply
+          for me to review. You&apos;ll have a reply within 4 working hours
+          (UK time), with a short follow-up form so I can put together a
+          fixed quote and a target go-live date.
         </p>
         <p className="mt-4 text-sm text-navy-600">
           Nothing more to do for now. Watch your inbox.
@@ -187,9 +188,10 @@ export default function EnquiryForm() {
       <div className="rounded-xl bg-cream-100 p-5 text-sm text-navy-700">
         <p>
           <strong className="text-navy-900">What happens next:</strong> when
-          you click &quot;Send enquiry&quot;, your details go straight to me.
-          I&apos;ll read them and reply within 4 hours (working hours), with
-          a short follow-up form to fill in. No sales call, no chase-ups.
+          you click &quot;Send enquiry&quot;, your details go to my private
+          Notion workspace. An AI assistant reads them and drafts a reply
+          against my playbook; I review and send it within 4 working hours.
+          No sales call, no chase-ups.
         </p>
       </div>
 

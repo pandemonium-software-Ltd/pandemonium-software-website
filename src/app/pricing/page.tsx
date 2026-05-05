@@ -55,8 +55,9 @@ export default function PricingPage() {
                   Ready when you are.
                 </h2>
                 <p className="mt-3 text-[1.05rem] leading-relaxed text-navy-700">
-                  Tell me a bit about your business and I&apos;ll be in touch
-                  within 4 hours (working hours) to set things up.
+                  Tell me a bit about your business and you&apos;ll have a
+                  reply within 4 working hours (drafted by AI against my
+                  playbook, reviewed and sent by me).
                 </p>
               </div>
               <Link

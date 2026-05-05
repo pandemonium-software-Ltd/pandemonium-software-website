@@ -55,7 +55,7 @@ const MODULES: Module[] = [
     setup: 39,
     monthly: 6,
     blurb:
-      "Collect customer emails and send monthly offers or seasonal reminders. I draft each campaign for you to review — no writer's block, just review and send.",
+      "Collect customer emails and send monthly offers or seasonal reminders. Each campaign is auto-drafted in your voice (reviewed by me first) — no writer's block, just check and send.",
   },
 ];
 

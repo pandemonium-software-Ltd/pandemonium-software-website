@@ -100,15 +100,21 @@ export default function AboutPage() {
             </p>
 
             <p>
-              I keep the business deliberately small. That means when you
-              ring or email, you get me — not a sales rep, not a support
-              ticket, not a chat bot. It also means I only take on as much
-              work as I can build properly.
+              I keep the business deliberately small. I do the building and
+              the human review myself. The routine work — reading enquiries,
+              drafting replies, running compatibility checks against my
+              playbook, tracking client progress, sending the right reminder
+              at the right time — is done by an AI assistant I&apos;ve set
+              up. Every client-facing email is reviewed by me before it
+              sends. That means fast turnaround for you and proper time for
+              me to spend building, not buried in admin.
             </p>
 
             <p>
               I&apos;m not trying to be a big agency. I&apos;m trying to
-              be the developer your mate should have told you about.
+              be the developer your mate should have told you about — just
+              with a smarter pipeline behind the scenes than most one-person
+              shops can manage.
             </p>
 
             <p className="mt-10">
