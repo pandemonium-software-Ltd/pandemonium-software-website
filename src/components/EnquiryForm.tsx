@@ -1,147 +1,119 @@
 "use client";
 
+// Phase 1 enquiry form. Replaces the old mailto: implementation with a
+// real server submission to /api/enquiry, which:
+//   1. Validates with phase1Schema (zod)
+//   2. Creates a Notion Prospects record (status "Phase 1 Complete")
+//   3. Sends Ben an internal notification with the qualification link
+//   4. Returns success → we show the confirmation card
+//
+// Field set is the seven Phase 1 fields from Playbook §7. No "tell us
+// what you want" textarea — that's covered in Phase 2 qualification.
+
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  phase1Schema,
+  type Phase1Data,
+  BUSINESS_TYPE_OPTIONS,
+  WEBSITE_SITUATION_OPTIONS,
+} from "@/lib/schemas";
 import { site } from "@/lib/site";
 
-const BUSINESS_TYPE_OPTIONS = [
-  // Trades
-  "Plumber",
-  "Electrician",
-  "Heating engineer",
-  "Builder",
-  "Roofer",
-  "Gardener / Landscaper",
-  "Painter / Decorator",
-  "Joiner / Carpenter",
-  "Tiler / Plasterer",
-  "Handyman",
-  "Locksmith",
-  "Tree surgeon",
-  // Other small businesses
-  "Photographer",
-  "Therapist",
-  "Personal trainer / Yoga instructor",
-  "Salon",
-  "Accountant / Consultant",
-  "Wedding supplier",
-  "Pet services",
-  "Tutor",
-  "Cleaner",
-  "Event planner",
-  "Other",
-];
-
-const WEBSITE_SITUATION_OPTIONS = [
-  "I don't have a website yet",
-  "I have a basic website that needs replacing",
-  "I have a decent website but want something better",
-  "I have a website but I don't own it / can't update it",
-];
-
-type FormState = {
-  name: string;
-  email: string;
-  phone: string;
-  business: string;
-  businessType: string;
-  location: string;
-  websiteSituation: string;
-  message: string;
-};
-
-const INITIAL: FormState = {
-  name: "",
-  email: "",
-  phone: "",
-  business: "",
-  businessType: "",
-  location: "",
-  websiteSituation: "",
-  message: "",
-};
+type SubmitState =
+  | { kind: "idle" }
+  | { kind: "submitting" }
+  | { kind: "success" }
+  | { kind: "error"; message: string };
 
 export default function EnquiryForm() {
-  const [form, setForm] = useState<FormState>(INITIAL);
-  const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
-  const [opened, setOpened] = useState(false);
+  const [state, setState] = useState<SubmitState>({ kind: "idle" });
 
-  const set = (k: keyof FormState) => (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ) => {
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-  };
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<Phase1Data>({
+    resolver: zodResolver(phase1Schema),
+    mode: "onTouched",
+  });
 
-  const blur = (k: keyof FormState) => () => {
-    setTouched((t) => ({ ...t, [k]: true }));
-  };
+  const onSubmit = handleSubmit(async (data) => {
+    setState({ kind: "submitting" });
+    try {
+      const res = await fetch("/api/enquiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setState({
+          kind: "error",
+          message:
+            body?.error ??
+            "Something went wrong on my end. Please try again, or email me directly.",
+        });
+        return;
+      }
+      setState({ kind: "success" });
+    } catch {
+      setState({
+        kind: "error",
+        message:
+          "Couldn't reach the server. Check your connection and try again, or email me directly.",
+      });
+    }
+  });
 
-  const errors: Partial<Record<keyof FormState, string>> = {};
-  if (!form.name.trim()) errors.name = "Please tell us your name.";
-  if (!form.email.trim()) {
-    errors.email = "We need an email address to reply to.";
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-    errors.email = "That doesn't look like an email address.";
+  if (state.kind === "success") {
+    return (
+      <div
+        role="status"
+        className="rounded-2xl border-2 border-navy-900 bg-cream-50 p-6 text-navy-900"
+      >
+        <h3 className="font-serif text-2xl font-semibold">Thanks — got it.</h3>
+        <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
+          I&apos;ll read your enquiry, then reply by email within 4 hours
+          (working hours, UK time). The reply will include a short follow-up
+          form so I can give you a fixed quote and a target go-live date.
+        </p>
+        <p className="mt-4 text-sm text-navy-600">
+          Nothing more to do for now. Watch your inbox.
+        </p>
+      </div>
+    );
   }
-  if (!form.location.trim()) {
-    errors.location = "We need a UK location — town or county is fine.";
-  }
-  if (!form.websiteSituation) {
-    errors.websiteSituation = "Pick whichever option fits best.";
-  }
-  if (!form.message.trim() || form.message.trim().length < 10) {
-    errors.message = "A couple of sentences about what you're after, please.";
-  }
-
-  const isValid = Object.keys(errors).length === 0;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setTouched({
-      name: true,
-      email: true,
-      phone: true,
-      business: true,
-      businessType: true,
-      location: true,
-      websiteSituation: true,
-      message: true,
-    });
-    if (!isValid) return;
-
-    const subject = `Website enquiry from ${form.name.trim()}${form.business.trim() ? ` (${form.business.trim()})` : ""}`;
-    const bodyLines = [
-      `Name: ${form.name.trim()}`,
-      `Email: ${form.email.trim()}`,
-      form.phone.trim() ? `Phone: ${form.phone.trim()}` : null,
-      form.business.trim() ? `Business name: ${form.business.trim()}` : null,
-      form.businessType.trim() ? `Business type: ${form.businessType.trim()}` : null,
-      `Location: ${form.location.trim()}`,
-      `Current website: ${form.websiteSituation}`,
-      "",
-      "What I'm after:",
-      form.message.trim(),
-      "",
-      "— Sent from pandemonium-software-website.benpandher.workers.dev",
-    ].filter(Boolean) as string[];
-
-    const mailto = `mailto:${site.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyLines.join("\n"))}`;
-    window.location.href = mailto;
-    setOpened(true);
-  };
-
-  const showError = (k: keyof FormState) => !!(touched[k] && errors[k]);
 
   return (
-    <form onSubmit={handleSubmit} noValidate className="space-y-5">
+    <form onSubmit={onSubmit} noValidate className="space-y-5">
+      {/* Honeypot — hidden from real users, fills only for bots. The API
+          route rejects submissions where this field is non-empty. */}
+      <input
+        type="text"
+        autoComplete="off"
+        tabIndex={-1}
+        aria-hidden="true"
+        {...register("company_website" as never)}
+        style={{
+          position: "absolute",
+          left: "-10000px",
+          width: 1,
+          height: 1,
+          opacity: 0,
+        }}
+      />
+
       <div className="grid gap-5 md:grid-cols-2">
         <Field
           id="name"
           label="Your name"
           required
-          value={form.name}
-          onChange={set("name")}
-          onBlur={blur("name")}
-          error={showError("name") ? errors.name : undefined}
+          register={register("name")}
+          error={errors.name?.message}
           autoComplete="name"
           maxLength={100}
         />
@@ -150,10 +122,8 @@ export default function EnquiryForm() {
           type="email"
           label="Email address"
           required
-          value={form.email}
-          onChange={set("email")}
-          onBlur={blur("email")}
-          error={showError("email") ? errors.email : undefined}
+          register={register("email")}
+          error={errors.email?.message}
           autoComplete="email"
           maxLength={254}
         />
@@ -164,22 +134,20 @@ export default function EnquiryForm() {
           id="phone"
           type="tel"
           label="Phone"
-          hint="optional"
-          value={form.phone}
-          onChange={set("phone")}
-          onBlur={blur("phone")}
+          required
+          register={register("phone")}
+          error={errors.phone?.message}
           autoComplete="tel"
           maxLength={30}
+          hint="in case email bounces"
         />
         <Field
           id="location"
           label="Where in the UK are you?"
           required
           placeholder="e.g. Oxford, or Cotswolds"
-          value={form.location}
-          onChange={set("location")}
-          onBlur={blur("location")}
-          error={showError("location") ? errors.location : undefined}
+          register={register("location")}
+          error={errors.location?.message}
           autoComplete="address-level2"
           maxLength={100}
         />
@@ -189,21 +157,19 @@ export default function EnquiryForm() {
         <Field
           id="business"
           label="Business name"
-          hint="optional"
-          value={form.business}
-          onChange={set("business")}
-          onBlur={blur("business")}
+          required
+          register={register("business")}
+          error={errors.business?.message}
           autoComplete="organization"
           maxLength={100}
         />
         <SelectField
           id="businessType"
           label="Business type"
-          hint="optional"
-          value={form.businessType}
-          onChange={set("businessType")}
-          onBlur={blur("businessType")}
-          placeholder="Pick one…"
+          required
+          register={register("businessType")}
+          error={errors.businessType?.message}
+          placeholder="Pick the closest match…"
           options={BUSINESS_TYPE_OPTIONS}
         />
       </div>
@@ -212,102 +178,61 @@ export default function EnquiryForm() {
         id="websiteSituation"
         label="Your current website"
         required
-        value={form.websiteSituation}
-        onChange={set("websiteSituation")}
-        onBlur={blur("websiteSituation")}
-        error={showError("websiteSituation") ? errors.websiteSituation : undefined}
+        register={register("websiteSituation")}
+        error={errors.websiteSituation?.message}
         placeholder="Pick whichever fits best…"
         options={WEBSITE_SITUATION_OPTIONS}
       />
 
-      <div>
-        <label
-          htmlFor="message"
-          className="mb-2 block text-sm font-semibold text-navy-900"
-        >
-          Tell us a bit about what you&apos;re after{" "}
-          <span aria-hidden="true" className="text-ember-600">
-            *
-          </span>
-        </label>
-        <textarea
-          id="message"
-          value={form.message}
-          onChange={set("message")}
-          onBlur={blur("message")}
-          required
-          rows={6}
-          maxLength={2000}
-          placeholder="A short description of your business and what you'd like on your website. Don't worry about getting it perfect — we'll fill in the blanks in a reply."
-          className={[
-            "w-full rounded-xl border-2 bg-white px-4 py-3 text-base text-navy-900 placeholder:text-navy-400 focus:border-navy-900 focus:outline-none",
-            showError("message") ? "border-ember-500" : "border-navy-200",
-          ].join(" ")}
-        />
-        {showError("message") && (
-          <p className="mt-2 text-sm text-ember-700">{errors.message}</p>
-        )}
-        <p className="mt-2 text-right text-xs text-navy-500">
-          {form.message.length}/2000
+      <div className="rounded-xl bg-cream-100 p-5 text-sm text-navy-700">
+        <p>
+          <strong className="text-navy-900">What happens next:</strong> when
+          you click &quot;Send enquiry&quot;, your details go straight to me.
+          I&apos;ll read them and reply within 4 hours (working hours), with
+          a short follow-up form to fill in. No sales call, no chase-ups.
         </p>
       </div>
 
-      <div className="rounded-xl bg-cream-100 p-5 text-sm text-navy-700">
-        <p>
-          <strong className="text-navy-900">How this works:</strong> when you
-          click &quot;Send enquiry&quot;, your email app will open with the
-          message pre-filled so you can review and send it. Nothing leaves
-          your computer until you hit send in your email app.
-        </p>
-      </div>
+      {state.kind === "error" && (
+        <div
+          role="alert"
+          className="rounded-xl border-2 border-ember-500 bg-white p-4 text-sm text-ember-700"
+        >
+          {state.message}
+        </div>
+      )}
 
       <div className="flex flex-col-reverse items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-navy-600">
-          Prefer plain email? Write to{" "}
+          Prefer plain email?{" "}
           <a href={`mailto:${site.contactEmail}`} className="link">
             {site.contactEmail}
           </a>
-          .
         </p>
         <button
           type="submit"
           className="btn-primary"
-          disabled={!isValid && Object.keys(touched).length > 0}
+          disabled={isSubmitting || state.kind === "submitting"}
         >
-          Send enquiry
+          {isSubmitting || state.kind === "submitting"
+            ? "Sending…"
+            : "Send enquiry"}
         </button>
       </div>
-
-      {opened && (
-        <div
-          role="status"
-          className="rounded-xl border border-navy-900 bg-white p-5 text-navy-800"
-        >
-          <p className="font-semibold text-navy-900">
-            Your email app should have opened.
-          </p>
-          <p className="mt-2 text-sm">
-            Review the pre-filled message and hit send. If nothing happened,
-            copy the details and email{" "}
-            <a href={`mailto:${site.contactEmail}`} className="link">
-              {site.contactEmail}
-            </a>{" "}
-            directly.
-          </p>
-        </div>
-      )}
     </form>
   );
 }
+
+// ---------- Field components ----------
+
+type FieldRegister = ReturnType<ReturnType<typeof useForm<Phase1Data>>["register"]>;
 
 function Field({
   id,
   label,
   type = "text",
   required,
-  value,
-  onChange,
-  onBlur,
+  register,
   error,
   autoComplete,
   maxLength,
@@ -318,9 +243,7 @@ function Field({
   label: string;
   type?: string;
   required?: boolean;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onBlur: () => void;
+  register: FieldRegister;
   error?: string;
   autoComplete?: string;
   maxLength?: number;
@@ -342,20 +265,17 @@ function Field({
             </span>
           </>
         )}
-        {!required && hint && (
+        {hint && (
           <span className="font-normal text-navy-500"> ({hint})</span>
         )}
       </label>
       <input
         id={id}
         type={type}
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        required={required}
         autoComplete={autoComplete}
         maxLength={maxLength}
         placeholder={placeholder}
+        {...register}
         className={[
           "w-full rounded-xl border-2 bg-white px-4 py-3 text-base text-navy-900 placeholder:text-navy-400 focus:border-navy-900 focus:outline-none",
           error ? "border-ember-500" : "border-navy-200",
@@ -370,24 +290,18 @@ function SelectField({
   id,
   label,
   required,
-  value,
-  onChange,
-  onBlur,
+  register,
   error,
   options,
   placeholder = "Pick one…",
-  hint,
 }: {
   id: string;
   label: string;
   required?: boolean;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
-  onBlur: () => void;
+  register: FieldRegister;
   error?: string;
   options: readonly string[];
   placeholder?: string;
-  hint?: string;
 }) {
   return (
     <div>
@@ -404,22 +318,19 @@ function SelectField({
             </span>
           </>
         )}
-        {!required && hint && (
-          <span className="font-normal text-navy-500"> ({hint})</span>
-        )}
       </label>
       <select
         id={id}
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
-        required={required}
+        defaultValue=""
+        {...register}
         className={[
           "w-full rounded-xl border-2 bg-white px-4 py-3 text-base text-navy-900 focus:border-navy-900 focus:outline-none",
           error ? "border-ember-500" : "border-navy-200",
         ].join(" ")}
       >
-        <option value="">{placeholder}</option>
+        <option value="" disabled>
+          {placeholder}
+        </option>
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
