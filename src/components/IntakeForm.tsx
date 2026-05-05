@@ -16,6 +16,15 @@
 // merged document on final submit. Per-section saves use getValues()
 // to pull just that section's data and POST it as a partial patch.
 
+// RHF's `valueAsNumber: true` turns an empty input into NaN, which
+// zod's .optional() rejects. Use this in `setValueAs` for any optional
+// numeric field so empty → undefined and zod treats it as not-supplied.
+const optionalNumber = (v: unknown): number | undefined => {
+  if (v === "" || v === null || v === undefined) return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isNaN(n) ? undefined : n;
+};
+
 import { useMemo, useState } from "react";
 import { useForm, useFieldArray, type Control, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -508,7 +517,9 @@ function BusinessBasicsSection({ register, errors }: SectionProps) {
         id="bb-yearEstablished"
         label="Year established"
         type="number"
-        {...register("businessBasics.yearEstablished", { valueAsNumber: true })}
+        {...register("businessBasics.yearEstablished", {
+          setValueAs: optionalNumber,
+        })}
         error={e?.yearEstablished?.message}
         hint="optional"
       />
@@ -725,7 +736,7 @@ function ServicesSection({
                     label='Starting price (£)'
                     type="number"
                     {...register(`services.services.${idx}.startingPrice`, {
-                      valueAsNumber: true,
+                      setValueAs: optionalNumber,
                     })}
                     error={e?.services?.[idx]?.startingPrice?.message}
                     hint="optional"
@@ -1092,7 +1103,9 @@ function SocialProofSection({
         id="sp-yearsExperience"
         label="Years of experience"
         type="number"
-        {...register("socialProof.yearsExperience", { valueAsNumber: true })}
+        {...register("socialProof.yearsExperience", {
+          setValueAs: optionalNumber,
+        })}
         error={e?.yearsExperience?.message}
         hint="optional"
       />
