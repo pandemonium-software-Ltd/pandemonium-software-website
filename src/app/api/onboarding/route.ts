@@ -160,7 +160,9 @@ export async function POST(request: Request) {
 
   // Mark-done flow: validate + flip checkbox + maybe complete the hub.
   if (markDone) {
-    const gate = canMarkStepDone(stepId, newSlice);
+    const gate = canMarkStepDone(stepId, newSlice, {
+      modules: prospect.moduleSelections,
+    });
     if (!gate.ok) {
       return NextResponse.json({ error: gate.reason }, { status: 400 });
     }

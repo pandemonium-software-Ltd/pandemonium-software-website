@@ -180,6 +180,17 @@ const step1CloudflareSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+// Step 2 covers the customer's *initiating* actions:
+//   - tell me your domain
+//   - tell me where you registered (or will register) it
+//   - confirm the domain is registered / connected to Cloudflare
+//   - if Enquiry or Newsletter is in play: sign up for Resend, invite
+//     me as a team member, share your Resend signup email
+//
+// The actual DNS plumbing (Cloudflare Pages CNAMEs, Resend SPF /
+// DKIM / Return-Path) is mine to do — I have Administrator access
+// on their Cloudflare from Step 1 and team-member access on their
+// Resend from this step. Customer never pastes a DNS record.
 const step2DomainSchema = z.object({
   domain: z
     .string()
@@ -190,16 +201,10 @@ const step2DomainSchema = z.object({
       "Domain looks malformed (e.g. yourbusiness.co.uk).",
     )
     .optional(),
-  registrar: z.enum(["cloudflare", "external", "buying-now"]).optional(),
-  cloudflareDnsAdded: z.boolean().optional(),
-  resendSignupEmail: z
-    .string()
-    .trim()
-    .email()
-    .max(254)
-    .optional(),
-  resendDomainAdded: z.boolean().optional(),
-  resendVerified: z.boolean().optional(),
+  registrar: z.enum(["already-have", "cloudflare", "external"]).optional(),
+  domainConnected: z.boolean().optional(),
+  resendSignupEmail: z.string().trim().email().max(254).optional(),
+  resendInvitedMe: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -257,10 +262,19 @@ export const STEP_SCHEMAS: Record<StepId, z.ZodTypeAny> = {
 // These check the minimum fields that must be present for a step to
 // flip its checkbox. They run on the server inside the API route so
 // the client can't bypass them.
+//
+// `ctx` carries module info so per-step gates can apply conditional
+// requirements (e.g. step 2 only requires Resend fields if the
+// prospect bought Enquiry or Newsletter).
+
+export type CanMarkStepDoneCtx = {
+  modules: string[]; // prospect.moduleSelections
+};
 
 export function canMarkStepDone(
   stepId: StepId,
   data: Record<string, unknown>,
+  ctx: CanMarkStepDoneCtx,
 ): { ok: true } | { ok: false; reason: string } {
   switch (stepId) {
     case "cloudflare":
@@ -271,15 +285,50 @@ export function canMarkStepDone(
         };
       }
       return { ok: true };
-    case "domain":
-      // H2 will tighten this — for now, a domain string is enough.
+    case "domain": {
       if (!data.domain) {
         return {
           ok: false,
           reason: "Please tell me which domain you'll be using.",
         };
       }
+      if (!data.registrar) {
+        return {
+          ok: false,
+          reason: "Please tell me where you registered (or will register) it.",
+        };
+      }
+      if (!data.domainConnected) {
+        return {
+          ok: false,
+          reason:
+            "Please tick the box once your domain is registered or connected.",
+        };
+      }
+      // Resend fields are only required when the prospect bought
+      // Enquiry or Newsletter — those are the modules that actually
+      // need a verified sender domain.
+      const needsResend =
+        ctx.modules.includes("Enquiry Form") ||
+        ctx.modules.includes("Newsletter");
+      if (needsResend) {
+        if (!data.resendSignupEmail) {
+          return {
+            ok: false,
+            reason:
+              "Please share the email you signed up to Resend with.",
+          };
+        }
+        if (!data.resendInvitedMe) {
+          return {
+            ok: false,
+            reason:
+              "Please tick the box once you've added me as a team member in Resend.",
+          };
+        }
+      }
       return { ok: true };
+    }
     case "tools":
       // H3 will tighten this — placeholder always passes for now.
       return { ok: true };

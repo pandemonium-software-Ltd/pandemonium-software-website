@@ -25,6 +25,7 @@ import {
   type StepId,
 } from "@/lib/onboarding";
 import Step1Cloudflare from "@/components/onboarding/Step1Cloudflare";
+import Step2Domain from "@/components/onboarding/Step2Domain";
 import StepPlaceholder from "@/components/onboarding/StepPlaceholder";
 
 export type OnboardingHubProps = {
@@ -210,6 +211,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                   doneFlags={doneFlags}
                   token={token}
                   benEmail={benEmail}
+                  modules={props.modules}
                   readOnly={hubDone}
                   savePartial={savePartial}
                   markDone={markDone}
@@ -230,6 +232,7 @@ function StepRenderer({
   data,
   doneFlags,
   benEmail,
+  modules,
   readOnly,
   savePartial,
   markDone,
@@ -239,6 +242,7 @@ function StepRenderer({
   doneFlags: Record<StepId, boolean>;
   token: string;
   benEmail: string;
+  modules: string[];
   readOnly: boolean;
   savePartial: (
     stepId: StepId,
@@ -266,10 +270,14 @@ function StepRenderer({
       );
     case "domain":
       return (
-        <StepPlaceholder
-          title={step.title}
-          arrivingIn="next update"
-          summary="Register or connect your domain, and (if you bought Newsletter or Enquiry) add the sender DNS records — all in one paste."
+        <Step2Domain
+          data={slice}
+          done={done}
+          readOnly={readOnly}
+          benEmail={benEmail}
+          modules={modules}
+          savePartial={(patch) => savePartial("domain", patch)}
+          markDone={(patch) => markDone("domain", patch)}
         />
       );
     case "tools":
