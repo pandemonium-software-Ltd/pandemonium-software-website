@@ -238,6 +238,19 @@ export default async function AdminPage() {
                             url={`${baseUrl}/intake/${p.token}`}
                           />
                         )}
+                        {(p.status === "Paid" ||
+                          p.status === "Onboarding Started" ||
+                          p.status === "Onboarding Complete" ||
+                          p.status === "Build Started" ||
+                          p.status === "Live") && (
+                          <>
+                            <CopyLink
+                              label="Hub URL"
+                              url={`${baseUrl}/onboarding/${p.token}`}
+                            />
+                            <OnboardingProgress prospect={p} />
+                          </>
+                        )}
                       </div>
                     </Td>
                   </tr>
@@ -319,10 +332,45 @@ const STATUS_COLOURS: Record<string, string> = {
   "Phase 3 In Progress": "bg-orange-100 text-orange-800",
   "Phase 3 Complete": "bg-green-100 text-green-800",
   Paid: "bg-green-200 text-green-900",
+  "Onboarding Started": "bg-purple-100 text-purple-800",
+  "Onboarding Complete": "bg-green-100 text-green-800",
   "Build Started": "bg-orange-100 text-orange-800",
   Live: "bg-green-200 text-green-900",
   Cancelled: "bg-navy-100 text-navy-600",
 };
+
+// Tiny "1•2•3•4•5" hub progress strip — filled circles = done, hollow = pending.
+// Shown on /admin under the Hub URL link for any post-payment prospect.
+function OnboardingProgress({ prospect }: { prospect: ProspectRecord }) {
+  const flags = [
+    prospect.onboardingStep1Done,
+    prospect.onboardingStep2Done,
+    prospect.onboardingStep3Done,
+    prospect.onboardingStep4Done,
+    prospect.onboardingStep5Done,
+  ];
+  const doneCount = flags.filter(Boolean).length;
+  return (
+    <div
+      className="mt-1 flex items-center gap-1"
+      title={`Onboarding: ${doneCount}/5 steps done`}
+    >
+      <span className="text-[10px] uppercase tracking-wider text-navy-500">
+        Hub
+      </span>
+      {flags.map((done, i) => (
+        <span
+          key={i}
+          aria-label={`Step ${i + 1} ${done ? "done" : "pending"}`}
+          className={[
+            "inline-block h-2 w-2 rounded-full",
+            done ? "bg-green-500" : "bg-navy-200",
+          ].join(" ")}
+        />
+      ))}
+    </div>
+  );
+}
 
 function CompatBadge({ result }: { result: string }) {
   const colour =

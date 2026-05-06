@@ -5,7 +5,7 @@
 // standard JSON shape, exactly as the SDK would have built them.
 //
 // Schema (must match the Notion database exactly — Cowork created the
-// schema via DDL in Phase B Checkpoint 2):
+// schema via DDL in Phase B Checkpoint 2; H1 added the Onboarding fields):
 //
 // Title         Name (text, prospect's full name)
 // Email         email
@@ -30,6 +30,16 @@
 // Monthly Fee Calculated  number
 // Founding Member  checkbox
 // Notes  rich_text
+// --- Onboarding Hub (Stage 2B) ---
+// Onboarding Step 1 Done  checkbox  (Cloudflare account)
+// Onboarding Step 2 Done  checkbox  (Domain & email DNS)
+// Onboarding Step 3 Done  checkbox  (Connect tools — Cal.com / GBP)
+// Onboarding Step 4 Done  checkbox  (Brand assets)
+// Onboarding Step 5 Done  checkbox  (Review & launch)
+// Onboarding Data         rich_text (JSON blob, per-step state)
+// Onboarding Started At   date
+// Onboarding Completed At date
+// Go Live Date            date
 
 import { notionFetch } from "./notion";
 import { getServerEnv } from "./env";
@@ -46,6 +56,8 @@ export type ProspectStatus =
   | "Phase 3 In Progress"
   | "Phase 3 Complete"
   | "Paid"
+  | "Onboarding Started"
+  | "Onboarding Complete"
   | "Build Started"
   | "Live"
   | "Cancelled";
@@ -80,6 +92,16 @@ export type ProspectRecord = {
   monthlyFeeCalculated?: number;
   foundingMember: boolean;
   notes?: string;
+  // --- Onboarding Hub (Stage 2B) ---
+  onboardingStep1Done: boolean;
+  onboardingStep2Done: boolean;
+  onboardingStep3Done: boolean;
+  onboardingStep4Done: boolean;
+  onboardingStep5Done: boolean;
+  onboardingData?: unknown; // parsed OnboardingData JSON, see lib/onboarding.ts
+  onboardingStartedAt?: string;
+  onboardingCompletedAt?: string;
+  goLiveDate?: string;
   notionUrl: string;
 };
 
@@ -354,6 +376,16 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     }
   }
 
+  let onboardingData: unknown;
+  const onboardingRaw = readRichText(p["Onboarding Data"]);
+  if (onboardingRaw) {
+    try {
+      onboardingData = JSON.parse(onboardingRaw);
+    } catch {
+      // ignore malformed
+    }
+  }
+
   return {
     pageId: page.id,
     notionUrl: page.url ?? "",
@@ -384,5 +416,73 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     monthlyFeeCalculated: readNumber(p["Monthly Fee Calculated"]),
     foundingMember: readCheckbox(p["Founding Member"]),
     notes: readRichText(p["Notes"]) || undefined,
+    onboardingStep1Done: readCheckbox(p["Onboarding Step 1 Done"]),
+    onboardingStep2Done: readCheckbox(p["Onboarding Step 2 Done"]),
+    onboardingStep3Done: readCheckbox(p["Onboarding Step 3 Done"]),
+    onboardingStep4Done: readCheckbox(p["Onboarding Step 4 Done"]),
+    onboardingStep5Done: readCheckbox(p["Onboarding Step 5 Done"]),
+    onboardingData,
+    onboardingStartedAt: readDate(p["Onboarding Started At"]),
+    onboardingCompletedAt: readDate(p["Onboarding Completed At"]),
+    goLiveDate: readDate(p["Go Live Date"]),
   };
+}
+
+// --- Update Onboarding (partial saves + per-step done flag + status flips) ---
+//
+// Called from POST /api/onboarding. Each call may:
+//  - Replace the Onboarding Data JSON blob (full overwrite — caller does merge)
+//  - Set/unset one or more "Onboarding Step N Done" checkboxes
+//  - Flip Status (e.g. Paid → Onboarding Started → Onboarding Complete)
+//  - Stamp Onboarding Started At / Onboarding Completed At
+//  - Set Go Live Date (separate property so it sorts/filters in Notion)
+
+export type OnboardingStepNumber = 1 | 2 | 3 | 4 | 5;
+
+export type OnboardingUpdate = {
+  data?: unknown; // full new OnboardingData blob
+  stepDone?: { step: OnboardingStepNumber; done: boolean };
+  statusFlip?: ProspectStatus;
+  stampStartedAt?: boolean; // sets Onboarding Started At = now
+  stampCompletedAt?: boolean; // sets Onboarding Completed At = now
+  goLiveDate?: string; // ISO date string (YYYY-MM-DD)
+};
+
+export async function updateProspectOnboarding(
+  pageId: string,
+  patch: OnboardingUpdate,
+): Promise<void> {
+  const properties: Record<string, unknown> = {};
+
+  if (patch.data !== undefined) {
+    properties["Onboarding Data"] = rt(JSON.stringify(patch.data));
+  }
+  if (patch.stepDone) {
+    properties[`Onboarding Step ${patch.stepDone.step} Done`] = {
+      checkbox: patch.stepDone.done,
+    };
+  }
+  if (patch.statusFlip) {
+    properties["Status"] = selectProp(patch.statusFlip);
+  }
+  if (patch.stampStartedAt) {
+    properties["Onboarding Started At"] = {
+      date: { start: new Date().toISOString() },
+    };
+  }
+  if (patch.stampCompletedAt) {
+    properties["Onboarding Completed At"] = {
+      date: { start: new Date().toISOString() },
+    };
+  }
+  if (patch.goLiveDate) {
+    properties["Go Live Date"] = { date: { start: patch.goLiveDate } };
+  }
+
+  if (Object.keys(properties).length === 0) return; // nothing to do
+
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: { properties },
+  });
 }
