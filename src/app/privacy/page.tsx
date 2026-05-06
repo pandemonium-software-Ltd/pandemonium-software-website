@@ -4,7 +4,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Privacy policy",
   description:
-    "How Pandemonium Software Ltd collects, uses and protects your data. Written in plain English by Ben Pandher.",
+    "How Pandamonium Software Ltd collects, uses and protects your data. Written in plain English by Ben Pandher.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -21,10 +21,15 @@ export default function PrivacyPage() {
         <div className="long-form mt-10">
           <p>
             This is the privacy policy for{" "}
-            <strong>Pandemonium Software Ltd</strong> — the company I run.
-            It explains what personal information I collect from visitors to{" "}
-            <strong>pandemonium-software-website.benpandher.workers.dev</strong>,
-            why I collect it, and what your rights are.
+            <strong>Pandamonium Software Ltd</strong> — the company I run.
+            It explains what personal information I collect from visitors to
+            this website, why I collect it, and what your rights are.
+          </p>
+          <p className="text-sm text-navy-500">
+            (The site currently runs on a Cloudflare Worker subdomain
+            while a permanent custom domain is being registered. The
+            URL shown in your address bar may differ from the brand
+            name on this page during that transition.)
           </p>
           <p>
             I&apos;ve written this in plain English on purpose. If anything
@@ -36,10 +41,10 @@ export default function PrivacyPage() {
           <h2>1. Who I am</h2>
           <p>
             I&apos;m Ben Pandher. I run{" "}
-            <strong>Pandemonium Software Ltd</strong>, a small one-person
+            <strong>Pandamonium Software Ltd</strong>, a small one-person
             software business based in Oxfordshire, United Kingdom, building
             websites for UK trades and small businesses. For the purposes of
-            UK GDPR and the Data Protection Act 2018, Pandemonium Software
+            UK GDPR and the Data Protection Act 2018, Pandamonium Software
             Ltd is the <strong>data controller</strong> for any personal
             information you give me through this website.
           </p>

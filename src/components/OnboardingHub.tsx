@@ -38,6 +38,8 @@ export type OnboardingHubProps = {
   initialStepId: StepId;
   initialData: OnboardingData;
   hubComplete: boolean;
+  /** Ops email customers invite as a Cloudflare / Resend team member. */
+  benEmail: string;
 };
 
 type SaveState =
@@ -55,6 +57,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
     initialStepId,
     initialData,
     hubComplete,
+    benEmail,
   } = props;
 
   const [currentStepId, setCurrentStepId] = useState<StepId>(initialStepId);
@@ -206,6 +209,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                   data={data}
                   doneFlags={doneFlags}
                   token={token}
+                  benEmail={benEmail}
                   readOnly={hubDone}
                   savePartial={savePartial}
                   markDone={markDone}
@@ -225,6 +229,7 @@ function StepRenderer({
   step,
   data,
   doneFlags,
+  benEmail,
   readOnly,
   savePartial,
   markDone,
@@ -233,6 +238,7 @@ function StepRenderer({
   data: OnboardingData;
   doneFlags: Record<StepId, boolean>;
   token: string;
+  benEmail: string;
   readOnly: boolean;
   savePartial: (
     stepId: StepId,
@@ -253,6 +259,7 @@ function StepRenderer({
           data={slice}
           done={done}
           readOnly={readOnly}
+          benEmail={benEmail}
           savePartial={(patch) => savePartial("cloudflare", patch)}
           markDone={(patch) => markDone("cloudflare", patch)}
         />

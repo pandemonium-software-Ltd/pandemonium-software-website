@@ -16,7 +16,7 @@ import { isStripeConfigured } from "@/lib/stripe";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Admin — Pandemonium Software",
+  title: "Admin — Pandamonium Software",
   robots: { index: false, follow: false },
 };
 

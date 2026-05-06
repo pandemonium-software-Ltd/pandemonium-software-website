@@ -12,7 +12,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-const REALM = "Pandemonium Admin";
+const REALM = "Pandamonium Admin";
 const ADMIN_USER = "ben";
 
 function unauthorised(): Response {

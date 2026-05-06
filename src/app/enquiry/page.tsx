@@ -5,12 +5,12 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Start your enquiry — Tell me about your business",
   description:
-    "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email me directly — I reply within 4 hours (working hours). Oxfordshire-based, serving small businesses across the UK.",
+    "Get in touch with Pandamonium Software Ltd. Fill in the enquiry form or email me directly — I reply within 4 hours (working hours). Oxfordshire-based, serving small businesses across the UK.",
   alternates: { canonical: "/enquiry" },
   openGraph: {
-    title: "Start your enquiry — Pandemonium Software Ltd",
+    title: "Start your enquiry — Pandamonium Software Ltd",
     description:
-      "Get in touch with Pandemonium Software Ltd. Fill in the enquiry form or email me directly.",
+      "Get in touch with Pandamonium Software Ltd. Fill in the enquiry form or email me directly.",
     url: `${site.url}/enquiry`,
   },
 };

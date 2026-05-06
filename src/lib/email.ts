@@ -7,12 +7,12 @@
 //
 // The "from" address must be on a verified domain in Resend.
 // For now we use Resend's default onboarding sender; Stage 3 swaps in
-// notifications@pandemoniumsoftware.co.uk once the domain is verified.
+// notifications@pandamoniumsoftware.co.uk once the domain is verified.
 
 import { Resend } from "resend";
 import { getServerEnv } from "./env";
 
-const FROM_INTERNAL = "Pandemonium Notifications <onboarding@resend.dev>";
+const FROM_INTERNAL = "Pandamonium Notifications <onboarding@resend.dev>";
 const TO_BEN = "benpandher@proton.me";
 
 let cachedResend: Resend | null = null;

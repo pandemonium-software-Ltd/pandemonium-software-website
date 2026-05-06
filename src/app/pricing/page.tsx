@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £129 setup and £19 per month. No surprises.",
   alternates: { canonical: "/pricing" },
   openGraph: {
-    title: "Pricing — Pandemonium Software Ltd",
+    title: "Pricing — Pandamonium Software Ltd",
     description:
       "Simple flat pricing. Pick the modules you want, see your total and first-year cost live. From £129 setup and £19 per month.",
     url: `${site.url}/pricing`,

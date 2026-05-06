@@ -12,6 +12,7 @@
 
 import type { Metadata } from "next";
 import { getProspectByToken } from "@/lib/notion-prospects";
+import { getServerEnv } from "@/lib/env";
 import {
   deriveStepList,
   getDoneFlags,
@@ -24,7 +25,7 @@ import OnboardingHub from "@/components/OnboardingHub";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Onboarding Hub — Pandemonium Software",
+  title: "Onboarding Hub — Pandamonium Software",
   description:
     "Set up your Cloudflare account, domain, brand assets and go-live date.",
   robots: { index: false, follow: false },
@@ -73,6 +74,14 @@ export default async function OnboardingPage({
   );
   const data: OnboardingData = parsedData.success ? parsedData.data : {};
 
+  // Read the ops email customers should invite as a Cloudflare /
+  // Resend team member. Surfaced verbatim in Step 1 (and H2 Step 2).
+  // Falls back to a clearly-broken placeholder so a missing env var
+  // doesn't break the page — it just becomes obvious in Step 1.
+  const env = getServerEnv();
+  const benEmail =
+    env.BEN_CLOUDFLARE_EMAIL ?? "(BEN_CLOUDFLARE_EMAIL not configured)";
+
   return (
     <OnboardingHub
       token={token}
@@ -85,6 +94,7 @@ export default async function OnboardingPage({
       initialStepId={initialStepId}
       initialData={data}
       hubComplete={prospect.status === "Onboarding Complete"}
+      benEmail={benEmail}
     />
   );
 }

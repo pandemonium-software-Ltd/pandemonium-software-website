@@ -14,7 +14,7 @@ import QualificationForm from "@/components/QualificationForm";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Quick qualification — Pandemonium Software",
+  title: "Quick qualification — Pandamonium Software",
   description:
     "A few quick questions about your business so I can put together a fixed quote.",
   robots: { index: false, follow: false }, // never index private pages
