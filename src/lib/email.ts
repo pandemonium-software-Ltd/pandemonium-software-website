@@ -12,7 +12,7 @@
 import { Resend } from "resend";
 import { getServerEnv } from "./env";
 
-const FROM_INTERNAL = "Pandamonium Notifications <onboarding@resend.dev>";
+const FROM_INTERNAL = "ModuForge Notifications <onboarding@resend.dev>";
 const TO_BEN = "benpandher@proton.me";
 
 let cachedResend: Resend | null = null;

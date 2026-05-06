@@ -25,7 +25,7 @@ import OnboardingHub from "@/components/OnboardingHub";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Onboarding Hub — Pandamonium Software",
+  title: "Onboarding Hub",
   description:
     "Set up your Cloudflare account, domain, brand assets and go-live date.",
   robots: { index: false, follow: false },

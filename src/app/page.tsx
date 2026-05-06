@@ -14,7 +14,7 @@ export default function HomePage() {
         <div className="container-content grid items-center gap-14 lg:grid-cols-[1.15fr_1fr]">
           <div>
             <span className="eyebrow">
-              Websites for UK trades and small businesses
+              ModuForge — websites for UK trades and small businesses
             </span>
             <h1 className="heading-1">
               Professional websites for UK trades and small businesses. No

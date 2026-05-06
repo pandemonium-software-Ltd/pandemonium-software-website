@@ -1,7 +1,13 @@
 export const site = {
+  // `name` is the legal entity — used in copyright, JSON-LD LocalBusiness,
+  // privacy / terms boilerplate.
   name: "Pandamonium Software Ltd",
-  shortName: "Pandamonium",
-  tagline: "Software Ltd",
+  // `shortName` is the customer-facing PRODUCT brand — shown in the header,
+  // footer, browser tab titles, OG cards, transactional email From-names.
+  shortName: "ModuForge",
+  // `tagline` is the small subtitle that sits next to `shortName` in the
+  // header / footer — credits the parent company.
+  tagline: "by Pandamonium Software Ltd",
   // The technical worker URL stays on the old spelling for now — renaming
   // the worker would break previously-emailed Hub / Intake / Pay links.
   // Once a custom domain is registered, swap this for the canonical URL.

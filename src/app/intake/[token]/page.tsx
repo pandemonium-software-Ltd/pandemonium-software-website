@@ -15,7 +15,7 @@ import type { Phase3Partial } from "@/lib/schemas";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Full intake — Pandamonium Software",
+  title: "Full intake",
   description:
     "The full intake form. Once you've finished it, your fixed quote is locked in and you continue to payment.",
   robots: { index: false, follow: false },

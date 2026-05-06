@@ -22,8 +22,8 @@ const sans = Inter({
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
   title: {
-    default: `${site.name} — Websites for UK Trades and Small Businesses`,
-    template: `%s · ${site.name}`,
+    default: `${site.shortName} — Websites for UK trades and small businesses`,
+    template: `%s · ${site.shortName}`,
   },
   description: site.description,
   keywords: [
@@ -37,8 +37,10 @@ export const metadata: Metadata = {
     "photographer website UK",
     "therapist website UK",
     "flat-fee small business website",
+    "ModuForge",
   ],
   authors: [{ name: "Ben Pandher" }],
+  // creator / publisher are the legal entity for SEO / structured data.
   creator: site.name,
   publisher: site.name,
   formatDetection: {
@@ -50,13 +52,13 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_GB",
     url: site.url,
-    title: `${site.name} — Websites for UK Trades and Small Businesses`,
+    title: `${site.shortName} — Websites for UK trades and small businesses`,
     description: site.description,
-    siteName: site.name,
+    siteName: site.shortName,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${site.name} — Websites for UK Trades and Small Businesses`,
+    title: `${site.shortName} — Websites for UK trades and small businesses`,
     description: site.description,
   },
   robots: {

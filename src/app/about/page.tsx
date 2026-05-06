@@ -3,14 +3,14 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "About — Ben Pandher and Pandamonium Software Ltd",
+  title: "About — Ben Pandher",
   description:
-    "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind Pandamonium Software Ltd.",
+    "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind ModuForge by Pandamonium Software Ltd.",
   alternates: { canonical: "/about" },
   openGraph: {
-    title: "About — Pandamonium Software Ltd",
+    title: "About — ModuForge",
     description:
-      "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind Pandamonium Software Ltd.",
+      "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind ModuForge.",
     url: `${site.url}/about`,
   },
 };
@@ -92,11 +92,12 @@ export default function AboutPage() {
             </p>
 
             <p>
-              So I built this. A small, focused business that does one
-              thing really well: professional websites for UK trades and
-              small businesses, at a fair flat fee, with no lock-in and no
-              lead fees. Proudly Oxfordshire-based, serving the UK. You own
-              everything, forever.
+              So I built <strong>ModuForge</strong> — a small, focused
+              service that does one thing really well: professional
+              websites for UK trades and small businesses, at a fair flat
+              fee, with no lock-in and no lead fees. Pick the modules you
+              need, get a site built around them. Proudly Oxfordshire-based,
+              serving the UK. You own everything, forever.
             </p>
 
             <p>

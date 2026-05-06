@@ -15,7 +15,7 @@ import { isStripeConfigured } from "@/lib/stripe";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Payment — Pandamonium Software",
+  title: "Payment",
   description:
     "Confirm your fees and pay to start your build.",
   robots: { index: false, follow: false },
