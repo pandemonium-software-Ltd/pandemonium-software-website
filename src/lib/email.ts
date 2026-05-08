@@ -1,19 +1,33 @@
 // Email sending via Resend.
 //
-// Stage 2A only sends internal notifications to Ben (benpandher@proton.me).
-// Client-facing emails (L1, L3, L4, etc. from Playbook Section 8) are
-// drafted by Cowork and approved by Ben in the email client during the
-// first-20-clients period — they don't go through this module.
+// Stage 2A only sends internal notifications to Ben at the operations
+// gmail (pandamoniumsoftwareltd@gmail.com). Client-facing emails (L1,
+// L3, L4, etc. from Playbook Section 8) are drafted by Cowork and
+// approved by Ben in the email client during the first-20-clients
+// period — they don't go through this module.
 //
-// The "from" address must be on a verified domain in Resend.
-// For now we use Resend's default onboarding sender; Stage 3 swaps in
-// notifications@moduforge.co.uk once the domain is verified.
+// Sender identity (technical "from" vs human "reply to"):
+//   - The "from" address must be on a Resend-verified domain. Right
+//     now that's Resend's free shared sender (`onboarding@resend.dev`);
+//     Stage 3 swaps in `notifications@moduforge.co.uk` once that
+//     domain is registered and verified.
+//   - The "reply-to" is set to OPS_EMAIL so any human reply (to a
+//     customer-facing email or to an internal notification) lands in
+//     the gmail inbox where Ben works. Gmail can't be a `from` address
+//     directly — that's an industry-wide email-auth rule, not a Resend
+//     limitation — so reply-to is the canonical pattern.
 
 import { Resend } from "resend";
 import { getServerEnv } from "./env";
 
+/**
+ * Operational inbox: where Ben reads and replies. Used as the
+ * recipient for internal notifications AND the reply-to on every
+ * email Resend sends, so all human-side correspondence funnels here.
+ */
+const OPS_EMAIL = "pandamoniumsoftwareltd@gmail.com";
 const FROM_INTERNAL = "ModuForge Notifications <onboarding@resend.dev>";
-const TO_BEN = "benpandher@proton.me";
+const TO_BEN = OPS_EMAIL;
 
 let cachedResend: Resend | null = null;
 
@@ -47,6 +61,10 @@ export async function sendInternalNotification(
     const { error } = await resend.emails.send({
       from: FROM_INTERNAL,
       to: TO_BEN,
+      // Reply-to lands in the same gmail inbox so a hit-Reply on any
+      // ModuForge email (internal or, later, customer-facing) funnels
+      // back to where Ben actually reads and writes.
+      replyTo: OPS_EMAIL,
       subject: payload.subject,
       text: payload.body,
     });
