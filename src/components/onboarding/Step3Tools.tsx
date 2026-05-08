@@ -11,7 +11,7 @@
 //     paste the public booking URL here. We embed their URL on the
 //     built site — no admin access needed.
 //   - GBP: claim or create their listing at business.google.com,
-//     add me (BEN_CLOUDFLARE_EMAIL) as a Manager, paste the public
+//     add me (BEN_OPS_EMAIL) as a Manager, paste the public
 //     GBP URL here.
 //
 // My job (after they tick done):

@@ -220,7 +220,7 @@ const step3ToolsSchema = z.object({
   // GBP listing URL — usually `https://g.page/...` or a full
   // `https://www.google.com/maps/...` URL. Permissive validation.
   gbpUrl: z.string().trim().url().max(500).optional(),
-  // Tick the customer flips once they've added BEN_CLOUDFLARE_EMAIL
+  // Tick the customer flips once they've added BEN_OPS_EMAIL
   // as a Manager on their GBP listing. Required to mark step done.
   gbpManagerInvited: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),

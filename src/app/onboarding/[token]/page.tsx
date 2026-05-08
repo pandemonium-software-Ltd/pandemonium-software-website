@@ -74,13 +74,13 @@ export default async function OnboardingPage({
   );
   const data: OnboardingData = parsedData.success ? parsedData.data : {};
 
-  // Read the ops email customers should invite as a Cloudflare /
-  // Resend team member. Surfaced verbatim in Step 1 (and H2 Step 2).
-  // Falls back to a clearly-broken placeholder so a missing env var
-  // doesn't break the page — it just becomes obvious in Step 1.
+  // Read the ops email customers invite as a team member across
+  // Cloudflare (Step 1), Resend (Step 2) and GBP Manager (Step 3).
+  // One env var, one shared inbox. Falls back to a clearly-broken
+  // placeholder so a missing env var doesn't break the page — it
+  // just becomes obvious in any invite step.
   const env = getServerEnv();
-  const benEmail =
-    env.BEN_CLOUDFLARE_EMAIL ?? "(BEN_CLOUDFLARE_EMAIL not configured)";
+  const benEmail = env.BEN_OPS_EMAIL ?? "(BEN_OPS_EMAIL not configured)";
 
   return (
     <OnboardingHub

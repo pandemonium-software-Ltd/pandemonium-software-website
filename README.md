@@ -169,7 +169,8 @@ Mandatory:
 
 Optional:
 
-- `BEN_CLOUDFLARE_EMAIL` (Onboarding Hub team-invite email — see
+- `BEN_OPS_EMAIL` (Onboarding Hub team-invite email shared across
+  Cloudflare / Resend / GBP — see
   [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §4.4)
 - `STRIPE_*` (placeholder until Stage 2A Part 2)
 

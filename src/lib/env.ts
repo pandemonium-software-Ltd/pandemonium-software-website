@@ -26,18 +26,17 @@ const serverEnvSchema = z.object({
   // Admin gate
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 chars"),
 
-  // Onboarding Hub — the email customers should invite as a Cloudflare team
-  // member (Step 1) and as a Resend team member (Step 2, H2). Same email is
-  // fine for both. Public-facing — surfaced verbatim in the Hub UI.
+  // Onboarding Hub — the email customers should invite as a team
+  // member across Cloudflare (Step 1), Resend (Step 2) and Google
+  // Business Profile Manager (Step 3). Same gmail keeps Ben's life
+  // simple and customers see the same address every time. Public-
+  // facing — surfaced verbatim in the Hub UI.
   //
-  // Optional so deploying without it doesn't break /onboarding, /admin or
-  // /api/*. If unset, the Hub renders a clear "(BEN_CLOUDFLARE_EMAIL not
-  // configured)" placeholder — visible to anyone who reaches Step 1, so
-  // it's hard to forget.
-  BEN_CLOUDFLARE_EMAIL: z
-    .string()
-    .email()
-    .optional(),
+  // Optional so deploying without it doesn't break /onboarding,
+  // /admin or /api/*. If unset, the Hub renders a clear
+  // "(BEN_OPS_EMAIL not configured)" placeholder — visible to anyone
+  // who reaches an invite step, so it's hard to forget.
+  BEN_OPS_EMAIL: z.string().email().optional(),
 
   // Stripe (Stage 2A Part 2 — placeholders accepted now)
   STRIPE_SECRET_KEY: z.string().optional(),
