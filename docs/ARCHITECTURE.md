@@ -213,7 +213,7 @@ dashboard" promise. Estimated 16-20 hours. Five commits:
   during first-20-clients period → sends automatically thereafter)
 
 ### Stage 3 (LATER)
-Full GBP API integration, custom domain `pandemoniumsoftware.co.uk`,
+Full GBP API integration, custom domain `moduforge.co.uk`,
 Plausible analytics, real photography, real testimonials, paid
 Cal.com Platform if scale justifies it.
 
