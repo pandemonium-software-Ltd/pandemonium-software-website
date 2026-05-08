@@ -28,7 +28,7 @@ import Step1Cloudflare from "@/components/onboarding/Step1Cloudflare";
 import Step2Domain from "@/components/onboarding/Step2Domain";
 import Step3Modules from "@/components/onboarding/Step3Modules";
 import Step4Assets from "@/components/onboarding/Step4Assets";
-import StepPlaceholder from "@/components/onboarding/StepPlaceholder";
+import Step5Review from "@/components/onboarding/Step5Review";
 
 export type OnboardingHubProps = {
   token: string;
@@ -314,10 +314,13 @@ function StepRenderer({
       );
     case "review":
       return (
-        <StepPlaceholder
-          title={step.title}
-          arrivingIn="next update"
-          summary="Walk through a private preview, leave any change requests, pick a go-live date and sign off."
+        <Step5Review
+          data={slice}
+          done={done}
+          readOnly={readOnly}
+          token={token}
+          savePartial={(patch) => savePartial("review", patch)}
+          markDone={(patch) => markDone("review", patch)}
         />
       );
   }

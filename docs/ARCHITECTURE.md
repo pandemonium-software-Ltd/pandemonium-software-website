@@ -166,19 +166,70 @@ The precise contract the Hub UI promises:
   Audit/update of the GBP listing itself is done by Ben in batch (or
   via browser fallback later)
 
-#### Step 4 (Brand assets — H4 scope, needs R2)
+#### Step 4 (Brand assets — H4 scope)
 - Customer uploads logo + photos directly to a Cloudflare R2 bucket
-  (presigned URLs from `/api/onboarding/upload`)
+  via `/api/onboarding/upload`. See §6.9 for the full contract.
 - Cowork Ops normalises: resize, optimise, convert to WebP, store
   derivatives
 - Updates Notion with R2 keys for the build step
 
-#### Step 5 (Review — H5 scope)
-- Customer ticks final sign-off and picks go-live date
-- Cowork Ops triggers a build via `wrangler deploy --env preview` on
-  their Cloudflare account, parametrised by their data
-- Generates a preview link, emails customer + Ben
-- On go-live date: production deploy + DNS swap
+#### Step 5 (Review & launch — H5 scope)
+
+The final pre-launch step. Three sub-sections in the Hub:
+
+  **A. Preview your site.** Iframe + open-in-new-tab link when
+  Cowork has set `data.review.previewUrl` on the prospect. While
+  unset, a "preview being built" placeholder card explains the
+  ~5-working-day timing. (Stage 2C C5 sets this URL; for Stage 2B
+  the operator can set it manually via Notion.)
+
+  **B. Request edits — capped at MAX_REVIEW_EDITS = 3.** This is
+  the scope-creep guardrail. Each submission counts as one round;
+  multiple small fixes batched into one edit count as one round.
+  Out-of-scope requests (new pages / new sections / new features /
+  full redesigns) are quoted separately under Terms §10. The Hub
+  UI shows two side-by-side panels:
+    - In scope: photo swap, copy tweak, phone/address/hours, price
+      update, testimonial swap, colour/font tweak
+    - Out of scope: new page, new section, new feature, layout
+      change, bulk rewrite (>~10% of copy)
+  Plus a "How to structure your feedback" template (where, what,
+  why) with a side-by-side good-vs-vague example.
+
+  Submission flow:
+    1. Customer types into the textarea (min 20 chars enforced
+       both client + server)
+    2. POST `/api/onboarding/review-edit { token, message }`
+    3. Server validates token + status + count < 3, generates a
+       UUID-keyed `ReviewEdit` ({ id, submittedAt, message,
+       status: "submitted" }), appends to `data.review.edits`,
+       writes back to Notion, emails Ben with scope-check guidance
+    4. Returns `{ success, edit, remaining }` to the client
+    5. Client appends to local state; counter ticks down
+  Server-side cap is the source of truth: any 4th submission gets
+  a 400 with the "used all 3" error message regardless of what the
+  client sent.
+
+  **C. Go-live date + final sign-off.** HTML date picker (min:
+  today). Sign-off checkbox. Both required to mark step done.
+
+  Marking the step done flips the prospect's Status to
+  **Onboarding Complete** and stamps `Onboarding Completed At`.
+  This is Cowork Ops' trigger to begin the build pipeline (Stage
+  2C C5).
+
+**Stage 2C C5 Cowork pipeline (what runs after Onboarding Complete):**
+- Pull the prospect's full state (modules, captured config from
+  Steps 1-3, brand assets from R2, edits queue from Step 5)
+- Render a templated build using the per-customer Cloudflare
+  account (parametrised `wrangler.jsonc`) and deploy a preview
+  Worker
+- Email customer with the preview URL; set `data.review.previewUrl`
+  in Notion so the Hub renders the iframe
+- Apply each `submitted` edit (operator approves before apply
+  during the first-20-clients period; Cowork applies after that)
+- On go-live date: production deploy + DNS swap; status flips to
+  `Live`
 
 ### 4.4 Credentials & state
 

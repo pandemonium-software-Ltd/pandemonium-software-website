@@ -76,6 +76,7 @@ for the full lifecycle, from enquiry to live customer dashboard.
 | `/api/intake` | POST | Phase 3 partial saves + final submission |
 | `/api/onboarding` | POST | Hub per-step partial saves + mark-done |
 | `/api/onboarding/upload` | POST/DELETE | Step 4 brand-asset uploads (multipart) and removals (R2 + Notion) |
+| `/api/onboarding/review-edit` | POST | Step 5 revision submission (server-enforced cap of 3 per customer) |
 | `/api/account/change-request` | POST | Customer change request → Notion inbox + email Ben |
 | `/api/admin/change-request` | PATCH | Operator update of change request status / reply (Basic Auth) |
 | `/api/prospect/[token]` | GET | Server lookup for token-gated pages |
@@ -310,6 +311,10 @@ pre-triage path and a self-serve customer change UI for that scale.
 - Stage 2B Phase H4 — Step 4 (Brand assets + R2 upload binding,
   bucket: `moduforge-customer-assets`, public dev URL enabled,
   drag-drop uploads, thumbnail previews, security gate by token prefix)
+- Stage 2B Phase H5 — Step 5 (Review & launch: preview iframe,
+  cap of 3 pre-launch revisions with scope guardrails, go-live
+  date picker + sign-off, hub-completion flips status to
+  Onboarding Complete)
 - Stage 2D D1 — Customer dashboard (`/account/[token]`) + operator
   per-customer detail (`/admin/[token]`) + change-requests inbox
 - Stage 2D D1.5 — RAG status pills + operator change-request editor
@@ -322,7 +327,6 @@ pre-triage path and a self-serve customer change UI for that scale.
 
 ### Next
 
-- Stage 2B Phase H5 — Step 5 (Review + go-live + sign-off)
 - Stage 2A Part 2 — real Stripe Checkout integration
 - Stage 2C — Cowork Ops automation worker (the milestone that makes
   the "Ben never touches a dashboard" promise real). 5 commits, see

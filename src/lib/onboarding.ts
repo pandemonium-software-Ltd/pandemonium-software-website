@@ -282,9 +282,48 @@ const step4AssetsSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+// Step 5 — Review & go-live. The final pre-launch step. Customer:
+//   - Reviews their preview build (when Cowork has it ready)
+//   - Submits up to MAX_REVIEW_EDITS rounds of revisions, each
+//     scoped to in-scope changes only
+//   - Picks a target go-live date
+//   - Signs off
+//
+// Hard cap on revisions stops scope creep. Out-of-scope requests
+// (new pages / new features / full redesigns) are quoted
+// separately under Terms §10. The pre-submit guardrails copy in
+// the Hub UI tells the customer what's in scope before they spend
+// an edit; Cowork (Stage 2C) will classify automatically and
+// reply with "this one's out of scope; your N stands at N, not
+// N-1; please re-submit something in scope".
+
+export const MAX_REVIEW_EDITS = 3;
+
+const reviewEditSchema = z.object({
+  id: z.string().min(1).max(40),
+  submittedAt: z.string(),
+  message: z
+    .string()
+    .trim()
+    .min(20, "Tell me a bit more — at least a couple of sentences.")
+    .max(2000),
+  /** Set to "applied" once the change is live; "rejected" if
+   *  Cowork or Ben deems it out of scope. Customers see this on
+   *  their Hub. */
+  status: z.enum(["submitted", "applied", "rejected"]).default("submitted"),
+});
+
+export type ReviewEdit = z.infer<typeof reviewEditSchema>;
+
 const step5ReviewSchema = z.object({
-  previewUrlSeen: z.boolean().optional(),
-  changeRequests: z.string().trim().max(5000).optional(),
+  /** URL Cowork sets once a preview is built. Empty until then. */
+  previewUrl: z.string().trim().url().max(500).optional(),
+  /** Customer's revision requests; capped at MAX_REVIEW_EDITS by
+   *  the schema AND by the dedicated /api/onboarding/review-edit
+   *  endpoint. */
+  edits: z.array(reviewEditSchema).max(MAX_REVIEW_EDITS).optional(),
+  /** YYYY-MM-DD. Persisted to Notion's "Go Live Date" property when
+   *  the step is marked done. */
   goLiveDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date.")
@@ -446,6 +485,12 @@ export function canMarkStepDone(
       // the edit-after-done pattern.
       return { ok: true };
     case "review":
+      if (!data.goLiveDate) {
+        return {
+          ok: false,
+          reason: "Please pick a target go-live date before signing off.",
+        };
+      }
       if (!data.finalSignOff) {
         return {
           ok: false,

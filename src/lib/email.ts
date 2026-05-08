@@ -176,6 +176,32 @@ export function buildPhase3Notification(
   };
 }
 
+export function buildReviewEditNotification(args: {
+  prospectName: string;
+  business: string;
+  editNumber: number;
+  remaining: number;
+  message: string;
+  notionUrl: string;
+  adminDetailUrl: string;
+}): NotificationPayload {
+  const businessTag = args.business ? ` at ${args.business}` : "";
+  return {
+    subject: `[REVIEW EDIT ${args.editNumber}/3] ${args.prospectName}${businessTag}`,
+    body:
+      `${args.prospectName}${businessTag} just submitted pre-launch edit ${args.editNumber} of 3. ` +
+      `${args.remaining} edit${args.remaining === 1 ? "" : "s"} remaining.\n\n` +
+      `--- Their request ---\n${args.message}\n--- End ---\n\n` +
+      `Notion:        ${args.notionUrl}\n` +
+      `Admin detail:  ${args.adminDetailUrl}\n\n` +
+      `Scope check before applying:\n` +
+      `  - Existing-content tweak / photo swap / copy edit / opening hours / etc. → in scope, apply\n` +
+      `  - New page / new section / new feature / full redesign → out of scope; reply quoting separately;\n` +
+      `    mark the edit "rejected" via /admin so the customer's 3 stand at the right count\n\n` +
+      `— Cowork`,
+  };
+}
+
 // ---------- Customer-facing notifications ----------
 
 /**
