@@ -742,7 +742,7 @@ type. Stage 2C C1 graduates this into a dedicated `Change
 Requests` Notion DB once Cowork starts processing them at scale,
 adding classifier outputs and audit trail.
 
-### 8.4 What this dashboard intentionally doesn't do (yet)
+### 8.5 What this dashboard intentionally doesn't do (yet)
 
 - Self-serve cancellation (D2)
 - Module add/remove without email (D2)
@@ -765,39 +765,65 @@ drilling into one customer, and intervening when needed. This
 section is the spec for that interface — built incrementally across
 Stages 2C-3.
 
-### 8.1 Fleet view (`/admin`)
+### 9.1 Fleet view (`/admin`) — current shape (Stage 2D D2)
 
-Single page, sortable table, one row per customer. Columns:
+Server-rendered table that hydrates into `<AdminProspectList>`
+(client component) for search + filter interactivity. Server still
+owns auth + Notion fetch + health strip; client owns the table state.
+
+**Columns:**
 
 | Column | Notes |
 |---|---|
-| Name / business / domain | Click → per-customer detail |
-| Status | Coloured badge (Live / Onboarding / Cancelled / Paused) |
-| Health | Red / amber / green derived from §6.1 checks (worst of: uptime, DNS, deps audit, Resend domain, Stripe) |
-| Last activity | Most recent of: cowork action, customer change request, incident |
-| Content allowance | "12 / 30 min used this month" |
-| Subscription | Stripe state — active, past_due, paused, cancelled |
-| Quick links | Notion · live site · `/admin/[token]` |
+| Name / Business | Customer name + business name + email |
+| Action | Outstanding indicators (red / amber pills, see below) |
+| Type / Loc | Business type + UK location |
+| Status | Coloured badge (Phase 1 / 2 / 3 / Paid / Live / Cancelled) |
+| Compat | Compatibility result + hard / soft blockers |
+| Fees | Calculated setup + monthly fee + Founding tag |
+| Submitted | Latest phase submission date |
+| Links | `Detail →` · Notion ↗ · Qualify URL · Intake URL · Hub URL · 5-dot Hub progress |
 
-**Filters** (chips above the table): status, health, business type, UK
-location, has open exception, subscription state, founding member,
-days-since-launch.
+**Outstanding indicators (Action column + row tint):**
 
-**Search** by name / business / domain / email / token prefix.
+Two attention-needed signals show in the new `Action` column. Rows
+are tinted to reinforce them:
 
-**Aggregate banners** at the top:
-- "X customers live" — total
-- "Y need attention" — open Tier 2 / Tier 3 incidents or unresolved
-  exceptions
-- "Z awaiting approval" — Cowork drafts pending Ben's review
+- **Open change requests** — count of requests in `pending` or
+  `in-progress`. Red pill ("N open requests") + light red row tint.
+- **Awaiting reply** — prospect status is one of {Phase 1 Complete,
+  Phase 2 Complete, Phase 2 Flagged for Review, Phase 2
+  Clarification Requested, Phase 3 Complete} — operator (or Cowork
+  in Stage 2C) is the next mover. Amber pill ("Awaiting reply") +
+  light orange row tint.
 
-**Bulk actions** (rarely used, require typed confirmation):
-- Apply security patch to all
-- Broadcast email to filtered set (e.g. "all newsletter customers")
-- Trigger fleet-wide rebuild
-- Force-rerun health checks
+A row with both shows both pills; red takes precedence on tint.
 
-### 8.2 Per-customer detail (`/admin/[token]`)
+**Search box** (case-insensitive substring match):
+- Name / Business / Email / Domain / Token prefix
+
+**Filter chips** (above the table, click to toggle):
+- All
+- Open requests *(red-tinted when count > 0)*
+- Awaiting reply *(amber-tinted when count > 0)*
+- Live customers *(green-tinted)*
+- Cancelled
+
+Each chip shows a count so Ben sees at a glance how many rows match.
+Active chip = solid navy; others styled by tone of their state.
+
+### 9.2 Fleet view — TODO for D3 (alongside Stage 2C)
+
+Once Cowork's audit log + Exceptions DB land:
+- Health badge per row (red / amber / green from §6.1 checks)
+- Aggregate banner: "X customers live · Y open requests · Z
+  awaiting Ben review · W incidents"
+- Bulk actions (typed-confirmation required): security patch,
+  broadcast email, fleet-wide rebuild, force-rerun health checks
+- Saved searches per common scenario (e.g. "Live customers with no
+  health checks in 24h")
+
+### 9.3 Per-customer detail (`/admin/[token]`)
 
 The drill-down. One scrollable page with collapsible sections:
 
@@ -830,7 +856,7 @@ The drill-down. One scrollable page with collapsible sections:
    team member so the dashboards open authenticated. Used for
    Tier 3 emergencies only.
 
-### 8.3 Notification routing (where each escalation goes)
+### 9.4 Notification routing (where each escalation goes)
 
 Mirror of §6.6 from Ben's side:
 
@@ -843,7 +869,7 @@ Mirror of §6.6 from Ben's side:
 Slack integration (Stage 3): an `#ops-modforge` channel gets every
 Tier 3, plus a daily digest of Tier 2 approvals.
 
-### 8.4 Direct intervention paths
+### 9.5 Direct intervention paths
 
 Five well-defined ways Ben can override Cowork. None require Ben to
 log into a customer SaaS dashboard for routine work, but all are
@@ -872,7 +898,7 @@ available for emergencies:
    bulk-edit in Notion's UI directly. System tolerates external
    edits (idempotent reconciliation on cron).
 
-### 8.5 How the model scales
+### 9.6 How the model scales
 
 | Customers | Ben's ops time / day | What changes |
 |---|---|---|
@@ -894,7 +920,7 @@ The model scales because:
 - The bottleneck at 1000+ is Ben's review queue for
   non-routine items; Cowork-of-Cowork (pre-triage) is the unlock
 
-### 8.6 Things Ben never has to do, ever
+### 9.7 Things Ben never has to do, ever
 
 Spelling out the negatives so the model is clear. **None** of these
 are part of Ben's working day:
