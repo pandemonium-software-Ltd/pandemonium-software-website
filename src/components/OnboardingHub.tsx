@@ -26,6 +26,7 @@ import {
 } from "@/lib/onboarding";
 import Step1Cloudflare from "@/components/onboarding/Step1Cloudflare";
 import Step2Domain from "@/components/onboarding/Step2Domain";
+import Step3Tools from "@/components/onboarding/Step3Tools";
 import StepPlaceholder from "@/components/onboarding/StepPlaceholder";
 
 export type OnboardingHubProps = {
@@ -282,10 +283,14 @@ function StepRenderer({
       );
     case "tools":
       return (
-        <StepPlaceholder
-          title={step.title}
-          arrivingIn="next update"
-          summary="Set up your booking page (Cal.com) and / or your Google Business Profile."
+        <Step3Tools
+          data={slice}
+          done={done}
+          readOnly={readOnly}
+          benEmail={benEmail}
+          modules={modules}
+          savePartial={(patch) => savePartial("tools", patch)}
+          markDone={(patch) => markDone("tools", patch)}
         />
       );
     case "assets":

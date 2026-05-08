@@ -208,15 +208,20 @@ const step2DomainSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+// Step 3 (Connect tools) — conditional on Booking and/or GBP-addon
+// modules. Cal.com is URL-capture only (we embed their public booking
+// page; no admin access needed). GBP requires manager invite so I can
+// audit / update their listing later.
 const step3ToolsSchema = z.object({
-  calcomBookingUrl: z
-    .string()
-    .trim()
-    .url()
-    .max(500)
-    .optional(),
-  calcomCalendarConnected: z.boolean().optional(),
+  // Cal.com booking URL — must be a cal.com domain so the embed
+  // library knows how to render it. Schema is loose-permissive (any
+  // URL); the per-step gate enforces the cal.com host check.
+  calcomBookingUrl: z.string().trim().url().max(500).optional(),
+  // GBP listing URL — usually `https://g.page/...` or a full
+  // `https://www.google.com/maps/...` URL. Permissive validation.
   gbpUrl: z.string().trim().url().max(500).optional(),
+  // Tick the customer flips once they've added BEN_CLOUDFLARE_EMAIL
+  // as a Manager on their GBP listing. Required to mark step done.
   gbpManagerInvited: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),
 });
@@ -329,9 +334,65 @@ export function canMarkStepDone(
       }
       return { ok: true };
     }
-    case "tools":
-      // H3 will tighten this — placeholder always passes for now.
+    case "tools": {
+      const hasBooking = ctx.modules.includes("Online Booking");
+      const hasGbpAddon = ctx.modules.includes(
+        "Google Business Profile Setup/Audit",
+      );
+      if (hasBooking) {
+        const url = typeof data.calcomBookingUrl === "string"
+          ? data.calcomBookingUrl.trim()
+          : "";
+        if (!url) {
+          return {
+            ok: false,
+            reason:
+              "Please paste your Cal.com booking URL so I can embed it on your site.",
+          };
+        }
+        // Cal.com hosted URL check. Self-hosted Cal.com (custom
+        // domain) is uncommon for the prospects we serve, so we
+        // require cal.com for now and revisit if a customer needs
+        // self-hosted.
+        try {
+          const parsed = new URL(url);
+          const ok =
+            parsed.hostname === "cal.com" ||
+            parsed.hostname === "www.cal.com" ||
+            parsed.hostname.endsWith(".cal.com");
+          if (!ok) {
+            return {
+              ok: false,
+              reason:
+                "That doesn't look like a cal.com URL — it should start with https://cal.com/.",
+            };
+          }
+        } catch {
+          return {
+            ok: false,
+            reason: "That Cal.com URL doesn't look valid.",
+          };
+        }
+      }
+      if (hasGbpAddon) {
+        const url = typeof data.gbpUrl === "string" ? data.gbpUrl.trim() : "";
+        if (!url) {
+          return {
+            ok: false,
+            reason:
+              "Please paste your Google Business Profile URL (e.g. https://g.page/...).",
+          };
+        }
+        if (!data.gbpManagerInvited) {
+          return {
+            ok: false,
+            reason:
+              "Please tick the box once you've added me as a Manager on your Google Business Profile.",
+          };
+        }
+      }
       return { ok: true };
+    }
     case "assets":
       // H4 will tighten this — placeholder always passes for now.
       return { ok: true };
