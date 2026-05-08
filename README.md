@@ -75,7 +75,9 @@ for the full lifecycle, from enquiry to live customer dashboard.
 | `/api/qualify` | POST | Phase 2 form → compatibility engine → Notion |
 | `/api/intake` | POST | Phase 3 partial saves + final submission |
 | `/api/onboarding` | POST | Hub per-step partial saves + mark-done |
+| `/api/onboarding/upload` | POST/DELETE | Step 4 brand-asset uploads (multipart) and removals (R2 + Notion) |
 | `/api/account/change-request` | POST | Customer change request → Notion inbox + email Ben |
+| `/api/admin/change-request` | PATCH | Operator update of change request status / reply (Basic Auth) |
 | `/api/prospect/[token]` | GET | Server lookup for token-gated pages |
 
 ---
@@ -305,22 +307,28 @@ pre-triage path and a self-serve customer change UI for that scale.
 - Stage 2B Phase H1 — Onboarding Hub scaffolding + Step 1 (Cloudflare)
 - Stage 2B Phase H2 — Step 2 (Domain + conditional Resend Teams flow)
 - Stage 2B Phase H3 — Step 3 (Cal.com URL capture + GBP manager invite)
+- Stage 2B Phase H4 — Step 4 (Brand assets + R2 upload binding,
+  bucket: `moduforge-customer-assets`, public dev URL enabled,
+  drag-drop uploads, thumbnail previews, security gate by token prefix)
 - Stage 2D D1 — Customer dashboard (`/account/[token]`) + operator
   per-customer detail (`/admin/[token]`) + change-requests inbox
+- Stage 2D D1.5 — RAG status pills + operator change-request editor
+  + customer email on resolution
+- Stage 2D D2 — Searchable fleet view at `/admin` with outstanding-flag
+  pills + filter chips
 - ModuForge brand introduced; legal entity Pandemonium Software Ltd
   preserved
 - AI transparency disclosures (Privacy §5, About page, enquiry copy)
 
 ### Next
 
-- Stage 2B Phase H4 — Step 4 (Brand assets + R2 upload binding)
-- Stage 2B Phase H5 — Step 5 (Review + go-live)
+- Stage 2B Phase H5 — Step 5 (Review + go-live + sign-off)
 - Stage 2A Part 2 — real Stripe Checkout integration
 - Stage 2C — Cowork Ops automation worker (the milestone that makes
   the "Ben never touches a dashboard" promise real). 5 commits, see
   `docs/ARCHITECTURE.md` §5
-- Stage 2D D2-D3 — inline Notion editing, change-request resolution
-  controls, audit-log feed, approval queue (depends on Stage 2C)
+- Stage 2D D3 — inline Notion editing on `/admin/[token]`, audit-log
+  feed, approval queue (depends on Stage 2C)
 - Stage 3 — full GBP API integration, custom domain, Plausible
   analytics, real client photography and testimonials
 

@@ -38,6 +38,15 @@ const serverEnvSchema = z.object({
   // who reaches an invite step, so it's hard to forget.
   BEN_OPS_EMAIL: z.string().email().optional(),
 
+  // Onboarding Hub Step 4 (brand assets) — public URL base for the
+  // moduforge-customer-assets R2 bucket. Cloudflare assigns this when
+  // public access is enabled on the bucket; looks like
+  // `https://pub-<account_hash>.r2.dev`. Used to render thumbnails of
+  // uploaded logos/photos on the Hub. Optional so deploying without
+  // it doesn't break /onboarding — Step 4 falls back to filename-only
+  // tiles when missing.
+  R2_PUBLIC_URL_BASE: z.string().url().optional(),
+
   // Stripe (Stage 2A Part 2 — placeholders accepted now)
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_PUBLIC_KEY: z.string().optional(),

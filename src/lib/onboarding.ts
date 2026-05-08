@@ -236,9 +236,30 @@ const step3ToolsSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+// Step 4 (Brand assets) — direct uploads to a public R2 bucket
+// (`moduforge-customer-assets`). The Hub UI uploads each file via
+// POST /api/onboarding/upload, which validates + writes to R2 and
+// appends the new asset record to this slice. Marking the step
+// done has no minimum asset count: customers without photos can
+// signal that in the notes field and I'll suggest placeholders.
+const assetSchema = z.object({
+  /** R2 object key, e.g. `assets/<token>/logo/<uuid>-favicon.png`. */
+  key: z.string().max(500),
+  filename: z.string().max(200),
+  /** Bytes. */
+  size: z.number().int().nonnegative(),
+  contentType: z.string().max(120),
+  /** ISO-8601 timestamp set when the upload completes. */
+  uploadedAt: z.string(),
+});
+
+export type Asset = z.infer<typeof assetSchema>;
+
 const step4AssetsSchema = z.object({
-  logoR2Key: z.string().max(500).optional(),
-  photoR2Keys: z.array(z.string().max(500)).max(20).optional(),
+  /** Single brand logo. PNG / JPG / SVG / WebP. */
+  logo: assetSchema.optional(),
+  /** Up to 20 photos. */
+  photos: z.array(assetSchema).max(20).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -405,7 +426,12 @@ export function canMarkStepDone(
       return { ok: true };
     }
     case "assets":
-      // H4 will tighten this — placeholder always passes for now.
+      // No minimum asset count: customers without a logo or photos
+      // can flag that in the notes field and I'll provide stock
+      // placeholders during the build. Mark-done = "I'm ready, you
+      // build with what's here". They can come back to upload more
+      // any time after marking done; the inputs stay editable per
+      // the edit-after-done pattern.
       return { ok: true };
     case "review":
       if (!data.finalSignOff) {

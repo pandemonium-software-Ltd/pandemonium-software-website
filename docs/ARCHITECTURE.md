@@ -547,21 +547,69 @@ hash for that step, the step is re-queued for ops. Idempotency
 (§7) means re-running a step is safe — actions check current state
 of the target service before acting.
 
-### 6.9 Asset management (ongoing)
+### 6.9 Asset management
 
-Customers occasionally need to swap photos or upload new ones
-post-launch. Cowork handles this without Ben:
+**Storage:** Cloudflare R2 bucket `moduforge-customer-assets`,
+single-region (ENAM), public dev URL enabled at
+`https://pub-<account-hash>.r2.dev`. Free-tier limits (10 GB
+storage, 1M class-A ops/month) cover roughly the first 1k
+customers given the 10 MB/file × ~10 files/customer envelope.
 
-1. Customer logs into `/account/[token]/assets` (future) — token
-   is the same Phase 1 unique token they've had since enquiry
-2. Customer drags new photos into the upload zone (presigned
-   Cloudflare R2 URLs, like H4)
-3. Cowork normalises (resize, optimise, WebP)
-4. Customer ticks "use these now" → Cowork triggers a rebuild +
-   deploy with the new assets; old assets kept in R2 for 90 days
-   then garbage-collected
-**Failure mode:** image processing failure → Tier 2 (manual fallback
-via the cloud admin dashboard).
+**Object key pattern:** `assets/<token>/<kind>/<uuid>-<safe-filename>`
+where `<kind>` is `logo` or `photo`. Token-prefixed keys are the
+authorisation primitive — DELETE refuses any key that doesn't start
+with `assets/<requester-token>/`, so customers can't reach into
+each other's prefixes by guessing.
+
+**Worker access:** R2 binding `ASSETS_BUCKET` declared in
+`wrangler.jsonc`. Worker reads/writes via `getCloudflareContext()`
+from `@opennextjs/cloudflare`. Public reads bypass the Worker —
+thumbnails on the Hub render straight from `R2_PUBLIC_URL_BASE`.
+
+**Upload flow (Hub Step 4 — shipped in 2B H4):**
+1. Customer drops a file into the Step 4 component
+2. Client POSTs multipart to `/api/onboarding/upload` with
+   `{ token, kind, file }`
+3. Route validates: token format, onboarding-unlocked status,
+   content type ∈ {png, jpeg, webp, svg+xml}, size ≤ 10 MB,
+   kind ∈ {logo, photo}, photos array < 20
+4. Generates the key, puts the bytes via `ASSETS_BUCKET.put`
+5. Reads current Onboarding Data, merges the new Asset record into
+   the `assets` slice (logo replaces; photo appends)
+6. Writes back to Notion's Onboarding Data field
+7. For `kind=logo` replacement: best-effort `delete` of the previous
+   logo's R2 object after Notion is updated (orphan-safe — failure
+   is logged, not propagated)
+8. Returns `{ success, asset, kind }`
+
+**Delete flow:** customer clicks the X on a thumbnail → DELETE
+`/api/onboarding/upload` with `{ token, key }` → server validates
+key prefix, removes from R2 (return-on-fail before Notion write),
+then patches Notion to clear the logo or filter the photos array.
+
+**Cowork's downstream job (Stage 2C C4):**
+- Pull each customer's assets blob from Notion
+- Normalise (resize to standard widths, convert to WebP, generate
+  responsive `srcset`s)
+- Inject into the build pipeline as templated `<img>` tags + the
+  appropriate `image-set()` CSS
+- Old originals stay in R2 for 90 days post-replacement, then
+  garbage-collected by a separate cron job
+
+**Post-launch swap (future via `/account/[token]/assets`):**
+- Customer uploads new photos via the same `/api/onboarding/upload`
+  endpoint (status check covers post-Live customers too)
+- Customer ticks "use these now" → Cowork rebuilds the site with
+  fresh assets, deploys, emails customer
+
+**Failure modes:**
+- R2 binding missing in production → 503 with a clear "asset
+  storage isn't configured yet" message
+- File too big / wrong type → 4xx with the specific reason
+- Notion write fails after R2 put succeeds → R2 object is
+  best-effort deleted to avoid orphans (5xx returned to client)
+- Image processing failure (Stage 2C) → Tier 2 incident via the
+  ops escalation path
 
 ---
 

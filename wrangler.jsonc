@@ -17,6 +17,17 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // R2 bucket for customer-uploaded brand assets (Hub Step 4).
+  // Bucket lives at the account level; Worker accesses it via the
+  // ASSETS_BUCKET binding (env.ASSETS_BUCKET in Worker code, surfaced
+  // via @opennextjs/cloudflare's getCloudflareContext().env). Public
+  // dev URL configured separately (see R2_PUBLIC_URL_BASE env var).
+  "r2_buckets": [
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "moduforge-customer-assets"
+    }
+  ],
   "observability": {
     "enabled": true
   }

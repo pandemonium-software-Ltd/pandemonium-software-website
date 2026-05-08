@@ -81,6 +81,10 @@ export default async function OnboardingPage({
   // just becomes obvious in any invite step.
   const env = getServerEnv();
   const benEmail = env.BEN_OPS_EMAIL ?? "(BEN_OPS_EMAIL not configured)";
+  // Public URL base for R2 brand-asset thumbnails (Step 4). Empty
+  // string = no thumbnail preview, just filename tiles — uploads
+  // still work without it.
+  const r2PublicUrlBase = env.R2_PUBLIC_URL_BASE ?? "";
 
   return (
     <OnboardingHub
@@ -95,6 +99,7 @@ export default async function OnboardingPage({
       initialData={data}
       hubComplete={prospect.status === "Onboarding Complete"}
       benEmail={benEmail}
+      r2PublicUrlBase={r2PublicUrlBase}
     />
   );
 }

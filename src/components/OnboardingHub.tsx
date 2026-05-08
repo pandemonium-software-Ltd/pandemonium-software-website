@@ -27,6 +27,7 @@ import {
 import Step1Cloudflare from "@/components/onboarding/Step1Cloudflare";
 import Step2Domain from "@/components/onboarding/Step2Domain";
 import Step3Tools from "@/components/onboarding/Step3Tools";
+import Step4Assets from "@/components/onboarding/Step4Assets";
 import StepPlaceholder from "@/components/onboarding/StepPlaceholder";
 
 export type OnboardingHubProps = {
@@ -42,6 +43,9 @@ export type OnboardingHubProps = {
   hubComplete: boolean;
   /** Ops email customers invite as a Cloudflare / Resend team member. */
   benEmail: string;
+  /** Public URL base for R2 brand-asset thumbnails. Empty string =
+   *  thumbnails fall back to filename tiles in Step 4. */
+  r2PublicUrlBase: string;
 };
 
 type SaveState =
@@ -60,6 +64,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
     initialData,
     hubComplete,
     benEmail,
+    r2PublicUrlBase,
   } = props;
 
   const [currentStepId, setCurrentStepId] = useState<StepId>(initialStepId);
@@ -212,6 +217,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                   doneFlags={doneFlags}
                   token={token}
                   benEmail={benEmail}
+                  r2PublicUrlBase={r2PublicUrlBase}
                   modules={props.modules}
                   readOnly={hubDone}
                   savePartial={savePartial}
@@ -232,7 +238,9 @@ function StepRenderer({
   step,
   data,
   doneFlags,
+  token,
   benEmail,
+  r2PublicUrlBase,
   modules,
   readOnly,
   savePartial,
@@ -243,6 +251,7 @@ function StepRenderer({
   doneFlags: Record<StepId, boolean>;
   token: string;
   benEmail: string;
+  r2PublicUrlBase: string;
   modules: string[];
   readOnly: boolean;
   savePartial: (
@@ -295,10 +304,14 @@ function StepRenderer({
       );
     case "assets":
       return (
-        <StepPlaceholder
-          title={step.title}
-          arrivingIn="next update"
-          summary="Upload your logo and 5–10 photos. Drag-and-drop, with previews."
+        <Step4Assets
+          data={slice}
+          done={done}
+          readOnly={readOnly}
+          r2PublicUrlBase={r2PublicUrlBase}
+          token={token}
+          savePartial={(patch) => savePartial("assets", patch)}
+          markDone={(patch) => markDone("assets", patch)}
         />
       );
     case "review":
