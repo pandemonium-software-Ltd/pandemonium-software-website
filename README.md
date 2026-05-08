@@ -1,7 +1,7 @@
-# ModuForge — Pandamonium Software Ltd
+# ModuForge — Pandemonium Software Ltd
 
 The customer-facing site and operations platform for **ModuForge**, the
-flat-fee modular website service from **Pandamonium Software Ltd**.
+flat-fee modular website service from **Pandemonium Software Ltd**.
 
 ModuForge sells, qualifies, intakes and onboards UK trades and small
 businesses; once a customer is live, the same codebase runs the
@@ -208,7 +208,7 @@ The deployed worker is available at
 > the original "pandemonium-software-website" spelling because
 > renaming would break previously-emailed Hub / Intake / Payment
 > links. The customer-facing brand is **ModuForge** (and the legal
-> entity **Pandamonium Software Ltd** — note the *a* vs *e*). When a
+> entity **Pandemonium Software Ltd** — note the *a* vs *e*). When a
 > custom domain registers, the worker URL becomes invisible to
 > customers.
 
@@ -237,6 +237,35 @@ email before send. After that, status updates ("DNS verified",
 "preview ready", "report ready") send automatically; everything else
 stays human-reviewed.
 
+### How Ben sees and intervenes (designed for hundreds of customers)
+
+Ben never logs into a customer's SaaS dashboard for routine work.
+But he always has clear paths to see what's happening and step in
+when needed. The full spec is in
+[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §8:
+
+- **Fleet view (`/admin`)** — sortable table of every live customer
+  with health badge, content allowance, subscription state, open
+  exceptions; filters by status / health / business type / location;
+  bulk actions (security patch, broadcast email, fleet rebuild)
+- **Per-customer detail (`/admin/[token]`)** — drill-down with
+  inline-editable Notion fields, recent Cowork audit entries, open
+  exceptions, this month's change requests, live preview iframe,
+  direct-action buttons (rebuild now, override Cowork, mark
+  cancellation, etc.) and deep-links into the customer's dashboards
+  for Tier 3 emergencies
+- **Notification routing** — Tier 1 logged only, Tier 2 daily digest
+  email + dashboard chip, Tier 3 immediate email + customer holding
+  reply already drafted by Cowork
+- **Direct intervention** — five paths covering everything from a
+  one-line Notion edit through a Cowork pause-toggle to a deep-link
+  into the customer's Cloudflare dashboard for genuine emergencies
+
+Estimated Ben ops time: **~30-45 min/day at 100 customers, ~60-90
+min/day at 1,000.** The bottleneck above 500-1,000 is Ben's
+escalation review queue; the model has a clear "Cowork-of-Cowork"
+pre-triage path and a self-serve customer change UI for that scale.
+
 ---
 
 ## Design tokens
@@ -257,7 +286,7 @@ stays human-reviewed.
   compatibility engine → intake → fee calculation → payment placeholder)
 - Stage 2B Phase H1 — Onboarding Hub scaffolding + Step 1 (Cloudflare)
 - Stage 2B Phase H2 — Step 2 (Domain + conditional Resend Teams flow)
-- ModuForge brand introduced; legal entity Pandamonium Software Ltd
+- ModuForge brand introduced; legal entity Pandemonium Software Ltd
   preserved
 - AI transparency disclosures (Privacy §5, About page, enquiry copy)
 
@@ -280,4 +309,4 @@ stays human-reviewed.
 
 ## Licence
 
-All rights reserved © Pandamonium Software Ltd.
+All rights reserved © Pandemonium Software Ltd.

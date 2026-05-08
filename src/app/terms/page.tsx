@@ -4,7 +4,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Terms of service",
   description:
-    "The simple working agreement between Pandamonium Software Ltd and my clients. Plain English, no legalese.",
+    "The simple working agreement between Pandemonium Software Ltd and my clients. Plain English, no legalese.",
   alternates: { canonical: "/terms" },
 };
 
@@ -33,11 +33,11 @@ export default function TermsPage() {
           <h2>1. Who I am</h2>
           <p>
             I&apos;m Ben Pandher. I run{" "}
-            <strong>Pandamonium Software Ltd</strong> ({site.location.city},{" "}
+            <strong>Pandemonium Software Ltd</strong> ({site.location.city},{" "}
             {site.location.region}, United Kingdom), a one-person business
             building websites for UK trades and small businesses. In these
             terms, &quot;I&quot; and &quot;me&quot; means Ben Pandher
-            trading as Pandamonium Software Ltd, and &quot;you&quot; means
+            trading as Pandemonium Software Ltd, and &quot;you&quot; means
             the business or person who hires me.
           </p>
           <p>

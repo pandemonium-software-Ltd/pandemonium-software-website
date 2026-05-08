@@ -13,7 +13,7 @@ export default function Footer() {
               <span className="font-serif text-2xl font-semibold text-white">
                 {site.shortName}
               </span>
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-cream-300/70">
+              <span className="text-[11px] font-normal text-cream-300/70">
                 {site.tagline}
               </span>
             </div>

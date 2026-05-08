@@ -18,7 +18,7 @@ export default function Header() {
           <span className="font-serif text-2xl font-semibold leading-none tracking-tight text-navy-900 transition-colors group-hover:text-ember-600 md:text-[1.65rem]">
             {site.shortName}
           </span>
-          <span className="hidden font-sans text-xs font-medium uppercase tracking-[0.18em] text-navy-500 sm:inline">
+          <span className="hidden font-sans text-[11px] font-normal text-navy-500 sm:inline">
             {site.tagline}
           </span>
         </Link>

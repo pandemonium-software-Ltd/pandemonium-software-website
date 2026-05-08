@@ -5,7 +5,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About — Ben Pandher",
   description:
-    "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind ModuForge by Pandamonium Software Ltd.",
+    "Small, local, and honest. Meet Ben Pandher, the Oxfordshire developer behind ModuForge by Pandemonium Software Ltd.",
   alternates: { canonical: "/about" },
   openGraph: {
     title: "About — ModuForge",
@@ -23,7 +23,7 @@ export default function AboutPage() {
           <span className="eyebrow">About</span>
           <h1 className="heading-1">Hello, I&apos;m Ben.</h1>
           <p className="prose-body mx-auto mt-6 max-w-2xl">
-            I built Pandamonium Software Ltd because UK trades and small
+            I built Pandemonium Software Ltd because UK trades and small
             businesses deserve a professional website without the usual
             tech hassle.
           </p>
@@ -75,7 +75,7 @@ export default function AboutPage() {
           <div className="long-form max-w-prose">
             <p>
               I&apos;m an Oxfordshire-based software developer. Before
-              starting Pandamonium Software Ltd, I spent years building
+              starting Pandemonium Software Ltd, I spent years building
               software for real businesses — the kind of work where a
               broken button costs someone real money and nobody has patience
               for jargon.

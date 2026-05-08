@@ -7,7 +7,7 @@
 //
 // The "from" address must be on a verified domain in Resend.
 // For now we use Resend's default onboarding sender; Stage 3 swaps in
-// notifications@pandamoniumsoftware.co.uk once the domain is verified.
+// notifications@pandemoniumsoftware.co.uk once the domain is verified.
 
 import { Resend } from "resend";
 import { getServerEnv } from "./env";

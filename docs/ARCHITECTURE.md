@@ -1,13 +1,13 @@
-# Pandamonium Software Ltd — Architecture & Operations PRD
+# Pandemonium Software Ltd — Architecture & Operations PRD
 
 > **Living document.** Captures the architectural decisions for ModuForge
-> (the Pandamonium Software Ltd product). Updated as Stage 2 phases ship.
+> (the Pandemonium Software Ltd product). Updated as Stage 2 phases ship.
 
 ## 1. Product positioning
 
 ModuForge is a flat-fee, modular website service for UK trades and small
 businesses. The customer-facing brand is **ModuForge**; the legal entity
-is **Pandamonium Software Ltd**.
+is **Pandemonium Software Ltd**.
 
 The single most important design constraint behind everything in this
 doc:
@@ -213,7 +213,7 @@ dashboard" promise. Estimated 16-20 hours. Five commits:
   during first-20-clients period → sends automatically thereafter)
 
 ### Stage 3 (LATER)
-Full GBP API integration, custom domain `pandamoniumsoftware.co.uk`,
+Full GBP API integration, custom domain `pandemoniumsoftware.co.uk`,
 Plausible analytics, real photography, real testimonials, paid
 Cal.com Platform if scale justifies it.
 
@@ -487,7 +487,175 @@ A few non-negotiables for Cowork, baked into prompts and code:
   Stage 2C C1) — every action, success or failure. Never edited or
   deleted.
 
-## 8. Open questions / pending decisions
+## 8. Operations interface (Ben's view at scale)
+
+ModuForge is designed for hundreds of customers without scaling Ben's
+ops time linearly. That only works if (a) Cowork does the work and
+(b) Ben has a tight, opinionated interface for seeing the fleet,
+drilling into one customer, and intervening when needed. This
+section is the spec for that interface — built incrementally across
+Stages 2C-3.
+
+### 8.1 Fleet view (`/admin`)
+
+Single page, sortable table, one row per customer. Columns:
+
+| Column | Notes |
+|---|---|
+| Name / business / domain | Click → per-customer detail |
+| Status | Coloured badge (Live / Onboarding / Cancelled / Paused) |
+| Health | Red / amber / green derived from §6.1 checks (worst of: uptime, DNS, deps audit, Resend domain, Stripe) |
+| Last activity | Most recent of: cowork action, customer change request, incident |
+| Content allowance | "12 / 30 min used this month" |
+| Subscription | Stripe state — active, past_due, paused, cancelled |
+| Quick links | Notion · live site · `/admin/[token]` |
+
+**Filters** (chips above the table): status, health, business type, UK
+location, has open exception, subscription state, founding member,
+days-since-launch.
+
+**Search** by name / business / domain / email / token prefix.
+
+**Aggregate banners** at the top:
+- "X customers live" — total
+- "Y need attention" — open Tier 2 / Tier 3 incidents or unresolved
+  exceptions
+- "Z awaiting approval" — Cowork drafts pending Ben's review
+
+**Bulk actions** (rarely used, require typed confirmation):
+- Apply security patch to all
+- Broadcast email to filtered set (e.g. "all newsletter customers")
+- Trigger fleet-wide rebuild
+- Force-rerun health checks
+
+### 8.2 Per-customer detail (`/admin/[token]`)
+
+The drill-down. One scrollable page with collapsible sections:
+
+1. **Header** — name, business, domain, status, health dot, founding
+   member tag, days since launch, **Notion ↗** + **Live site ↗** +
+   **Pause Cowork** toggle
+2. **Notion record (editable inline)** — every field from the
+   Prospects / Clients DB; saves write through to Notion; system
+   picks up changes on next cron tick
+3. **Recent activity (last 30)** — Cowork audit entries (action,
+   timestamp, status, ms duration); click to expand a single entry
+   for full context
+4. **Open exceptions** — from `Exceptions` DB; each has buttons:
+   *Acknowledge* / *Mark resolved* / *Escalate to Tier 3*
+5. **Change requests this month** — open and recently-closed; each
+   shows the original request, Cowork's classification, the draft (if
+   any), and approve / edit / reject buttons
+6. **Live preview** — iframe of `https://customer.domain` (or
+   `/preview/[token]` for un-launched ones)
+7. **Direct-action buttons:**
+   - Rebuild now
+   - Send a one-off email (Cowork drafts; Ben edits + sends)
+   - Override compatibility result
+   - Extend content allowance for the month
+   - Mark cancellation requested
+   - Force resync from Stripe
+   - Trigger handover (if cancellation)
+8. **Drop-in deep links** — open this customer's Cloudflare /
+   Resend / Cal.com / GBP dashboards in new tabs; Ben's already a
+   team member so the dashboards open authenticated. Used for
+   Tier 3 emergencies only.
+
+### 8.3 Notification routing (where each escalation goes)
+
+Mirror of §6.6 from Ben's side:
+
+| Tier | Visible to Ben in | Email | Push | Customer notified |
+|---|---|---|---|---|
+| 1 (auto-resolvable) | "Recent activity" feed in `/admin` | No | No | No |
+| 2 (config-fix) | "Awaiting approval" queue chip on `/admin` header | Daily digest by default | No | Only if customer-visible change |
+| 3 (genuinely broken) | Banner at top of `/admin` | Immediate | Push (Stage 3 — requires PWA notification setup) | Cowork-drafted holding email goes immediately; full update after fix |
+
+Slack integration (Stage 3): an `#ops-modforge` channel gets every
+Tier 3, plus a daily digest of Tier 2 approvals.
+
+### 8.4 Direct intervention paths
+
+Five well-defined ways Ben can override Cowork. None require Ben to
+log into a customer SaaS dashboard for routine work, but all are
+available for emergencies:
+
+1. **Edit Notion directly.** Any field. System reads Notion as
+   source of truth on next cron tick. This is the lowest-friction
+   override — adjust fees, change module selections, extend allowance,
+   change status. Cowork audits the change ("Notion field changed
+   externally") on next read.
+2. **Override Cowork drafts.** Every draft has *Edit*, *Replace*,
+   *Cancel*. Edit lets Ben tweak content; Replace lets Ben write a
+   completely different action; Cancel kills the action and asks
+   Cowork to re-classify or escalate.
+3. **Pause Cowork for one customer.** Single Notion checkbox
+   ("Cowork Paused"). When checked, Cowork stops all automated actions
+   on that customer (audit log records the pause), but health checks
+   keep running so Ben still sees their state. Used when something's
+   weird and Ben wants Cowork out of the way while he investigates.
+4. **Drop-in deep links to dashboards.** From `/admin/[token]`,
+   one-click opens the customer's Cloudflare / Resend / Cal.com /
+   GBP dashboards. Ben's team-member access means these open
+   authenticated. Use for Tier 3 emergencies only.
+5. **Direct database edit.** All operational state (prospects,
+   clients, audit log, exceptions) is in Notion. Worst case, Ben can
+   bulk-edit in Notion's UI directly. System tolerates external
+   edits (idempotent reconciliation on cron).
+
+### 8.5 How the model scales
+
+| Customers | Ben's ops time / day | What changes |
+|---|---|---|
+| 1 – 20 | ~30 min | Draft-then-send on every customer email; manual cancellation flow; Ben reads every audit entry |
+| 20 – 100 | ~30 – 45 min | Auto-send status updates; only L1 / L3 / quote emails reviewed; bulk security patches via `/admin`; daily digest for Tier 2 |
+| 100 – 500 | ~45 – 60 min | Days are pure escalation review; the dashboard *is* the day's work |
+| 500 – 1000 | ~60 – 90 min | Need Cowork-of-Cowork (a pre-triage layer that classifies and pre-drafts responses to escalations); `/admin` needs saved searches and SLA timers |
+| 1000+ | needs business hire | Either hire ops support, or productise self-serve change-request UI for customers (most changes go end-to-end without Cowork or Ben) |
+
+The model scales because:
+
+- Cowork's load grows linearly with customer count, not Ben's
+- Health checks are O(1) per customer; the cron processes 1000+
+  customers in seconds
+- Notion handles 10k+ rows comfortably as a state store
+- Cloudflare Workers handle the request load (Stage 2C ops worker
+  is a separate Worker from the customer-facing site, so customer
+  performance never degrades from ops workload)
+- The bottleneck at 1000+ is Ben's review queue for
+  non-routine items; Cowork-of-Cowork (pre-triage) is the unlock
+
+### 8.6 Things Ben never has to do, ever
+
+Spelling out the negatives so the model is clear. **None** of these
+are part of Ben's working day:
+
+- Log into a customer's Cloudflare / Resend / Cal.com / GBP for
+  routine work (only Tier 3 emergencies, via the deep-links in §8.4)
+- Click "deploy" for a content change (Cowork does it after approval)
+- Manually generate a performance report (Cowork drafts; Ben
+  approves and sends during pre-20-clients period; auto-sends after)
+- Accept a SaaS invitation manually (Cowork polls and accepts)
+- Track which customer needs what (Notion + Cowork; never a
+  spreadsheet or todo list)
+- Calculate fees (fee engine does, deterministically)
+- Process subscription renewals (Stripe does)
+- Apply security patches (Cowork does on the weekly audit cron)
+- Renew TLS certificates (Cloudflare auto-renews)
+- Watch a build complete (Cowork waits + emails when done)
+
+What Ben DOES do (the irreducible human work):
+
+- Maintain the Playbook (the rules Cowork follows)
+- Approve drafts during the pre-20-clients period
+- Make policy decisions (set new prices, add modules, change scope rules)
+- Handle Tier 3 incidents
+- Make business decisions on edge cases Cowork escalates
+- Personally onboard a particularly important customer if he wants to
+- Periodically review the audit log and Cowork's classification
+  accuracy; update prompts if drift detected
+
+## 9. Open questions / pending decisions
 
 - **Encryption library for Resend keys** — Web Crypto API (built into
   Workers) using AES-GCM, key from a Worker secret. Pin the choice in

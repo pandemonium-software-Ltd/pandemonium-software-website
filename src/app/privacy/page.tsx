@@ -4,7 +4,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Privacy policy",
   description:
-    "How Pandamonium Software Ltd collects, uses and protects your data. Written in plain English by Ben Pandher.",
+    "How Pandemonium Software Ltd collects, uses and protects your data. Written in plain English by Ben Pandher.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <div className="long-form mt-10">
           <p>
             This is the privacy policy for{" "}
-            <strong>Pandamonium Software Ltd</strong> — the company I run.
+            <strong>Pandemonium Software Ltd</strong> — the company I run.
             It explains what personal information I collect from visitors to
             this website, why I collect it, and what your rights are.
           </p>
@@ -41,10 +41,10 @@ export default function PrivacyPage() {
           <h2>1. Who I am</h2>
           <p>
             I&apos;m Ben Pandher. I run{" "}
-            <strong>Pandamonium Software Ltd</strong>, a small one-person
+            <strong>Pandemonium Software Ltd</strong>, a small one-person
             software business based in Oxfordshire, United Kingdom, building
             websites for UK trades and small businesses. For the purposes of
-            UK GDPR and the Data Protection Act 2018, Pandamonium Software
+            UK GDPR and the Data Protection Act 2018, Pandemonium Software
             Ltd is the <strong>data controller</strong> for any personal
             information you give me through this website.
           </p>
