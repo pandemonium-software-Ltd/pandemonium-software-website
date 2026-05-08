@@ -66,7 +66,12 @@ export default function Step3Tools({
   const [gbpInvited, setGbpInvited] = useState(initialGbpInvited);
   const [notes, setNotes] = useState(initialNotes);
 
-  const [pending, setPending] = useState<"none" | "save" | "done">("none");
+  // "update" is the post-done re-save (data correction without
+  // toggling done off). Stage 2B-safe; Stage 2C ops need to detect
+  // and re-trigger downstream work — see ARCHITECTURE.md §6.
+  const [pending, setPending] = useState<
+    "none" | "save" | "done" | "update"
+  >("none");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -133,6 +138,21 @@ export default function Step3Tools({
     if (!ok) setError("Couldn't mark done. Try again.");
   }
 
+  async function handleUpdate() {
+    // Re-save without toggling done off. Same validation as
+    // mark-done so the saved data stays consistent.
+    const err = validateForDone();
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
+    setPending("update");
+    const ok = await savePartial(buildPatch());
+    setPending("none");
+    if (!ok) setError("Couldn't update just now. Try again.");
+  }
+
   async function handleCopyEmail() {
     try {
       await navigator.clipboard.writeText(benEmail);
@@ -143,7 +163,9 @@ export default function Step3Tools({
     }
   }
 
-  const disabled = readOnly || done;
+  // Inputs stay editable after done so the customer can correct
+  // mistakes; the Update button re-saves without toggling done off.
+  const disabled = readOnly;
   const labelHeader =
     hasBooking && hasGbp
       ? "your booking page and Google Business Profile"
@@ -296,7 +318,7 @@ export default function Step3Tools({
             <li className="flex gap-3">
               <Bullet n={1} />
               <span>
-                Open{" "}
+                Go to your Business Profile (sign in at{" "}
                 <a
                   href={GBP_HOME_URL}
                   target="_blank"
@@ -304,35 +326,35 @@ export default function Step3Tools({
                   className="link"
                 >
                   business.google.com
-                </a>{" "}
-                — sign in with the Google account that owns (or will
-                own) your business listing. If you don&apos;t have a
-                listing yet, click <strong>Add your business to
-                Google</strong> and follow the verification steps.
+                </a>
+                ). If you don&apos;t have a listing yet, click{" "}
+                <strong>Add your business to Google</strong> and
+                follow the verification steps first.
               </span>
             </li>
             <li className="flex gap-3">
               <Bullet n={2} />
               <span>
-                Once your listing is claimed, find <strong>Users</strong>{" "}
-                or <strong>Managers</strong> in the menu (its location
-                varies; Google moves things around). (
-                <a
-                  href={GBP_MANAGER_HELP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="link"
-                >
-                  Google&apos;s help
-                </a>{" "}
-                if you can&apos;t find it.)
+                Select <strong>More</strong> →{" "}
+                <strong>Business Profile settings</strong> →{" "}
+                <strong>People and access</strong>.
+              </span>
+            </li>
+            <li className="flex gap-3">
+              <Bullet n={3} />
+              <span>
+                At the top left, select <strong>Add</strong> →{" "}
+                <strong>Invite new users</strong>.
               </span>
             </li>
             <li className="flex flex-col gap-3">
               <div className="flex gap-3">
-                <Bullet n={3} />
+                <Bullet n={4} />
                 <span>
-                  Add this email as a <strong>Manager</strong>:
+                  Enter this email address. Under{" "}
+                  <strong>Access</strong>, select{" "}
+                  <strong>Manager</strong>. Click{" "}
+                  <strong>Invite</strong>.
                 </span>
               </div>
               <InviteCallout
@@ -342,13 +364,52 @@ export default function Step3Tools({
               />
             </li>
             <li className="flex gap-3">
-              <Bullet n={4} />
+              <Bullet n={5} />
               <span>
                 Paste your GBP URL below and tick that you&apos;ve
                 added me. I&apos;ll accept and start the audit/setup.
+                (
+                <a
+                  href={GBP_MANAGER_HELP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="link"
+                >
+                  Google&apos;s help on adding users
+                </a>{" "}
+                if you get stuck.)
               </span>
             </li>
           </ol>
+
+          <div className="mt-4 rounded-xl bg-white p-4 text-xs leading-relaxed text-navy-600">
+            <p className="font-semibold text-navy-900">Useful tips</p>
+            <ul className="mt-2 ml-4 list-disc space-y-1">
+              <li>
+                I can accept the invite immediately — no waiting around
+                for verification.
+              </li>
+              <li>
+                You can see all current users and pending invites on
+                the same <strong>People and access</strong> page.
+              </li>
+              <li>
+                To revoke my access at any time: open{" "}
+                <strong>People and access</strong>, find me in the
+                list, click my role and select{" "}
+                <strong>Remove access</strong>. (For a pending invite:
+                under the <strong>PENDING</strong> section, find me and
+                click <strong>Cancel invitation</strong>.)
+              </li>
+              <li>
+                <strong>Pick Manager, not Owner.</strong> Manager gives
+                me everything I need to audit and update the listing.
+                Owner would let me transfer the listing&apos;s primary
+                ownership — which I&apos;d never do, but the option
+                shouldn&apos;t exist in the first place.
+              </li>
+            </ul>
+          </div>
 
           <label className="mt-6 block">
             <span className="block text-sm font-semibold text-navy-900">
@@ -416,22 +477,22 @@ export default function Step3Tools({
 
       <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
         {done ? (
-          <p className="text-sm text-green-700" role="status">
-            <strong>Done.</strong>
-            {hasBooking && (
-              <>
-                {" "}
-                Cal.com:{" "}
-                <span className="font-mono">{calcomUrl || "(not set)"}</span>
-              </>
+          <>
+            <p className="text-sm text-green-700" role="status">
+              <strong>Done.</strong> Edit above and click Update if
+              anything changes.
+            </p>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleUpdate}
+                disabled={pending !== "none"}
+                className="btn-secondary"
+              >
+                {pending === "update" ? "Updating…" : "Update saved data"}
+              </button>
             )}
-            {hasGbp && (
-              <>
-                {hasBooking ? " · " : " "}GBP:{" "}
-                <span className="font-mono">{gbpUrl || "(not set)"}</span>
-              </>
-            )}
-          </p>
+          </>
         ) : (
           <>
             <button

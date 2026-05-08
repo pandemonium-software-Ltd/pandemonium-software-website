@@ -47,7 +47,12 @@ export default function Step1Cloudflare({
 
   const [email, setEmail] = useState(initialEmail);
   const [notes, setNotes] = useState(initialNotes);
-  const [pending, setPending] = useState<"none" | "save" | "done">("none");
+  // "update" is the post-done re-save (data correction without
+  // toggling done off). Stage 2B-safe; Stage 2C ops need to detect
+  // and re-trigger downstream work — see ARCHITECTURE.md §6.
+  const [pending, setPending] = useState<
+    "none" | "save" | "done" | "update"
+  >("none");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -87,6 +92,25 @@ export default function Step1Cloudflare({
     if (!ok) setError("Couldn't mark done. Try again.");
   }
 
+  async function handleUpdate() {
+    // Re-save without toggling done off. Same payload as Save, but
+    // surfaces a different status message so the customer knows
+    // they're editing a completed step.
+    const emailErr = validateEmail(email);
+    if (emailErr) {
+      setError(emailErr);
+      return;
+    }
+    setError(null);
+    setPending("update");
+    const ok = await savePartial({
+      cloudflareEmail: email.trim(),
+      notes: notes.trim(),
+    });
+    setPending("none");
+    if (!ok) setError("Couldn't update just now. Try again.");
+  }
+
   async function handleCopyEmail() {
     try {
       await navigator.clipboard.writeText(benEmail);
@@ -97,7 +121,10 @@ export default function Step1Cloudflare({
     }
   }
 
-  const disabled = readOnly || done;
+  // Inputs are editable until the whole hub locks (readOnly). Even a
+  // done step stays editable so the customer can correct mistakes —
+  // the Update button re-saves without toggling done off.
+  const disabled = readOnly;
 
   return (
     <article className="rounded-3xl bg-white p-7 shadow-card md:p-10">
@@ -238,10 +265,22 @@ export default function Step1Cloudflare({
 
       <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
         {done ? (
-          <p className="text-sm text-green-700" role="status">
-            <strong>Done.</strong> Saved email:{" "}
-            <span className="font-mono">{email || "(not set)"}</span>
-          </p>
+          <>
+            <p className="text-sm text-green-700" role="status">
+              <strong>Done.</strong> Edit above and click Update if
+              anything changes.
+            </p>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleUpdate}
+                disabled={pending !== "none"}
+                className="btn-secondary"
+              >
+                {pending === "update" ? "Updating…" : "Update saved data"}
+              </button>
+            )}
+          </>
         ) : (
           <>
             <button

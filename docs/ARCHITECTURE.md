@@ -444,7 +444,37 @@ Every incident writes to Notion `Exceptions` DB with:
 - `customer.subscription.deleted` → trigger cancellation flow §7.5
 - `customer.subscription.updated` → reconcile against Notion
 
-### 6.8 Asset management (ongoing)
+### 6.8 Editing a completed step (re-ops detection)
+
+Customers can edit any Hub step at any time, even after they've
+ticked it done — by design (corrections happen). The Hub doesn't
+toggle the done-flag off when fields change; instead it shows an
+**Update saved data** button that re-saves the patch with
+`markDone: false`.
+
+This is **safe in Stage 2B** because Cowork isn't running yet — an
+edit is just a Notion field write. Stage 2C must add **change
+detection** to know when an edit invalidates work Cowork already
+did, and trigger a redo:
+
+| Step | Field changes that need re-ops |
+|---|---|
+| 1 (Cloudflare) | `cloudflareEmail` change → invite goes to a new email; old invite cancelled |
+| 2 (Domain) | `domain` change → DNS work redone on new domain; old zone retired; sender domain re-verified in Resend |
+| 2 (Resend) | `resendSignupEmail` change → re-accept invitation under new email; previous Teams membership left |
+| 3 (Cal.com) | `calcomBookingUrl` change → embed regenerated with new username/event slug; old embed cleared from build pipeline |
+| 3 (GBP) | `gbpUrl` change → footer link updated; manager invitation accepted on new listing if different |
+| 4 (Assets) | new asset uploads → resized derivatives regenerated; old assets garbage-collected after 90 days |
+| 5 (Review) | `goLiveDate` change → reschedule production deploy; `changeRequests` change → Cowork re-classifies and re-drafts |
+
+Implementation pattern (Stage 2C C1): each Cowork action stores a
+hash of the inputs it consumed in the audit log. On the next cron
+tick, if a done-step's slice hash differs from the latest audit
+hash for that step, the step is re-queued for ops. Idempotency
+(§7) means re-running a step is safe — actions check current state
+of the target service before acting.
+
+### 6.9 Asset management (ongoing)
 
 Customers occasionally need to swap photos or upload new ones
 post-launch. Cowork handles this without Ben:

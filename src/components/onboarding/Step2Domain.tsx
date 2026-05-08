@@ -65,7 +65,12 @@ export default function Step2Domain({
   const [resendInvitedMe, setResendInvitedMe] = useState(initialResendInvitedMe);
   const [notes, setNotes] = useState(initialNotes);
 
-  const [pending, setPending] = useState<"none" | "save" | "done">("none");
+  // "update" is the post-done re-save (data correction without
+  // toggling done off). Stage 2B-safe; Stage 2C ops need to detect
+  // and re-trigger downstream work — see ARCHITECTURE.md §6.
+  const [pending, setPending] = useState<
+    "none" | "save" | "done" | "update"
+  >("none");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -128,6 +133,21 @@ export default function Step2Domain({
     if (!ok) setError("Couldn't mark done. Try again.");
   }
 
+  async function handleUpdate() {
+    // Re-save the patch without toggling done off. Same validation as
+    // mark-done so the saved data stays consistent.
+    const err = validateForDone();
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
+    setPending("update");
+    const ok = await savePartial(buildPatch());
+    setPending("none");
+    if (!ok) setError("Couldn't update just now. Try again.");
+  }
+
   async function handleCopyEmail() {
     try {
       await navigator.clipboard.writeText(benEmail);
@@ -138,7 +158,9 @@ export default function Step2Domain({
     }
   }
 
-  const disabled = readOnly || done;
+  // Inputs stay editable even after done so the customer can correct
+  // mistakes; the Update button re-saves without toggling done off.
+  const disabled = readOnly;
 
   return (
     <article className="rounded-3xl bg-white p-7 shadow-card md:p-10">
@@ -313,7 +335,7 @@ export default function Step2Domain({
             <li className="flex flex-col gap-3">
               <div className="flex gap-3">
                 <Bullet n={3} />
-                <span>Invite this email — pick the Admin role:</span>
+                <span>Invite this email as an <strong>Admin</strong>:</span>
               </div>
               <InviteCallout
                 email={benEmail}
@@ -394,17 +416,22 @@ export default function Step2Domain({
 
       <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
         {done ? (
-          <p className="text-sm text-green-700" role="status">
-            <strong>Done.</strong> Domain:{" "}
-            <span className="font-mono">{domain || "(not set)"}</span>
-            {needsResend && resendEmail && (
-              <>
-                {" "}
-                · Resend:{" "}
-                <span className="font-mono">{resendEmail}</span>
-              </>
+          <>
+            <p className="text-sm text-green-700" role="status">
+              <strong>Done.</strong> Edit above and click Update if
+              anything changes.
+            </p>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleUpdate}
+                disabled={pending !== "none"}
+                className="btn-secondary"
+              >
+                {pending === "update" ? "Updating…" : "Update saved data"}
+              </button>
             )}
-          </p>
+          </>
         ) : (
           <>
             <button
