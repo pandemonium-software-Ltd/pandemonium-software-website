@@ -217,7 +217,277 @@ Full GBP API integration, custom domain `pandamoniumsoftware.co.uk`,
 Plausible analytics, real photography, real testimonials, paid
 Cal.com Platform if scale justifies it.
 
-## 6. Open questions / pending decisions
+## 6. Post-launch operations (Stage 2C and ongoing)
+
+This is the part that justifies the monthly fee. Once a customer's
+site goes live, Cowork Ops takes over a recurring set of duties so
+Ben never has to think about an individual customer's site unless
+something is escalated. Each duty below is documented as a contract:
+**trigger → inputs → steps → outputs → failure mode**.
+
+The collective output of all these duties is what the customer pays
+£19/month (or £15/month for Founding Members) for: continuous
+maintenance, bundled time-based services and peace of mind. None of
+them require Ben to log into a customer dashboard.
+
+### 6.1 Recurring health checks (cron-driven)
+
+| Frequency | Check | Action on red |
+|---|---|---|
+| Every 5 minutes | Site uptime ping (HTTP 200 from `/`) | Tier 3 incident (page Ben) after 3 consecutive failures |
+| Daily | DNS resolution for the site's domain (A / CNAME records still pointing at Cloudflare Pages) | Tier 2 (auto-fix attempt; escalate if blocked) |
+| Daily | Resend sender-domain status (still verified) | Tier 2 (re-add records via Cloudflare API) |
+| Daily | Cal.com booking URL liveness (HTTP 200) | Tier 1 (log only); Tier 2 if down 3 days |
+| Daily | Cloudflare Pages latest build status | Tier 2 if last build failed |
+| Daily | Stripe subscription status | See §7.7 |
+| Weekly | `npm audit --audit-level=high` against the customer's checked-out site repo | Tier 2 (Cowork applies patch + redeploys; flags major-version bumps for Ben review) |
+| Weekly | Lighthouse / Web Vitals snapshot, stored in Notion `Asset Collection` DB | Used for monthly report; no immediate action |
+| Monthly | Generate and send the customer's performance report | See §7.3 |
+
+**Trigger:** Cloudflare Cron Trigger on the Cowork Ops Worker
+(`* * * * *`, with cadence-aware dispatch inside).
+**Inputs:** Notion Clients DB (one row per live customer, with their
+configuration as JSON).
+**Outputs:** Audit log entries, Notion field updates, customer / Ben
+notifications.
+**Failure mode:** retry with exponential backoff; tier 3 escalation
+on persistent failure; never silently swallow.
+
+### 6.2 Customer change-request flow (the 30-min content allowance)
+
+Every monthly subscription includes 30 minutes of content changes
+covered. Bigger changes are quoted separately under §10 of the Terms.
+
+```
+Customer ─ email or /account/[token]/changes form ─► Cowork
+                                                      │
+            [classify: content / module / out-of-scope]
+                                                      │
+   ┌──────────────────────┬──────────────────────────────┐
+   │                      │                              │
+content (within budget)   module add/remove          out-of-scope
+   │                      │                              │
+Cowork drafts the          Cowork updates Notion +    Cowork drafts a
+edit + a preview link     Stripe subscription;        quote against the
+   │                       see §7.4                    Playbook §10
+Ben approves               │                              │
+   │                       Cowork drafts customer       Ben reviews +
+Cowork applies             reply with new total         sends quote to
++ deploys + emails         + new Hub link if ops        customer
+customer "your             needed
+change is live"            │
+                           Ben approves; Cowork sends
+```
+
+**Trigger:** inbound email to `pandamoniumsoftwareltd@gmail.com` (Gmail
+push notification → webhook → Cowork) OR form submission at
+`/account/[token]/changes` (future route).
+**Inputs:** customer's request text, attachments (photos, files).
+**Steps:**
+1. **Classify** the request (Cowork prompt with the Playbook §10
+   triage rules):
+   - *Content* (text edit, photo swap, price/phone/address update,
+     new testimonial)
+   - *Module* (add or remove Booking / Enquiry / Newsletter /
+     GBP addon)
+   - *Out-of-scope* (new page, redesign, custom feature)
+2. **For content:** check this month's allowance in Notion
+   (`Content Minutes Used` number field on Clients DB). If under
+   budget, draft the change as a git diff against their checked-out
+   repo + a preview deploy link. If over budget, draft a "we'll need
+   to extend or roll into next month — happy with that?" reply.
+3. **For module:** see §7.4.
+4. **For out-of-scope:** Cowork generates a fixed-price quote based
+   on the Playbook scope-and-pricing matrix; Ben reviews and sends.
+**Outputs:** preview deploy URL (for content changes); updated
+Notion record (allowance consumed); customer email; audit log entry.
+**Failure mode:** any classification confidence below threshold →
+Tier 2 (Ben classifies manually).
+
+### 6.3 Monthly performance report
+
+**Trigger:** 1st of each month, 09:00 UK time, per customer.
+**Inputs:** previous month's data from:
+- Cloudflare Web Analytics (page views, top pages, country breakdown)
+- Cloudflare uptime metrics
+- Resend sending stats (newsletter opens, bounces, complaints) — if
+  Newsletter module
+- Cal.com booking volume — derived from the embed's webhook (or
+  Cal.com booking-list API if the customer authorised it)
+- GBP search-impressions (Stage 3 only; URL-only customers get a
+  manual GBP audit summary instead)
+- Stripe payment status (only mentioned if there's a problem)
+**Steps:**
+1. Pull metrics for the customer's date range
+2. Cowork drafts a 1-page email in plain English with:
+   - Three headline numbers (visits, enquiries, bookings)
+   - One thing that improved
+   - One thing to keep an eye on
+   - Any actions Cowork took during the month (security patches,
+     dependency updates) — completes the "you're being looked
+     after" loop
+3. Ben reviews and sends (during first-20-clients period)
+4. After 20 clients: Cowork sends without review unless the
+   classifier flags an anomaly worth Ben's eyes
+**Outputs:** customer email; Notion archive of the report (PDF + raw
+data); audit log.
+**Failure mode:** missing data sources (e.g. Cloudflare Analytics
+empty for new sites) → fall back to "your first month's full report
+arrives next month" template.
+
+### 6.4 Module add / remove lifecycle
+
+**Add a module** (e.g. Newsletter, post-launch):
+1. Customer requests via email or `/account/[token]/modules` (future)
+2. Cowork validates: is the module compatible? (e.g. Newsletter
+   requires a verified Resend domain — re-uses Step 2's flow if
+   absent)
+3. Cowork updates Notion (`Module Selections` multi-select, recalcs
+   `Setup Fee Calculated` and `Monthly Fee Calculated`)
+4. Cowork creates a Stripe subscription update (one-off charge for
+   the module's £39 setup; recurring fee adjusted)
+5. If new infrastructure needed (e.g. Newsletter requires sender
+   domain — already done if existing): re-open the relevant Hub
+   step, send link to customer
+6. After provisioning: Cowork rebuilds the site with the module
+   enabled, deploys, emails customer "your new module is live"
+**Failure mode:** Stripe failure → Tier 2; provisioning failure →
+Tier 2.
+
+**Remove a module:**
+1. Customer requests with 30 days' notice
+2. Cowork acknowledges, schedules removal at the end of the notice
+   period
+3. At T-0: Cowork rebuilds without the module, removes related
+   integrations (e.g. revoke Resend sending API key if Newsletter +
+   Enquiry both removed), updates Stripe subscription pro-rated
+4. Customer keeps the underlying account (Resend, Cal.com) — only
+   the embed/integration is removed from their site
+
+**Founding Member rate is locked for life:** never adjusted by
+Cowork. Tracked via `Founding Member` checkbox in Notion.
+
+### 6.5 Cancellation flow (mirroring Terms §6 of /terms)
+
+**Trigger:** customer email or `/account/[token]/cancel` form.
+**Steps:**
+1. **Day 0:** Cowork acknowledges, sets `Cancellation Requested At`
+   in Notion, drafts a "we got your notice, here's what happens
+   next" email for Ben to send
+2. **Day 1-28:** normal service continues; performance report sent
+   if monthly cycle hits
+3. **Day 28:** Cowork drafts the **handover package**:
+   - Zip of the customer's site source (from their git repo)
+   - GitHub repo transfer offer (we transfer ownership to their
+     account if they want it)
+   - Credential exit list — every account I was a member of, with
+     "access revoked at HH:MM on DATE" timestamps
+   - Plain-English exit summary (what runs where, what to watch out
+     for) — Cowork generates from the Notion record + a small
+     template
+4. **Day 30:** Cowork actions the technical exits in this exact
+   order so nothing breaks mid-flight:
+   - Stripe subscription cancelled (final invoice already paid for
+     final 30 days)
+   - Cowork removes itself from customer's Cloudflare team
+   - Cowork removes itself from customer's Resend team (sending
+     API key revoked first to avoid orphaned sends)
+   - Cowork removes itself from customer's GBP manager list (if
+     applicable)
+   - Final email: "you're all yours now, here's the handover bundle"
+5. **Day 30+:** Notion record archived to a `Former Clients` view
+   (retained 6 years per UK tax rules), `Status` flipped to
+   `Cancelled`. Audit log retained.
+**Failure mode:** any technical-exit step failing → Tier 3 (Ben
+manually completes; never leave a customer half-disconnected).
+
+### 6.6 Incident response
+
+Three tiers, set by Cowork classifier:
+
+- **Tier 1 (auto-resolvable):** transient errors, retried by Cowork.
+  Logged to audit; no customer / Ben notification unless retries
+  exhaust. Examples: Cloudflare API 429, transient DNS lookup fail.
+- **Tier 2 (config-level fix):** Cowork drafts a fix → Ben approves
+  → Cowork applies. Customer not notified unless the fix means a
+  visible change. Examples: dependency-patch redeploy, DNS record
+  drift, build-config tweak.
+- **Tier 3 (genuinely broken):** site down or customer-impacting.
+  Cowork pages Ben (push notification + email + Slack if connected)
+  AND sends customer a holding email ("we know, we're on it,
+  expected ETA HH:MM"). SLA per Terms §10: aim for response within
+  working hours, fix within 48 hours.
+
+Every incident writes to Notion `Exceptions` DB with:
+- Customer relation
+- Step / area
+- Detection time, resolution time
+- Detection mechanism (which check)
+- Action taken
+- Whether customer was notified
+- Resolution notes
+
+### 6.7 Stripe subscription monitoring
+
+**Daily check:**
+- Failed payments in the last 24 hours → Cowork emails customer (3
+  retries over 7 days) → if final fail, services pause (site keeps
+  serving but active maintenance stops); Ben notified
+- Card expiry within 7 days → Cowork emails customer with a card
+  update link
+- Subscription tier mismatch with Notion → reconcile (Stripe is
+  source of truth for billing; Notion for service config)
+
+**On Stripe webhook events:**
+- `invoice.payment_succeeded` → audit log
+- `invoice.payment_failed` → trigger retry sequence
+- `customer.subscription.deleted` → trigger cancellation flow §7.5
+- `customer.subscription.updated` → reconcile against Notion
+
+### 6.8 Asset management (ongoing)
+
+Customers occasionally need to swap photos or upload new ones
+post-launch. Cowork handles this without Ben:
+
+1. Customer logs into `/account/[token]/assets` (future) — token
+   is the same Phase 1 unique token they've had since enquiry
+2. Customer drags new photos into the upload zone (presigned
+   Cloudflare R2 URLs, like H4)
+3. Cowork normalises (resize, optimise, WebP)
+4. Customer ticks "use these now" → Cowork triggers a rebuild +
+   deploy with the new assets; old assets kept in R2 for 90 days
+   then garbage-collected
+**Failure mode:** image processing failure → Tier 2 (manual fallback
+via the cloud admin dashboard).
+
+---
+
+## 7. Operational guardrails
+
+A few non-negotiables for Cowork, baked into prompts and code:
+
+- **Never delete customer data without explicit Ben approval.** Even
+  cancelled customer records sit in Notion for 6 years (UK tax law).
+  R2 garbage-collection is the only auto-delete, and it has a 90-day
+  buffer.
+- **Never make myself a permanent member of a customer's account.**
+  I'm Administrator on Cloudflare and team-member on Resend / GBP /
+  Cal.com only while their subscription is active. Cancellation
+  flow §7.5 is the only path that removes me — never any other
+  way.
+- **Every customer-facing email goes through draft-then-send during
+  the first 20 clients.** After that, *acceptance, rejection,
+  clarification and quote* emails stay human-reviewed forever; only
+  status updates ("DNS verified", "preview ready", "report ready")
+  send automatically.
+- **Idempotency on everything.** Every Cowork action checks current
+  state of the target service before acting. Re-running a step
+  must be safe.
+- **Audit log is append-only.** Notion `Cowork Audit` DB (TODO in
+  Stage 2C C1) — every action, success or failure. Never edited or
+  deleted.
+
+## 8. Open questions / pending decisions
 
 - **Encryption library for Resend keys** — Web Crypto API (built into
   Workers) using AES-GCM, key from a Worker secret. Pin the choice in

@@ -238,14 +238,40 @@ export default function PricingPage() {
                 {
                   q: "Can I cancel anytime?",
                   a: (
-                    <p>
-                      Yes — 30 days&apos; written notice, by email, and
-                      you&apos;re out. No exit fees, no &quot;but wait&quot;
-                      calls. You keep your website, your domain, your
-                      Cloudflare Pages account, and everything in them. I
-                      hand over any credentials I was holding and we part on
-                      good terms.
-                    </p>
+                    <>
+                      <p>
+                        Yes — 30 days&apos; written notice, by email, and
+                        you&apos;re out. No exit fees, no &quot;but
+                        wait&quot; calls.
+                      </p>
+                      <p className="mt-3">
+                        <strong>What you keep:</strong> your website (still
+                        hosted free on your own Cloudflare account), your
+                        domain, your subscriber list (one-click CSV
+                        export), your Cal.com booking page, your Google
+                        Business Profile, every photo and every word. I
+                        hand over any credentials I was holding and the
+                        site carries on serving customers exactly as it
+                        does today.
+                      </p>
+                      <p className="mt-3">
+                        <strong>What you stop getting:</strong> my ongoing
+                        maintenance — security patches, dependency
+                        updates, browser-compatibility fixes, the 30
+                        minutes of monthly content changes, the
+                        performance report, and direct support. Without
+                        those, your site runs fine but slowly drifts as
+                        the web around it evolves — typically 12 to 24
+                        months before you&apos;d notice anything.
+                        Nothing breaks suddenly; things just stop staying
+                        current.
+                      </p>
+                      <p className="mt-3">
+                        Coming back later is straightforward — re-onboarding
+                        at the standard setup fee. No hard feelings either
+                        way.
+                      </p>
+                    </>
                   ),
                 },
                 {

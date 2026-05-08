@@ -1,40 +1,179 @@
-# Pandemonium Software Ltd — Marketing Website
+# ModuForge — Pandamonium Software Ltd
 
-The marketing site for **Pandemonium Software Ltd**, a small Oxfordshire software
-business that builds professional websites for UK trades and small businesses.
-Proudly Oxfordshire-based, serving the UK.
+The customer-facing site and operations platform for **ModuForge**, the
+flat-fee modular website service from **Pandamonium Software Ltd**.
 
-This is **not** a client site template. For the reusable trades site template, see
-[`trades-website-template`](https://github.com/pandemonium-software-Ltd/trades-website-template).
+ModuForge sells, qualifies, intakes and onboards UK trades and small
+businesses; once a customer is live, the same codebase runs the
+ongoing maintenance, content updates and performance reporting via
+Cowork — the AI operations layer that means Ben never has to log into
+a customer dashboard.
+
+> **Architecture deep-dive:** see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+> for the full PRD: per-service automation feasibility, Cowork Ops
+> Worker design, post-launch operations contracts, and the operational
+> guardrails baked into every Cowork action.
+
+---
 
 ## Stack
 
-- **Next.js 14** (App Router, TypeScript, static export via `output: 'export'`)
-- **React 18**
-- **Tailwind CSS 3**
-- Fonts: Fraunces (serif) + Inter (sans), via `next/font/google`
-- **Cloudflare Workers** (Static Assets) — serving `./out` via `wrangler.jsonc`
+- **Next.js 15** (App Router, TypeScript)
+- **React 19**
+- **Tailwind CSS 3** + Fraunces (serif) + Inter (sans)
+- **@opennextjs/cloudflare** — runs Next.js as a Cloudflare Worker (SSR)
+- **Notion** (private workspace) — the operational source of truth for
+  every prospect, client, asset and exception
+- **Resend** — transactional + customer-owned newsletter sending
+- **Cal.com** (URL-embedded) — customer-owned booking pages
+- **Stripe** — subscriptions (Stage 2A Part 2 — placeholder for now)
+- **Cloudflare R2** — customer brand asset storage (Stage 2B H4)
 
-## Pages
+---
 
-| Route       | Purpose                                                        |
-| ----------- | -------------------------------------------------------------- |
-| `/`         | Homepage — hero, what you get, how it works, trust, CTA        |
-| `/pricing`  | Live interactive pricing calculator + FAQ                      |
-| `/contact`  | Enquiry form (mailto submit) + direct email                    |
-| `/about`    | Ben Pandher's short, honest story                              |
-| `/privacy`  | UK GDPR-compliant privacy policy for Pandemonium Software Ltd  |
-| `/terms`    | Simplified working-agreement terms of service                  |
-| `/*`        | Custom friendly 404 page                                       |
+## Routes
+
+The site has three concentric surfaces:
+
+### Public marketing
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Hero, modular pricing pitch, trust strip, CTA |
+| `/pricing` | Live module calculator + FAQ |
+| `/about` | Ben's story + how AI fits into the operation |
+| `/enquiry` | Phase 1 enquiry form |
+| `/privacy` | UK GDPR privacy policy |
+| `/terms` | Plain-English working agreement |
+
+### Token-gated prospect pipeline
+
+Each customer's journey is keyed by a UUID token issued at enquiry
+and surfaced through every subsequent email.
+
+| Route | Phase | Status gate |
+| --- | --- | --- |
+| `/qualify/[token]` | Phase 2 — qualification questions | After Phase 1 reply |
+| `/intake/[token]` | Phase 3 — full 7-section intake wizard | After Phase 2 acceptance |
+| `/payment/[token]` | Phase 3 → Stripe handoff | After intake submission |
+| `/onboarding/[token]` | Stage 2B — 5-step Onboarding Hub | After payment |
+
+### Operator surface
+
+| Route | Purpose | Auth |
+| --- | --- | --- |
+| `/admin` | Pipeline dashboard, prospect list, copy-link tools | HTTP Basic Auth (`ADMIN_PASSWORD`) |
+
+### API
+
+| Route | Method | Purpose |
+| --- | --- | --- |
+| `/api/enquiry` | POST | Phase 1 form → Notion + email |
+| `/api/qualify` | POST | Phase 2 form → compatibility engine → Notion |
+| `/api/intake` | POST | Phase 3 partial saves + final submission |
+| `/api/onboarding` | POST | Hub per-step partial saves + mark-done |
+| `/api/prospect/[token]` | GET | Server lookup for token-gated pages |
+
+---
+
+## Lifecycle: from enquiry to ongoing operations
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Marketing                                                   │
+│     /  /pricing  /about  /enquiry                            │
+│                          │                                   │
+│                          ▼                                   │
+│  Pipeline (tokenised)                                        │
+│     /qualify/[token]  →  /intake/[token]  →  /payment/[token]│
+│                                                  │            │
+│                                                  ▼            │
+│  Onboarding (post-payment, Stage 2B)                         │
+│     /onboarding/[token] — 5 steps                            │
+│        1. Cloudflare account + invite Ben                    │
+│        2. Domain + (optional) Resend Teams invite            │
+│        3. Cal.com booking URL + GBP URL                      │
+│        4. Brand assets upload                                │
+│        5. Review + sign-off + go-live date                   │
+│                                                  │            │
+│                                                  ▼            │
+│  Cowork Ops (Stage 2C, see docs/ARCHITECTURE.md §4)          │
+│     • Accepts the customer's invitations                     │
+│     • Provisions DNS, sender domain, sending API key         │
+│     • Builds + deploys the site                              │
+│     • Goes live on the agreed date                           │
+│                                                  │            │
+│                                                  ▼            │
+│  LIVE                                                        │
+│                                                  │            │
+│                                                  ▼            │
+│  Post-launch operations (docs/ARCHITECTURE.md §6)            │
+│     • Recurring health checks (uptime, DNS, deps audit)      │
+│     • Customer change requests (30 min/month included)       │
+│     • Monthly performance reports                            │
+│     • Module add/remove lifecycle                            │
+│     • Incident response (3-tier escalation)                  │
+│     • Stripe subscription monitoring                         │
+│     • Cancellation handover                                  │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Every line of "Cowork Ops" and "Post-launch operations" runs without
+Ben touching a dashboard. He's the human-in-the-loop only when:
+
+- Tier 3 incidents fire (genuinely broken, customer-impacting)
+- The classifier flags an inbound request as ambiguous
+- The first-20-clients period requires draft review on customer
+  emails (auto-send for status updates only, after that)
+
+For the full automation contracts — what triggers each duty, what
+inputs it needs, what state it changes, and how failures escalate —
+see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §6.
+
+---
 
 ## Running locally
 
 ```bash
 npm install
+cp .dev.vars.example .dev.vars  # then fill in real values
 npm run dev
 ```
 
 Opens on <http://localhost:3000>.
+
+For the full Cloudflare Workers preview (recommended before pushing):
+
+```bash
+npm run preview
+```
+
+This runs the OpenNext-built worker against Wrangler's local emulator
+with `.dev.vars` providing secrets.
+
+### Required env vars
+
+See `src/lib/env.ts` for the validated schema. Production secrets live
+in Cloudflare Dashboard (Workers & Pages → `pandemonium-software-website`
+→ Settings → Variables and Secrets); local dev values live in
+`.dev.vars` (gitignored).
+
+Mandatory:
+
+- `NOTION_API_KEY`
+- `NOTION_PROSPECTS_DB_ID`, `NOTION_CLIENTS_DB_ID`,
+  `NOTION_ASSETS_DB_ID`, `NOTION_EXCEPTIONS_DB_ID`
+- `RESEND_API_KEY`
+- `ADMIN_PASSWORD`
+
+Optional:
+
+- `BEN_CLOUDFLARE_EMAIL` (Onboarding Hub team-invite email — see
+  [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §4.4)
+- `STRIPE_*` (placeholder until Stage 2A Part 2)
+
+---
 
 ## Build
 
@@ -42,63 +181,103 @@ Opens on <http://localhost:3000>.
 npm run build
 ```
 
-Produces a fully static site in `./out/`. No Node.js runtime is required in
-production.
+This runs:
 
-To preview the built output locally:
+1. `next build` — generates the optimised production bundle
+2. `opennextjs-cloudflare build --skipNextBuild` — wraps the Next.js
+   output as a Cloudflare Worker (`.open-next/worker.js`) plus static
+   assets (`.open-next/assets/`)
 
-```bash
-npx serve out
-```
+Built output is what `wrangler deploy` uploads.
 
-## Deploying to Cloudflare Workers
+---
 
-Git integration handles deployment automatically: push to `main` and
-Cloudflare clones the repo, runs `npm run build`, then runs `npx wrangler
-deploy` which reads [`wrangler.jsonc`](./wrangler.jsonc) and uploads `./out/`
-as [Workers Static Assets](https://developers.cloudflare.com/workers/static-assets/).
+## Deploying
 
-Manual deploy (if needed):
+`git push origin main` triggers Cloudflare's auto-deploy via the
+GitHub integration. Manual deploy:
 
 ```bash
-npm run build
 npx wrangler deploy
 ```
 
-### Why Workers Static Assets, not Pages / OpenNext
+The deployed worker is available at
+<https://pandemonium-software-website.benpandher.workers.dev>.
 
-Cloudflare's framework auto-detection will try to deploy a Next.js app
-with the OpenNext SSR adapter. OpenNext only supports Next.js 15.5+ and
-16.2+, and we're pinned to Next.js 14.2.x for security parity with the
-`trades-website-template` (Playbook Section 12). More importantly, this
-site is a pure static export — there's no SSR code to run.
+> **Note on the worker name vs the brand.** The worker URL still uses
+> the original "pandemonium-software-website" spelling because
+> renaming would break previously-emailed Hub / Intake / Payment
+> links. The customer-facing brand is **ModuForge** (and the legal
+> entity **Pandamonium Software Ltd** — note the *a* vs *e*). When a
+> custom domain registers, the worker URL becomes invisible to
+> customers.
 
-`wrangler.jsonc` short-circuits all of that. It declares the project as
-a Worker with `assets.directory: ./out` and no `main` script, so wrangler
-just uploads the `out/` folder verbatim. The deployed "Worker" is a
-0.34 KiB asset manifest — no server code at all.
+---
 
-Security headers live in [`public/_headers`](./public/_headers) —
-respected by both Cloudflare Pages and Workers Static Assets — not
-`next.config.mjs`, because `output: 'export'` is a no-op for Next.js's
-`headers()` function.
+## Cowork — what it is and what it isn't
+
+**Cowork** is the AI operations assistant that handles the routine
+work of running ModuForge: reading enquiries, drafting replies,
+running compatibility checks, accepting team invitations, provisioning
+DNS, generating performance reports, processing change requests,
+escalating incidents.
+
+Cowork is **not**:
+
+- A separate product or service customers see — they only see
+  ModuForge
+- A replacement for Ben on judgment calls (acceptance / rejection /
+  scope / pricing — those stay human)
+- An autonomous agent — it operates inside well-defined contracts (see
+  `docs/ARCHITECTURE.md` §4 and §6) with idempotent actions, audit
+  trails and explicit escalation tiers
+
+The first 20 clients run with Ben reviewing every customer-facing
+email before send. After that, status updates ("DNS verified",
+"preview ready", "report ready") send automatically; everything else
+stays human-reviewed.
+
+---
 
 ## Design tokens
 
-- Primary: `navy` — deep navy, trustworthy
-- Accent: `ember` — warm orange
-- Surface: `cream` — warm neutral
+- Primary: `navy` (deep navy — trustworthy)
+- Accent: `ember` (warm orange)
+- Surface: `cream` (warm neutral)
 - Serif: Fraunces · Sans: Inter
 
-## Deliberately out of scope (Stage 2 / 3)
+---
 
-- Full intake form and client onboarding flow (currently a simple enquiry form)
-- Stripe checkout
-- Plausible analytics
-- Real client testimonials and photography
-- Real business email address (currently `benpandher@proton.me`)
-- Custom domain (currently using a `.workers.dev` subdomain)
+## Status: what's done, what's next
+
+### Done
+
+- Stage 1 — full marketing site
+- Stage 2A — pre-payment pipeline (enquiry → qualification →
+  compatibility engine → intake → fee calculation → payment placeholder)
+- Stage 2B Phase H1 — Onboarding Hub scaffolding + Step 1 (Cloudflare)
+- Stage 2B Phase H2 — Step 2 (Domain + conditional Resend Teams flow)
+- ModuForge brand introduced; legal entity Pandamonium Software Ltd
+  preserved
+- AI transparency disclosures (Privacy §5, About page, enquiry copy)
+
+### In progress
+
+- Stage 2B Phase H3 — Step 3 (Cal.com URL capture + GBP URL capture)
+- Stage 2B Phase H4 — Step 4 (Brand assets + R2 upload binding)
+- Stage 2B Phase H5 — Step 5 (Review + go-live)
+
+### Next
+
+- Stage 2A Part 2 — real Stripe Checkout integration
+- Stage 2C — Cowork Ops automation worker (the milestone that makes
+  the "Ben never touches a dashboard" promise real). 5 commits, see
+  `docs/ARCHITECTURE.md` §5
+- Stage 3 — full GBP API integration, custom domain, Plausible
+  analytics, real client photography and testimonials
+
+---
 
 ## Licence
 
-All rights reserved © Pandemonium Software Ltd.
+All rights reserved © Pandamonium Software Ltd.

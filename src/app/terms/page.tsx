@@ -107,11 +107,73 @@ export default function TermsPage() {
             <strong>30 days&apos; written notice</strong> (email is fine —
             just send it to{" "}
             <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>).
+            The final 30 days of service complete normally; my last
+            invoice covers that period.
           </p>
+
+          <h3>What happens to your site</h3>
           <p>
-            When you cancel, you pay for the final 30 days and then I hand
-            everything over — your domain, your content, your website
-            files. No handover fees. No hostage-taking. You own it all.
+            Your site keeps running. It&apos;s hosted on your own
+            Cloudflare Pages account — free forever — so there&apos;s no
+            bill that picks up when I leave. Your domain, your subscriber
+            list, your booking page, your Google Business Profile and all
+            your content stay yours.
+          </p>
+
+          <h3>What I hand over (within 14 days of your final billing date)</h3>
+          <ul>
+            <li>
+              A complete copy of your website source code, as a
+              downloadable zip and (if you&apos;d like) a private GitHub
+              repository transferred to your account.
+            </li>
+            <li>
+              A list of every credential I was holding on your behalf,
+              with my access already revoked from each — Cloudflare team
+              membership, Resend team membership, Google Business Profile
+              manager access, Cal.com (where applicable) and any other
+              account I was a member of.
+            </li>
+            <li>
+              An exit summary in plain English: what runs where, what to
+              watch out for, and the kind of thing you&apos;d want to ask
+              your next maintainer about.
+            </li>
+          </ul>
+
+          <h3>What you stop receiving</h3>
+          <p>Once your subscription ends, I no longer:</p>
+          <ul>
+            <li>
+              Apply security patches, dependency updates or browser
+              compatibility fixes to your site.
+            </li>
+            <li>
+              Make content changes, generate the monthly performance
+              report or provide direct support.
+            </li>
+            <li>
+              Maintain oversight of your hosting, sender domain or any of
+              the connected services on your behalf.
+            </li>
+          </ul>
+          <p>
+            Practically, your site will slowly drift over time —
+            typically 12 to 24 months before you&apos;d notice anything.
+            It won&apos;t suddenly break, but it also won&apos;t stay
+            current with the web around it. If you want to come back
+            later, re-onboarding is the standard setup fee and we pick up
+            where we left off.
+          </p>
+
+          <h3>If your subscription lapses involuntarily</h3>
+          <p>
+            If a subscription payment fails, I&apos;ll email you and try
+            again over a few days. After three failed attempts, services
+            pause (your site keeps serving, but I stop active
+            maintenance) until payment is back in good standing. No
+            hostile takeover, no lockout — just a pause until you&apos;re
+            ready to continue or formally cancel.
           </p>
 
           <h2>7. Ownership</h2>
