@@ -252,10 +252,11 @@ export default function Step5Review({
         </div>
         <p className="mt-2 text-sm text-navy-700">
           You get up to <strong>{MAX_REVIEW_EDITS} rounds</strong> of
-          revisions before launch. After that, anything else either
-          rolls into your monthly content allowance (30 min/month
-          included) or gets quoted separately if it&apos;s bigger.
-          The cap keeps us both honest about scope.
+          revisions before launch. After that, post-launch tweaks
+          go through your monthly allowance (3 change requests
+          included, one item per request) or get quoted separately
+          if they&apos;re bigger. The cap keeps us both honest about
+          scope.
         </p>
 
         {/* Scope guardrails */}
@@ -325,8 +326,8 @@ export default function Step5Review({
             </p>
             <p className="mt-2">
               Anything else from here goes into your post-launch
-              monthly content allowance (30 min/month included with
-              your subscription) or gets quoted separately if it&apos;s
+              monthly allowance (3 change requests included, one
+              item per request) or gets quoted separately if it&apos;s
               bigger. Email me from your{" "}
               <a href="#" className="link">
                 Account dashboard
@@ -468,7 +469,8 @@ export default function Step5Review({
               Your account dashboard is your home for everything from
               now on — site status, subscription details, and the
               &ldquo;Need a change?&rdquo; form for any post-launch
-              tweaks (30 minutes/month included).
+              tweaks (3 change requests/month included, one item per
+              request).
             </p>
           </div>
         ) : (

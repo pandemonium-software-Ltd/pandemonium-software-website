@@ -294,7 +294,7 @@ export function buildOnboardingCompleteEmail(args: {
       `1. I'm building your site now. You'll get another email when your preview is ready (typically 3-5 working days).\n` +
       `2. After your site is live, your account dashboard is your home for everything — site status, subscription details, content change requests, the lot:\n` +
       `   ${args.accountUrl}\n` +
-      `3. Your monthly subscription includes 30 minutes of content changes per month from launch. Use the "Need a change?" form on the dashboard for anything you'd like updated.\n\n` +
+      `3. Your monthly subscription includes 3 change requests per month from launch — one item per request. Use the "Need a change?" form on the dashboard for anything you'd like updated.\n\n` +
       `If anything's not right between now and launch, just reply.\n\n` +
       `Thanks,\n` +
       `Ben (and the ModuForge ops assistant)`,

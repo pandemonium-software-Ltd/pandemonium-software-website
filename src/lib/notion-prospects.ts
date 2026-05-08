@@ -108,6 +108,41 @@ export type ProspectRecord = {
 };
 
 /**
+ * Hard cap on customer change requests per calendar month. Replaces
+ * the old "30 minutes/month" time-based allowance with a count-based
+ * model that's easier to reason about for both customer and operator.
+ * Each request must be a single item — multiple items in one
+ * submission are auto-declined by the API and the customer is asked
+ * to split. See /api/account/change-request for the detector.
+ *
+ * Rationale: counting requests is unambiguous and trivially
+ * trackable. Time was always a soft estimate that drifted. The
+ * one-item-per-request rule keeps each change atomic, makes
+ * classification (in scope vs out of scope) tractable, and gives
+ * Cowork a clean unit to apply or reject.
+ */
+export const MONTHLY_CHANGE_REQUEST_LIMIT = 3;
+
+/**
+ * Counts requests submitted in the current calendar month that
+ * count toward the cap. "rejected" requests don't count — those
+ * are typically out-of-scope items that Cowork or Ben quoted
+ * separately, so the customer's allowance shouldn't be burned by
+ * them. Reset is on the 1st of each month, UTC.
+ */
+export function countActiveChangeRequestsThisMonth(
+  requests: ChangeRequest[],
+): number {
+  const now = new Date();
+  const startOfMonth = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
+  return requests.filter(
+    (r) => r.submittedAt >= startOfMonth && r.status !== "rejected",
+  ).length;
+}
+
+/**
  * One row in the customer's change-requests inbox. Submitted via the
  * /account/[token] dashboard's "Need a change?" form. Cowork will
  * pick these up in Stage 2C, classify (content / module / out-of-
@@ -134,7 +169,7 @@ export type ChangeRequest = {
    *   "Done — your phone number is updated. Refresh your site to
    *   see it live."
    *   "I've quoted this separately because it's bigger than the
-   *   30-min monthly allowance — see my email."
+   *   monthly allowance — see my email."
    */
   reply?: string;
 };

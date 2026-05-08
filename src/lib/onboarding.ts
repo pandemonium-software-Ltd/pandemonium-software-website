@@ -83,7 +83,8 @@ export function isOnboardingUnlocked(status: string): boolean {
 // Once the customer signs off Step 5 (status flips to Onboarding
 // Complete), the Hub becomes a read-only archive — any further
 // changes go through the customer dashboard's "Need a change?"
-// form and the post-launch monthly content allowance.
+// form and the post-launch monthly allowance (3 requests/month,
+// one item per request).
 const ONBOARDING_MUTABLE_STATUSES = new Set<ProspectStatus>([
   "Paid",
   "Onboarding Started",

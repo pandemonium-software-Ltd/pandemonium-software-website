@@ -190,7 +190,7 @@ export default function ChangeRequestEditor({ token, request }: Props) {
                 draftStatus === "resolved"
                   ? "Done — your phone number is updated. Refresh your site to see it live."
                   : draftStatus === "rejected"
-                    ? "I've quoted this separately because it's bigger than the 30-min monthly allowance — see my email."
+                    ? "I've quoted this separately because it's out of scope for the monthly allowance — see my email."
                     : "Optional note for the customer (won't trigger an email yet)…"
               }
               className="mt-1 w-full resize-y rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900"

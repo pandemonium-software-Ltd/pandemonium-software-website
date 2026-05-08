@@ -52,8 +52,10 @@ export default function TermsPage() {
             my pricing page — as a minimum, it always includes a
             mobile-optimised website hosted on your own free Cloudflare
             Pages account, ongoing security and dependency updates, a
-            monthly performance report, 30 minutes of content changes per
-            month, and UK-based support from a real person.
+            monthly performance report, 3 included change requests per
+            month (one item per request — text edits, photo swaps,
+            price updates, anything in scope), and UK-based support
+            from a real person.
           </p>
           <p>
             I don&apos;t provide legal, tax, insurance or accounting

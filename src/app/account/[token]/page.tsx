@@ -4,8 +4,8 @@
 // enquiry; same gate pattern as the Onboarding Hub. Surfaces:
 //   - status of their site (Live / building / onboarding)
 //   - subscription details (setup fee paid, monthly, modules)
-//   - this month's content allowance usage (placeholder until
-//     Cowork's audit log is in place — Stage 2C C1)
+//   - this month's change-request count (X / 3 used; reset on the
+//     1st each month UTC; out-of-scope rejections don't count)
 //   - "Need a change?" inbox: submit a content change request,
 //     see prior requests with status
 //   - get-in-touch / cancel links

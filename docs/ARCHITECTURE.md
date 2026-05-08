@@ -377,10 +377,33 @@ notifications.
 **Failure mode:** retry with exponential backoff; tier 3 escalation
 on persistent failure; never silently swallow.
 
-### 6.2 Customer change-request flow (the 30-min content allowance)
+### 6.2 Customer change-request flow (3 requests/month, one item each)
 
-Every monthly subscription includes 30 minutes of content changes
-covered. Bigger changes are quoted separately under §10 of the Terms.
+Every monthly subscription includes **3 change requests per month**
+(replacing the old 30-min/month time-based model — see §6.2.1 for
+why). Each request must be a **single item**; multi-item submissions
+are auto-declined with a "split this into separate requests" message
+that doesn't burn the cap. Out-of-scope items are quoted separately
+under Terms §10.
+
+#### 6.2.1 Why count-based, one-item-per-request
+
+The previous time-based "30 minutes per month" allowance had three
+problems:
+- **Time was always a soft estimate.** "About 5 minutes" for a
+  photo swap drifts to 15 if the customer wants the layout
+  retouched too. Operator and customer end up arguing minutes.
+- **Multi-item bundles were untrackable.** "Change my phone, swap a
+  photo, update the about page" arrives as one message — was that
+  10 minutes or 30? Nobody knows. Audit log can't tell.
+- **No clean unit for Cowork classification.** Cowork's job is to
+  classify each customer ask as in-scope / out-of-scope / module
+  add. A bundled message is multiple classifications squashed into
+  one. Counting requests with one-item-each gives Cowork exactly
+  the unit it needs.
+
+The count-based model fixes all three. Each request is a unit.
+Counts are unambiguous. The cap is enforced at the API layer.
 
 ```
 Customer ─ email or /account/[token]/changes form ─► Cowork
@@ -403,30 +426,70 @@ change is live"            │
                            Ben approves; Cowork sends
 ```
 
-**Trigger:** inbound email to `pandamoniumsoftwareltd@gmail.com` (Gmail
-push notification → webhook → Cowork) OR form submission at
-`/account/[token]/changes` (future route).
-**Inputs:** customer's request text, attachments (photos, files).
-**Steps:**
-1. **Classify** the request (Cowork prompt with the Playbook §10
-   triage rules):
-   - *Content* (text edit, photo swap, price/phone/address update,
-     new testimonial)
-   - *Module* (add or remove Booking / Enquiry / Newsletter /
-     GBP addon)
-   - *Out-of-scope* (new page, redesign, custom feature)
-2. **For content:** check this month's allowance in Notion
-   (`Content Minutes Used` number field on Clients DB). If under
-   budget, draft the change as a git diff against their checked-out
-   repo + a preview deploy link. If over budget, draft a "we'll need
-   to extend or roll into next month — happy with that?" reply.
-3. **For module:** see §7.4.
-4. **For out-of-scope:** Cowork generates a fixed-price quote based
-   on the Playbook scope-and-pricing matrix; Ben reviews and sends.
-**Outputs:** preview deploy URL (for content changes); updated
-Notion record (allowance consumed); customer email; audit log entry.
-**Failure mode:** any classification confidence below threshold →
-Tier 2 (Ben classifies manually).
+#### 6.2.2 API enforcement (current shape, Stage 2D D1.5)
+
+`POST /api/account/change-request` runs three checks before saving
+anything to Notion:
+
+1. **Schema** (zod): token format, message length (5-5000 chars),
+   eligible status (Paid through Live)
+2. **Multi-item detector** (regex heuristic — Stage 2C C1 graduates
+   this to Cowork's LLM classifier):
+   - Numbered list with ≥2 items (e.g. `1.` / `2.`) → 422 decline
+   - Bullet list with ≥2 items (e.g. `-` / `*` / `•`) → 422 decline
+   - Conjunctive markers (`Also,`, `and also`, `additionally`,
+     `secondly`, `thirdly`) → 422 decline
+   - 2+ instances of `Please` → 422 decline
+   - Single-paragraph requests with multiple data points are NOT
+     declined (e.g. "Update opening hours: Mon-Fri 8-6, Sat 9-12,
+     closed Sundays" passes — that's one change with multiple
+     values, not multiple changes)
+3. **Monthly cap** (`countActiveChangeRequestsThisMonth`): if used
+   ≥ MONTHLY_CHANGE_REQUEST_LIMIT, return 429 with the next reset
+   date. Rejected status doesn't count — out-of-scope items quoted
+   separately don't burn the cap.
+
+Declined submissions are **not saved**. The customer sees the
+decline message, edits their submission (or splits it), and
+re-submits. No request record exists in Notion until the message
+passes all three checks.
+
+#### 6.2.3 Cowork classification (Stage 2C C1 onwards)
+
+Once Cowork is online, accepted requests get classified before
+they're applied:
+
+```
+Customer ─ /account/[token] form ─► API saves (status: pending)
+                                    │
+            [Cowork classifies on next cron tick]
+                                    │
+   ┌──────────────────────┬──────────────────────────────┐
+   │                      │                              │
+content (in scope)        module add/remove          out-of-scope
+   │                      │                              │
+Cowork drafts the          Cowork updates Notion +    Cowork drafts a
+edit + a preview link     Stripe subscription;        quote against the
+   │                       see §6.4                    Playbook §10
+Ben approves (first       │                              │
+20-clients period);       Cowork drafts customer       Ben reviews +
+auto-applies after.       reply with new total         sends quote to
+   │                       + new Hub link if ops        customer
+Cowork applies             needed                        │
++ deploys + emails         │                          status: rejected
+customer "your             Ben approves; Cowork sends (does NOT count
+change is live"                                        toward the cap)
+status: applied
+```
+
+**Outputs:** preview deploy URL (content changes); updated Notion
+record (status flipped); customer email; audit log entry.
+**Failure modes:**
+- Classifier confidence below threshold → Tier 2 (Ben classifies
+  manually via the operator dashboard's ChangeRequestEditor)
+- Cap-exceeded edge case (Cowork accidentally adds a request
+  past 3 due to race condition) → operator can mark one as
+  rejected to reclaim the slot
 
 ### 6.3 Monthly performance report
 
@@ -767,9 +830,9 @@ cancelled) a clear banner explaining what happened.
   subject
 
 **Card 3 — This month:**
-- Content allowance: "X / 30 min used this month" (placeholder
-  showing 0/30 in Stage 2D D1; populated from the Cowork audit log
-  in D3)
+- Change requests this month: "X / 3 used" — counted from the
+  customer's Change Requests Inbox by `countActiveChangeRequestsThisMonth`
+  (rejected = out-of-scope items don't burn the cap)
 - Note that the monthly performance report contains the detailed
   tracking
 
@@ -993,7 +1056,8 @@ The drill-down. One scrollable page with collapsible sections:
    - Rebuild now
    - Send a one-off email (Cowork drafts; Ben edits + sends)
    - Override compatibility result
-   - Extend content allowance for the month
+   - Extend change-request allowance for the month (e.g. mark a
+     request "rejected" so it doesn't count, or manually add a slot)
    - Mark cancellation requested
    - Force resync from Stripe
    - Trigger handover (if cancellation)

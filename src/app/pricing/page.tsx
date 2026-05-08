@@ -149,11 +149,12 @@ export default function PricingPage() {
                   q: "What if I need changes later?",
                   a: (
                     <p>
-                      Your monthly fee includes 30 minutes of content changes
-                      per month — a new phone number, a swapped photo, a
-                      fresh testimonial, a price update. Bigger changes like
-                      new pages or redesigns I quote separately and fairly
-                      before any work starts.
+                      Your monthly fee includes 3 change requests per
+                      month — a new phone number, a swapped photo, a
+                      fresh testimonial, a price update. One item per
+                      request keeps each change clean to track and apply.
+                      Bigger changes like new pages or redesigns I quote
+                      separately and fairly before any work starts.
                     </p>
                   ),
                 },
@@ -188,7 +189,8 @@ export default function PricingPage() {
                         <li>Maintenance, security and dependency updates</li>
                         <li>A monthly performance report, in plain English</li>
                         <li>
-                          30 minutes of content changes per month
+                          3 included change requests per month (one
+                          item per request)
                         </li>
                         <li>
                           Oversight of your hosting (which runs on your own
@@ -197,9 +199,11 @@ export default function PricingPage() {
                         <li>UK-based support from a real person</li>
                       </ul>
                       <p className="mt-4">
-                        Anything bigger than a 30-minute content job — a new
-                        page, a section redesign, a custom feature — I quote
-                        for separately and fairly before any work starts.
+                        Anything beyond your 3 monthly requests, or
+                        bigger than a single-item content edit — a new
+                        page, a section redesign, a custom feature — I
+                        quote for separately and fairly before any work
+                        starts.
                       </p>
                     </>
                   ),

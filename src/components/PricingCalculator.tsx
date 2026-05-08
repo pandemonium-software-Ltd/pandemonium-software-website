@@ -28,7 +28,7 @@ const MODULES: Module[] = [
       "Hosted on your own free Cloudflare Pages account — no hidden bills",
       "Security, maintenance and dependency updates done for you",
       "Monthly performance report, in plain English",
-      "30 minutes of content changes per month, included",
+      "3 included change requests per month (one item per request — text, photo, price, hours, anything in scope)",
       "Guided self-setup through the Onboarding Hub — short videos at every step",
       "UK-based support from a real person",
     ],

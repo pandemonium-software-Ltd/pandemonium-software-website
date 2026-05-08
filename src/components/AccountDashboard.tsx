@@ -7,7 +7,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { ChangeRequest } from "@/lib/notion-prospects";
+import {
+  countActiveChangeRequestsThisMonth,
+  MONTHLY_CHANGE_REQUEST_LIMIT,
+  type ChangeRequest,
+} from "@/lib/notion-prospects";
 import RAGStatus from "@/components/RAGStatus";
 import { site } from "@/lib/site";
 
@@ -234,18 +238,22 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             {/* ---------- This month ---------- */}
             <DashCard title="This month">
               <p className="text-sm text-navy-700">
-                30 minutes of content changes are included every month.
+                {MONTHLY_CHANGE_REQUEST_LIMIT} change requests are
+                included every month — content edits, photo swaps,
+                price updates, anything in scope. One item per
+                request.
               </p>
               <div className="mt-4 rounded-xl bg-cream-50 p-4">
                 <p className="text-xs uppercase tracking-wider text-navy-500">
-                  Allowance used
+                  Used this month
                 </p>
                 <p className="mt-1 font-serif text-2xl font-semibold text-navy-900">
-                  0 / 30 min
+                  {countActiveChangeRequestsThisMonth(requests)} /{" "}
+                  {MONTHLY_CHANGE_REQUEST_LIMIT}
                 </p>
                 <p className="mt-1 text-xs text-navy-500">
-                  Detailed tracking arrives with the monthly performance
-                  report.
+                  Resets on the 1st of next month. Out-of-scope items
+                  quoted separately don&apos;t count.
                 </p>
               </div>
             </DashCard>
@@ -348,11 +356,18 @@ function ChangeRequestsBlock({
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const usedThisMonth = countActiveChangeRequestsThisMonth(requests);
+  const remaining = Math.max(
+    0,
+    MONTHLY_CHANGE_REQUEST_LIMIT - usedThisMonth,
+  );
+  const atCap = remaining === 0;
 
   async function handleSubmit() {
     setError(null);
-    setSuccess(false);
+    setSuccess(null);
     const trimmed = message.trim();
     if (trimmed.length < 5) {
       setError("Please describe the change in at least a few words.");
@@ -372,7 +387,9 @@ function ChangeRequestsBlock({
       const json = (await res.json()) as {
         success?: boolean;
         request?: ChangeRequest;
+        remaining?: number;
         error?: string;
+        suggestion?: string;
       };
       if (!res.ok || !json.success || !json.request) {
         setError(json.error ?? "Couldn't submit just now. Try again.");
@@ -380,7 +397,11 @@ function ChangeRequestsBlock({
       }
       onSubmitted(json.request);
       setMessage("");
-      setSuccess(true);
+      const remainingAfter = json.remaining ?? remaining - 1;
+      setSuccess(
+        `Got it. ${remainingAfter} request${remainingAfter === 1 ? "" : "s"} remaining this month. I'll come back within 48 working hours.`,
+      );
+      setTimeout(() => setSuccess(null), 8000);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -390,54 +411,105 @@ function ChangeRequestsBlock({
 
   return (
     <article className="rounded-2xl bg-white p-7 shadow-card md:p-8">
-      <h2 className="font-serif text-xl font-semibold text-navy-900">
-        Need a change?
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="font-serif text-xl font-semibold text-navy-900">
+          Need a change?
+        </h2>
+        <span
+          className={[
+            "rounded-full px-3 py-1 text-xs font-semibold",
+            atCap
+              ? "bg-navy-900 text-white"
+              : remaining === 1
+                ? "bg-ember-100 text-ember-800 ring-1 ring-ember-200"
+                : "bg-cream-100 text-navy-800 ring-1 ring-navy-200",
+          ].join(" ")}
+        >
+          {usedThisMonth} of {MONTHLY_CHANGE_REQUEST_LIMIT} used
+          this month
+        </span>
+      </div>
       <p className="mt-2 text-sm leading-relaxed text-navy-700">
         Tell me what you&apos;d like updated — a phone number, a new
-        photo, a price tweak, a fresh testimonial. The first 30 minutes
-        of changes each month are included in your monthly fee. I&apos;ll
-        come back within 48 working hours.
+        photo, a price tweak, a fresh testimonial. You get{" "}
+        <strong>
+          {MONTHLY_CHANGE_REQUEST_LIMIT} change requests included
+          every month
+        </strong>
+        , and each one needs to be a single item. I&apos;ll come back
+        within 48 working hours.
       </p>
 
-      <div className="mt-5">
-        <label className="block">
-          <span className="block text-sm font-semibold text-navy-900">
-            What would you like changed?
-          </span>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            disabled={pending}
-            placeholder="e.g. Please update my phone number on the contact page from 01865 111 222 to 01865 333 444. Also swap the second photo on the gallery for the one I emailed last week (subject: 'New van photo')."
-            rows={5}
-            maxLength={5000}
-            className="mt-2 w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-          />
-        </label>
-
-        {error && (
-          <p className="mt-3 text-sm text-ember-700" role="alert">
-            {error}
-          </p>
-        )}
-        {success && (
-          <p className="mt-3 text-sm text-green-700" role="status">
-            <strong>Got it.</strong> I&apos;ll come back within 48
-            working hours. You&apos;ll see this request in your history
-            below.
-          </p>
-        )}
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          disabled={pending || message.trim().length === 0}
-          className="btn-primary mt-4"
-        >
-          {pending ? "Submitting…" : "Submit request"}
-        </button>
+      {/* One-item rule callout */}
+      <div className="mt-4 rounded-xl border-2 border-navy-100 bg-cream-50 p-4 text-xs leading-relaxed text-navy-700">
+        <p className="font-semibold text-navy-900">
+          One item per request
+        </p>
+        <p className="mt-1">
+          If you need three things changed, send three separate
+          requests. It keeps each change clean to track and apply.
+          Multi-item submissions (numbered lists, &ldquo;Also,&rdquo;
+          paragraphs, etc.) are auto-declined and you&apos;ll be asked
+          to split them — that doesn&apos;t burn a request.
+        </p>
       </div>
+
+      {atCap ? (
+        <div className="mt-5 rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm leading-relaxed text-navy-700">
+          <p className="font-semibold text-navy-900">
+            All {MONTHLY_CHANGE_REQUEST_LIMIT} requests used this
+            month.
+          </p>
+          <p className="mt-2">
+            Allowance resets on the 1st of next month. For anything
+            urgent or bigger,{" "}
+            <a
+              href={`mailto:${site.contactEmail}`}
+              className="link"
+            >
+              email me directly
+            </a>{" "}
+            and I&apos;ll quote it separately.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-5">
+          <label className="block">
+            <span className="block text-sm font-semibold text-navy-900">
+              What would you like changed? (one item)
+            </span>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              disabled={pending}
+              placeholder="e.g. Please update my phone number on the contact page from 01865 111 222 to 01865 333 444 — we just got a new line."
+              rows={5}
+              maxLength={5000}
+              className="mt-2 w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+            />
+          </label>
+
+          {error && (
+            <p className="mt-3 text-sm text-ember-700" role="alert">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="mt-3 text-sm text-green-700" role="status">
+              {success}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={pending || message.trim().length === 0}
+            className="btn-primary mt-4"
+          >
+            {pending ? "Submitting…" : "Submit request"}
+          </button>
+        </div>
+      )}
 
       {requests.length > 0 && (
         <div className="mt-7 border-t border-navy-100 pt-6">
