@@ -183,14 +183,25 @@ const step1CloudflareSchema = z.object({
 // Step 2 covers the customer's *initiating* actions:
 //   - tell me your domain
 //   - tell me where you registered (or will register) it
-//   - confirm the domain is registered / connected to Cloudflare
 //   - if Enquiry or Newsletter is in play: sign up for Resend, invite
 //     me as a team member, share your Resend signup email
 //
-// The actual DNS plumbing (Cloudflare Pages CNAMEs, Resend SPF /
-// DKIM / Return-Path) is mine to do — I have Administrator access
-// on their Cloudflare from Step 1 and team-member access on their
-// Resend from this step. Customer never pastes a DNS record.
+// Marking the step "done" means "the domain exists at a registrar
+// and I'm ready for Cowork to take over" — NOT "I've already
+// connected the nameservers". The customer literally can't connect
+// nameservers before Cowork has added the zone and emailed them the
+// assigned values, so the old "domain connected" checkbox was
+// chicken-and-egg misleading.
+//
+// Cowork's downstream job (after the customer ticks done):
+//   - add the zone to their Cloudflare via API
+//   - read back the assigned nameservers
+//   - email the customer with the values + per-registrar instructions
+//   - poll Cloudflare until the zone status is "active"
+//   - email confirmation when their site goes live
+// All DNS records (Cloudflare Pages CNAMEs, Resend SPF / DKIM /
+// Return-Path) are mine to apply via the Cloudflare API. Customer
+// never pastes a DNS record themselves.
 const step2DomainSchema = z.object({
   domain: z
     .string()
@@ -202,7 +213,6 @@ const step2DomainSchema = z.object({
     )
     .optional(),
   registrar: z.enum(["already-have", "cloudflare", "external"]).optional(),
-  domainConnected: z.boolean().optional(),
   resendSignupEmail: z.string().trim().email().max(254).optional(),
   resendInvitedMe: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),
@@ -303,13 +313,14 @@ export function canMarkStepDone(
           reason: "Please tell me where you registered (or will register) it.",
         };
       }
-      if (!data.domainConnected) {
-        return {
-          ok: false,
-          reason:
-            "Please tick the box once your domain is registered or connected.",
-        };
-      }
+      // No "domain connected" check — the customer can't honestly
+      // confirm "connected" before Cowork has added the zone and
+      // sent them the nameserver values. Mark-done = "the domain
+      // exists at a registrar and I'm ready for you to take over".
+      // Cowork handles the rest (zone add → email the customer the
+      // assigned nameservers → poll for propagation → email
+      // confirmation when live). See ARCHITECTURE.md §6.2.
+
       // Resend fields are only required when the prospect bought
       // Enquiry or Newsletter — those are the modules that actually
       // need a verified sender domain.

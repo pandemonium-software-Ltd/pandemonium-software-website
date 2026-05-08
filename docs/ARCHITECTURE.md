@@ -99,19 +99,65 @@ Cron is enough.
 - Notify customer: "I'm in your Cloudflare account, ready to deploy"
 
 #### Step 2 (Domain + optional Resend)
-- Read prospect's stored `domain`
-- On their Cloudflare account: create zone if missing → check if
-  domain is registered → if registered elsewhere, instruct customer
-  to point nameservers (skip DNS until pointed); if registered via
-  Cloudflare, proceed
-- Create DNS records for ModuForge Pages (CNAME / A records)
-- If Newsletter or Enquiry: poll Resend Teams API for invitations
-  matching `resendSignupEmail` → accept → POST /domains → fetch
-  DKIM/SPF/Return-Path records → apply to their Cloudflare DNS via
-  Cloudflare API → poll Resend `domain.status` until `verified` (max
-  ~10 min)
-- Generate sending-only Resend API key, store encrypted in Notion
-- Notify customer when verified
+
+The precise contract the Hub UI promises:
+
+**A. Domain → DNS-ready (always)**
+- Read `prospect.onboardingData.domain` and `domain.registrar`
+- Branch on registrar:
+  - `cloudflare` (domain is registered through Cloudflare Registrar):
+    no nameserver work needed. Add the zone if it's not already
+    visible in their account, then proceed straight to DNS records
+  - `already-have` / `external` (domain is at a third-party
+    registrar): `POST /zones` on the customer's Cloudflare account
+    via my user-token. Read back the assigned `name_servers` (two
+    strings, e.g. `aron.ns.cloudflare.com` + `nina.ns.cloudflare.com`).
+    Email the customer with:
+      * Both nameserver values
+      * A per-registrar walkthrough rendered from a templates table
+        keyed off domain heuristics (e.g. `.co.uk` + `123-reg`,
+        `.com` + `godaddy`, etc.) — falls back to a generic guide
+      * "Reply with screenshots if anything's confusing" CTA
+    Then poll the zone's `status` field every 5 minutes until it
+    flips to `active` (typically <2 hours; max 48). Email
+    confirmation on activation.
+- Once the zone is active: create the DNS records ModuForge Pages
+  needs (CNAME for `www` → `pandemonium-software-website.pages.dev`,
+  apex A or CNAME-flattening, `_redirect` if customising). Run a
+  resolution check from a dummy DNS-over-HTTPS query before
+  declaring done.
+
+**B. Resend (only if Newsletter or Enquiry module bought)**
+- Poll Resend Teams API for pending invitations addressed to
+  `BEN_OPS_EMAIL` whose team owner matches `prospect.onboardingData.
+  domain.resendSignupEmail`
+- Accept the invitation
+- `POST /domains` on the customer's Resend team with their domain →
+  receive DKIM (3 CNAMEs), SPF (1 TXT) and Return-Path (1 CNAME)
+- Apply each record to the customer's Cloudflare DNS via the
+  Cloudflare API (using my Administrator role from Step 1)
+- Poll Resend `GET /domains/{id}` every 60 seconds until
+  `status: verified` (max 10 minutes)
+- Generate a **sending-only** API key
+  (`POST /api-keys` with `permission: "sending_access"`) — narrower
+  scope than admin so a future leak can't, e.g., add new domains
+- Store the API key in `prospect.onboardingData.domain.resendApiKey`,
+  AES-GCM encrypted at rest using `RESEND_KEY_ENCRYPTION_KEY` Worker
+  secret
+- Revoke human team membership (leave the team) — only the sending
+  API key remains
+- Email customer: "your sender domain `news@yourbusiness.co.uk` is
+  live; here's a test send"
+
+**Failure modes:**
+- Customer hasn't pointed nameservers within 5 days → Cowork sends a
+  reminder email; after 10 days, escalates to Tier 2 for Ben
+- Resend domain verification fails after 1 hour of polling →
+  Tier 2 (DNS records may have been mis-applied; Cowork checks +
+  retries; if still failing, Ben investigates)
+- Customer's Resend invitation never arrives in `BEN_OPS_EMAIL` → 
+  Tier 2 (almost always means they typo'd `resendSignupEmail` or
+  haven't actually invited yet; Cowork emails customer to confirm)
 
 #### Step 3 (Tools — H3 scope)
 - Booking module: capture `calcomBookingUrl` (validated as a Cal.com

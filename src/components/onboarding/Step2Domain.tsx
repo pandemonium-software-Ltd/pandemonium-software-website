@@ -52,7 +52,6 @@ export default function Step2Domain({
     data.registrar === "external"
       ? (data.registrar as Registrar)
       : "";
-  const initialDomainConnected = data.domainConnected === true;
   const initialResendEmail =
     typeof data.resendSignupEmail === "string" ? data.resendSignupEmail : "";
   const initialResendInvitedMe = data.resendInvitedMe === true;
@@ -60,7 +59,6 @@ export default function Step2Domain({
 
   const [domain, setDomain] = useState(initialDomain);
   const [registrar, setRegistrar] = useState<Registrar | "">(initialRegistrar);
-  const [domainConnected, setDomainConnected] = useState(initialDomainConnected);
   const [resendEmail, setResendEmail] = useState(initialResendEmail);
   const [resendInvitedMe, setResendInvitedMe] = useState(initialResendInvitedMe);
   const [notes, setNotes] = useState(initialNotes);
@@ -81,7 +79,6 @@ export default function Step2Domain({
     const patch: Record<string, unknown> = {
       domain: domain.trim(),
       registrar: registrar || undefined,
-      domainConnected,
       notes: notes.trim(),
     };
     if (needsResend) {
@@ -92,15 +89,10 @@ export default function Step2Domain({
   }
 
   function validateForDone(): string | null {
-    if (!domain.trim()) return "Please enter your domain (e.g. yourbusiness.co.uk).";
-    if (!registrar) return "Please pick where your domain is (or will be) registered.";
-    if (!domainConnected) {
-      return registrar === "already-have"
-        ? "Please tick the box once you've added your existing domain to Cloudflare."
-        : registrar === "cloudflare"
-          ? "Please tick the box once you've finished registering through Cloudflare."
-          : "Please tick the box once you've pointed your domain's nameservers to Cloudflare.";
-    }
+    if (!domain.trim())
+      return "Please enter your domain (e.g. yourbusiness.co.uk).";
+    if (!registrar)
+      return "Please pick where your domain is (or will be) registered.";
     if (needsResend) {
       if (!resendEmail.trim())
         return "Please share the email you signed up to Resend with.";
@@ -225,7 +217,18 @@ export default function Step2Domain({
             disabled={disabled}
             onChange={setRegistrar}
             title="I already have my domain"
-            blurb="Registered with anyone (123-reg, GoDaddy, Namecheap, etc.). I&rsquo;ll show you how to point it to Cloudflare."
+            blurb={
+              <>
+                Registered anywhere — 123-reg, GoDaddy, Namecheap,
+                Fasthosts, Heart Internet, anyone. You don&apos;t need
+                to transfer it. I&apos;ll add it to your Cloudflare
+                account and email you the two nameservers (small
+                strings like <code>aron.ns.cloudflare.com</code>) to
+                paste into your registrar&apos;s control panel.
+                Cloudflare then handles your DNS while your existing
+                registrar keeps handling your annual renewal.
+              </>
+            }
           />
           <RegistrarOption
             value="cloudflare"
@@ -235,8 +238,9 @@ export default function Step2Domain({
             title="I want to register a new domain through Cloudflare"
             blurb={
               <>
-                Cleanest setup, no DNS to point. From your Cloudflare
-                dashboard, go to{" "}
+                Cleanest setup — no nameservers to point because the
+                domain lives on Cloudflare from day one. From your
+                Cloudflare dashboard, go to{" "}
                 <a
                   href={CLOUDFLARE_REGISTRAR_URL}
                   target="_blank"
@@ -246,7 +250,8 @@ export default function Step2Domain({
                   Domain Registration
                 </a>{" "}
                 and search for the name you want. £8–£12/year for most
-                .co.uk and .com names.
+                .co.uk and .com names. Once registered, mark this step
+                done and I&apos;ll deploy your site straight to it.
               </>
             }
           />
@@ -256,29 +261,74 @@ export default function Step2Domain({
             disabled={disabled}
             onChange={setRegistrar}
             title="I&rsquo;ll be registering it elsewhere"
-            blurb="No problem. Once you&rsquo;ve bought it, change its nameservers to Cloudflare&rsquo;s and tick the box below — I&rsquo;ll handle the rest."
+            blurb={
+              <>
+                Buy it at the registrar of your choice (123-reg,
+                GoDaddy, Namecheap, etc.), then come back here and
+                mark this step done. Same as the existing-domain path
+                above — I&apos;ll add the domain to your Cloudflare
+                and email you the nameservers to update at your
+                registrar.
+              </>
+            }
           />
         </fieldset>
 
-        <label className="mt-5 flex items-start gap-3">
-          <input
-            type="checkbox"
-            checked={domainConnected}
-            disabled={disabled}
-            onChange={(e) => setDomainConnected(e.target.checked)}
-            className="mt-1 h-5 w-5 flex-none rounded border-2 border-navy-300 accent-navy-900"
-          />
-          <span className="min-w-0 text-[0.95rem] leading-relaxed text-navy-700">
-            <span className="font-semibold text-navy-900">
-              My domain is registered and connected.
-            </span>
-            <span className="mt-1 block text-xs text-navy-500">
-              Tick this once your domain exists at the registrar of your
-              choice and (if external) its nameservers point to Cloudflare.
-              I&apos;ll see it in your account on my next check.
-            </span>
-          </span>
-        </label>
+        {/* What happens after the customer ticks done — content
+            adapts to the chosen registrar option. */}
+        {registrar && (
+          <div className="mt-5 rounded-2xl border-2 border-navy-100 bg-cream-50 p-5">
+            <p className="text-xs uppercase tracking-wider text-navy-500">
+              What happens after you tick &ldquo;Mark this step done&rdquo;
+            </p>
+            {registrar === "cloudflare" ? (
+              <p className="mt-2 text-[0.95rem] leading-relaxed text-navy-700">
+                Once you&apos;ve completed the Cloudflare registration,
+                I add the domain to your account, set up DNS records
+                for your site, and deploy. No nameserver changes
+                needed from your side — the domain is already on
+                Cloudflare. <strong>Live within an hour.</strong>
+              </p>
+            ) : (
+              <ol className="mt-2 ml-4 list-decimal space-y-1.5 text-[0.95rem] leading-relaxed text-navy-700">
+                <li>I add your domain as a zone in your Cloudflare account.</li>
+                <li>
+                  I email you the two nameserver values Cloudflare
+                  assigned, with a step-by-step for your specific
+                  registrar (123-reg, GoDaddy, etc.).
+                </li>
+                <li>
+                  You log in to your registrar and paste the
+                  nameservers into the &ldquo;custom nameservers&rdquo;
+                  field. Takes about 5 minutes.
+                </li>
+                <li>
+                  Cloudflare propagates the change (24-48 hours,
+                  usually much faster). I&apos;ll email you when it&apos;s
+                  active and your site goes live.
+                </li>
+              </ol>
+            )}
+          </div>
+        )}
+
+        {/* Transfer-vs-nameserver explainer aside. */}
+        <div className="mt-5 rounded-xl bg-white p-5 text-sm leading-relaxed text-navy-600 ring-1 ring-navy-100">
+          <p className="font-semibold text-navy-900">
+            Wait — do I need to transfer my domain to Cloudflare?
+          </p>
+          <p className="mt-2">
+            <strong>No.</strong> A &ldquo;transfer&rdquo; means moving
+            the domain registration itself from one registrar to
+            another — that takes 5-7 days, costs ~£8-12 in transfer
+            fees, and isn&apos;t needed for any of this. We&apos;re
+            doing a <strong>nameserver swap</strong>, which is
+            different: your domain stays at your existing registrar (so
+            renewals carry on as they were), but DNS lookups get
+            answered by Cloudflare instead. Free, fast, reversible
+            with one paste.
+          </p>
+        </div>
       </section>
 
       {/* ---------- B. Resend (conditional) ---------- */}
