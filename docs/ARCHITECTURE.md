@@ -20,6 +20,13 @@ doc:
 If a feature can't be automated end-to-end without Ben touching a
 dashboard, it doesn't ship in Stage 2. Stage 3 may revisit edge cases.
 
+**Day-1 automation is the goal.** The earlier "first 20 clients =
+Ben drafts every customer email" period (Playbook §8) is replaced
+with a template-first / risk-tier / shadow-mode model — see §11.
+Ben never has to draft a routine customer email; he reviews drafts
+only for High-risk tasks and during the shadow runs of new template
+variants.
+
 ## 2. System map (Stage 2 target)
 
 ```
@@ -121,11 +128,15 @@ The precise contract the Hub UI promises:
     Then poll the zone's `status` field every 5 minutes until it
     flips to `active` (typically <2 hours; max 48). Email
     confirmation on activation.
-- Once the zone is active: create the DNS records ModuForge Pages
-  needs (CNAME for `www` → `pandemonium-software-website.pages.dev`,
-  apex A or CNAME-flattening, `_redirect` if customising). Run a
-  resolution check from a dummy DNS-over-HTTPS query before
-  declaring done.
+- Once the zone is active: bind the customer's hostname to their
+  per-customer Worker via `POST /accounts/{customerAccountId}/workers/domains`
+  with `{ hostname: <domain>, service: "mf-<token-prefix>" }`. This
+  single call provisions DNS records AND routes traffic to the
+  Worker. Repeat for `www.<domain>`. Cloudflare auto-provisions
+  TLS certificates (~few minutes); poll
+  `GET /accounts/{id}/workers/domains/{id}` until `status: active`.
+  Verify by hitting `https://<domain>/` (expect HTTP 200). Update
+  Notion: `Site Live At` = now; `Worker Name` = `mf-<token-prefix>`.
 
 **B. Resend (only if Newsletter or Enquiry module bought)**
 - Poll Resend Teams API for pending invitations addressed to
@@ -226,8 +237,9 @@ The final pre-launch step. Three sub-sections in the Hub:
   Worker
 - Email customer with the preview URL; set `data.review.previewUrl`
   in Notion so the Hub renders the iframe
-- Apply each `submitted` edit (operator approves before apply
-  during the first-20-clients period; Cowork applies after that)
+- Apply each `submitted` edit per the §11 risk-tier gate (Low /
+  Medium auto-apply; High routes to Ben via Cowork Drafts; Shadow
+  mode covers the first 10 invocations of any new template variant)
 - On go-live date: production deploy + DNS swap; status flips to
   `Live`
 
@@ -243,12 +255,11 @@ The final pre-launch step. Three sub-sections in the Hub:
 
 ### 4.5 Customer-side notifications
 
-Cowork drafts customer-facing email copy → Ben approves in his email
-client during the first-20-clients period (per Playbook §8) → sends.
-After 20 clients, automation level goes up: status notifications
-("DNS verified", "preview ready") send automatically without Ben
-review. Acceptance / rejection / clarification stay human-reviewed
-forever.
+All customer-facing emails are templated by default — see §11 for
+the cascade. Drafts that need Ben review (High-risk tasks, or
+Shadow-mode runs of new template variants) flow through the Cowork
+Drafts approval inbox at §11. Ben never drafts a routine customer
+email.
 
 ### 4.6 Failure & escalation
 
@@ -297,17 +308,29 @@ yet — captures data only.**
 ### Stage 2C — Cowork Ops automation (NEW MILESTONE)
 
 This is the milestone that delivers the "Ben never touches a
-dashboard" promise. Estimated 16-20 hours. Five commits:
+dashboard" promise. Estimated 16-20 hours. Seven commits:
+- C0: Template engine + golden eval scenarios (synthetic customer
+  cases that gate any template / classifier change). The
+  template-first cascade (template → Haiku classifier → Haiku
+  generator → Sonnet last resort) needs deterministic fixtures so
+  prompt edits don't silently regress. See §11 for the cascade.
 - C1: Ops Worker scaffolding (separate Worker, Cron Trigger, Notion
   poller, audit log table, Exceptions DB schema)
-- C2: Cloudflare automation (membership accept; DNS + Pages project
-  setup for Step 1 and Step 2-website parts)
+- C2: Cloudflare automation (membership accept; DNS + per-customer
+  Worker provisioning + Custom Domain binding for Step 1 and Step
+  2-website parts; per-customer Worker named `mf-<token-prefix>`
+  per §10)
 - C3: Resend automation (Teams accept; domain add; DNS apply via
   Cloudflare; sending key generation; encryption)
 - C4: Cal.com URL capture + GBP URL capture + browser-fallback for
   GBP (`claude-in-chrome` if needed)
-- C5: Customer notification email pipeline (drafts → Ben approves
-  during first-20-clients period → sends automatically thereafter)
+- C5: Customer notification email pipeline (template-first cascade
+  per §11; auto-send for Low/Medium tiers; Cowork Drafts approval
+  flow for High-tier and Shadow-mode runs)
+- C6: Cowork Drafts approval pipeline (Drafts DB +
+  `/api/drafts/[id]` HMAC-signed approve / intervene routes +
+  `/admin/drafts/[id]` editor page + email template with the two
+  inline action buttons). Full spec in §11.
 
 ### Stage 2D — Dashboards (PARTIALLY SHIPPED)
 
@@ -552,16 +575,16 @@ record (status flipped); customer email; audit log entry.
 - Stripe payment status (only mentioned if there's a problem)
 **Steps:**
 1. Pull metrics for the customer's date range
-2. Cowork drafts a 1-page email in plain English with:
-   - Three headline numbers (visits, enquiries, bookings)
-   - One thing that improved
-   - One thing to keep an eye on
-   - Any actions Cowork took during the month (security patches,
-     dependency updates) — completes the "you're being looked
-     after" loop
-3. Ben reviews and sends (during first-20-clients period)
-4. After 20 clients: Cowork sends without review unless the
-   classifier flags an anomaly worth Ben's eyes
+2. Render the report from a template: three headline numbers
+   (visits, enquiries, bookings); month-over-month delta; list of
+   Cowork actions taken during the month (security patches,
+   dependency updates).
+3. Risk tier: Low (template-only, auto-send). Sends without Ben
+   review.
+
+Stage 3 may add an LLM-generated "anything noteworthy" closing
+line; for day 1 the template alone is enough.
+
 **Outputs:** customer email; Notion archive of the report (PDF + raw
 data); audit log.
 **Failure mode:** missing data sources (e.g. Cloudflare Analytics
@@ -823,11 +846,14 @@ A few non-negotiables for Cowork, baked into prompts and code:
   Cal.com only while their subscription is active. Cancellation
   flow §7.5 is the only path that removes me — never any other
   way.
-- **Every customer-facing email goes through draft-then-send during
-  the first 20 clients.** After that, *acceptance, rejection,
-  clarification and quote* emails stay human-reviewed forever; only
-  status updates ("DNS verified", "preview ready", "report ready")
-  send automatically.
+- **Risk-tier gating governs every customer email.** Low-tier
+  (status updates, factual confirmations) auto-send via templates
+  only — no LLM in the path. Medium-tier (template-per-class,
+  classifier picks the class) auto-send once classifier confidence
+  ≥ threshold; first 10 invocations of any new template variant or
+  classifier class route to Ben via Shadow mode. High-tier
+  (refunds, complaints, legal-sounding language, scope quotes)
+  always route to Ben via §11. See §6 for full per-task contracts.
 - **Idempotency on everything.** Every Cowork action checks current
   state of the target service before acting. Re-running a step
   must be safe.
@@ -1158,7 +1184,7 @@ available for emergencies:
 
 | Customers | Ben's ops time / day | What changes |
 |---|---|---|
-| 1 – 20 | ~30 min | Draft-then-send on every customer email; manual cancellation flow; Ben reads every audit entry |
+| 1 – 20 | ~30 min | All customer emails templated; only High-risk drafts route to Ben for review via §11; new template variants run Shadow mode for the first 10 invocations |
 | 20 – 100 | ~30 – 45 min | Auto-send status updates; only L1 / L3 / quote emails reviewed; bulk security patches via `/admin`; daily digest for Tier 2 |
 | 100 – 500 | ~45 – 60 min | Days are pure escalation review; the dashboard *is* the day's work |
 | 500 – 1000 | ~60 – 90 min | Need Cowork-of-Cowork (a pre-triage layer that classifies and pre-drafts responses to escalations); `/admin` needs saved searches and SLA timers |
@@ -1184,8 +1210,8 @@ are part of Ben's working day:
 - Log into a customer's Cloudflare / Resend / Cal.com / GBP for
   routine work (only Tier 3 emergencies, via the deep-links in §8.4)
 - Click "deploy" for a content change (Cowork does it after approval)
-- Manually generate a performance report (Cowork drafts; Ben
-  approves and sends during pre-20-clients period; auto-sends after)
+- Manually generate a performance report (template-only render;
+  Low risk tier; auto-sends per §6.3)
 - Accept a SaaS invitation manually (Cowork polls and accepts)
 - Track which customer needs what (Notion + Cowork; never a
   spreadsheet or todo list)
@@ -1194,11 +1220,16 @@ are part of Ben's working day:
 - Apply security patches (Cowork does on the weekly audit cron)
 - Renew TLS certificates (Cloudflare auto-renews)
 - Watch a build complete (Cowork waits + emails when done)
+- **Draft routine customer emails** (initial reply, status updates,
+  monthly reports, change-request acknowledgements,
+  onboarding-step confirmations) — all templated; see §11
 
 What Ben DOES do (the irreducible human work):
 
 - Maintain the Playbook (the rules Cowork follows)
-- Approve drafts during the pre-20-clients period
+- Review High-risk drafts (refunds, complaints, legal-sounding
+  language, scope quotes) and Shadow-mode drafts (first 10 of each
+  new template variant) via the Cowork Drafts approval inbox — see §11
 - Make policy decisions (set new prices, add modules, change scope rules)
 - Handle Tier 3 incidents
 - Make business decisions on edge cases Cowork escalates
@@ -1213,9 +1244,12 @@ What Ben DOES do (the irreducible human work):
   Stage 2C C3.
 - **Cron interval** — 60s feels right; verify by simulating 10
   customers in flight at once.
-- **Per-customer Cloudflare project naming** — proposal:
-  `mf-<prospect-token-prefix>` (e.g. `mf-d2f42fb6`). Globally unique
-  across the account. Confirm in Stage 2C C2.
+- **Per-customer Cloudflare project naming — DECIDED:**
+  `mf-<token-prefix>` (8 chars from `Phase 1 Unique Token`, e.g.
+  `mf-d2f42fb6`). Globally unique inside the customer's Cloudflare
+  account, deterministic from the prospect record so reruns are
+  idempotent. See §4.3 Step 2 for binding to hostnames via the
+  Cloudflare Workers Custom Domain API.
 - **Build pipeline parametrization** — currently the worker name is
   hardcoded (`pandemonium-software-website`). Stage 2C C5 needs to
   generalise this to deploy per-customer Workers with their data.
@@ -1223,6 +1257,146 @@ What Ben DOES do (the irreducible human work):
 - **GBP browser fallback** — viable using `claude-in-chrome` MCP, but
   fragile (Google UI changes). Defer until first real customer needs
   it; URL-only suffices for many cases.
+
+---
+
+## 11. Cowork Drafts approval flow
+
+Customer-facing emails that need Ben review — High-risk drafts and
+Shadow-mode runs of new template variants — flow through this
+approval inbox rather than auto-sending. Two surfaces: an email to
+Ben's gmail with two action buttons, and an operator webpage at
+`/admin/drafts/[id]` for the Intervene path.
+
+### 11.1 The cascade (template → classifier → generator)
+
+Every customer-facing email runs through the cascade, in order:
+
+1. **Template** (90%+ of cases). Deterministic interpolation of a
+   per-task template with values pulled from Notion. No LLM in the
+   path. Examples: "DNS verified", "preview ready", "monthly report",
+   change-request acknowledgement, onboarding-step confirmation.
+2. **Haiku classifier** (free-text customer input → 1 of N defined
+   classes). Picks the matching template. Example: customer change
+   request "please change my phone to 01234 567 890" → classifier
+   returns class `content / phone-update / in-budget` → template
+   `change-confirmed-content` renders the reply.
+3. **Haiku generator** (fallback when no template matches the
+   class). Generates the reply from a system prompt that names the
+   class. Stays narrow.
+4. **Sonnet** as a never-used last resort. Defaults to routing to
+   Ben via §11.4 instead.
+
+Estimated cost: ~£1/mo at 100 customers, ~£10/mo at 1000.
+Templates dominate; LLM hits are the long tail. Golden eval
+scenarios (Stage 2C C0) gate any prompt or template change so a
+silent regression can't ship.
+
+### 11.2 Risk-tier gating
+
+Every draft is scored Low / Medium / High by the route that produces
+it. The `needsBenReview` helper (§11.5) decides whether it
+auto-sends or routes through the approval inbox.
+
+| Tier | Examples | Behaviour |
+|---|---|---|
+| **Low** | Status updates ("DNS verified", "preview ready"), factual confirmations, monthly reports | Template-only, auto-send. No LLM in the path. |
+| **Medium** | Acceptance results, change-request replies | Template-per-class; classifier picks the class. Auto-send once classifier confidence ≥ threshold. First 10 invocations of any new template variant or classifier class run in Shadow mode (§11.6). |
+| **High** | Refunds, complaints, legal-sounding language, scope quotes | Always route to Ben via the Cowork Drafts approval inbox. No auto-send. |
+
+### 11.3 Notion DB: "Cowork Drafts"
+
+| Field | Type | Purpose |
+|---|---|---|
+| ID (Title) | text | UUID; the draft token in the URL |
+| Prospect | relation → Prospects | The customer this is about |
+| Subject | text | Email subject line |
+| Body | text | Email body (plain text) |
+| Original message | text | Customer's inbound text (only for change requests) |
+| Classification | text | Cowork's classification (e.g. `content / in-budget`) |
+| Confidence | number | Classifier confidence 0–1 |
+| Risk tier | select | low / medium / high |
+| Status | select | pending / approved-sent / intervened-sent / intervened-cancelled |
+| Created at | date | |
+| Resolved at | date | |
+| Resolved by | text | "ben via email" / "ben via /admin (edited)" / "auto-promoted from shadow" |
+
+### 11.4 Email template
+
+Sent via Resend FROM `ModuForge Notifications <onboarding@resend.dev>`
+TO `pandamoniumsoftwareltd@gmail.com`, with `replyTo` of `OPS_EMAIL`.
+
+Subject: `[Approve] Reply to {customer.name} re: {short summary}`
+
+Body contains: customer's original message (if applicable), Cowork's
+classification + confidence + risk tier, the proposed reply text,
+and two HMAC-signed links — Approve and Intervene. Plain-text
+fallback works on every client; HTML version styles the two as
+inline buttons.
+
+### 11.5 API route: `/api/drafts/[id]`
+
+Method: GET (so a click in any client works).
+Query: `act` (approve | intervene), `sig` (HMAC of `<id>:<act>`
+using `DRAFT_APPROVAL_SECRET`).
+
+- Validate HMAC. Fail closed (403) on signature mismatch.
+- Look up draft by id; 404 if not found.
+- Already-resolved drafts → 409 with a "this draft was already
+  acted on" page.
+- `act=approve`: send the draft body via Resend to the customer
+  (replyTo = OPS_EMAIL); update Notion (`Status: approved-sent`,
+  `Resolved at: now`, `Resolved by: ben via email`); show success
+  page in browser.
+- `act=intervene`: redirect (302) to `/admin/drafts/[id]?act=intervene`
+  (Basic-Auth gated by the existing `/admin/*` middleware).
+
+### 11.6 Operator webpage: `/admin/drafts/[id]`
+
+Server component, Basic-Auth gated. Shows:
+- Customer's original message + Cowork's classification + confidence
+- Full Notion record for context
+- Editable textarea pre-filled with the draft body
+- Two buttons:
+  - **Edit and send** → POST `/api/admin/drafts/[id]/send` with
+    edited body; Resend sends; Notion → `intervened-sent`,
+    `Resolved by: ben via /admin (edited)`
+  - **Cancel draft** → POST `/api/admin/drafts/[id]/cancel` with
+    optional `reason`; Notion → `intervened-cancelled`;
+    classifier+template combination flagged in audit log
+
+### 11.7 Risk-tier and shadow-mode gate
+
+Single helper that decides whether a draft routes to the inbox:
+
+```typescript
+function needsBenReview(draft: Draft, ctx: CustomerCtx): boolean {
+  if (draft.riskTier === "high") return true;
+  if (ctx.coworkPaused) return true;             // §9.5 kill switch
+  if (draft.shadowRunsRemaining > 0) return true; // first 10 of new variant
+  return false;                                   // Low/Medium auto-send
+}
+```
+
+`shadowRunsRemaining` is decremented on each Shadow-mode draft;
+once it reaches 0 the template variant auto-promotes. Counter
+lives in a small Notion DB ("Cowork Templates") keyed by template
+name.
+
+### 11.8 Per-customer kill switch
+
+A `Cowork Paused` checkbox on the prospect's Notion record halts
+all automation on that customer. The `needsBenReview` helper
+returns true unconditionally when it's set, so every draft routes
+through the approval inbox. Health checks keep running; only the
+mutating actions and auto-sent emails pause. Audit log records the
+pause with timestamp + the operator who set it.
+
+### 11.9 Secrets
+
+- `DRAFT_APPROVAL_SECRET` — HMAC secret. Generate with
+  `openssl rand -hex 32`. Stored as a Cloudflare Worker secret AND
+  in `.dev.vars` for local development.
 
 ---
 
