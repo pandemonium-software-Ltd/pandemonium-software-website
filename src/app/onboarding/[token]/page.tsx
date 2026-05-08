@@ -16,6 +16,7 @@ import { getServerEnv } from "@/lib/env";
 import {
   deriveStepList,
   getDoneFlags,
+  isOnboardingMutable,
   isOnboardingUnlocked,
   onboardingDataSchema,
   pickInitialStep,
@@ -97,7 +98,7 @@ export default async function OnboardingPage({
       doneFlags={doneFlags}
       initialStepId={initialStepId}
       initialData={data}
-      hubComplete={prospect.status === "Onboarding Complete"}
+      hubLocked={!isOnboardingMutable(prospect.status)}
       benEmail={benEmail}
       r2PublicUrlBase={r2PublicUrlBase}
     />

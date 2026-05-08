@@ -664,6 +664,43 @@ then patches Notion to clear the logo or filter the photos array.
 
 ---
 
+### 6.10 Hub mutation gate (post sign-off lockdown)
+
+Two distinct status gates govern the Onboarding Hub:
+
+- **View gate** (`isOnboardingUnlocked`): true for any post-payment
+  status — Paid, Onboarding Started, Onboarding Complete, Build
+  Started, Live. Pre-payment customers see the "your account
+  isn't active yet" page; everyone else can VIEW the Hub.
+- **Mutation gate** (`isOnboardingMutable`): true only for **Paid**
+  and **Onboarding Started**. Once the customer ticks Step 5's
+  sign-off and status flips to **Onboarding Complete**, the Hub
+  becomes a read-only archive — no further changes via Hub
+  endpoints, all step inputs disabled, Save / Mark Done / Update
+  buttons hidden.
+
+**Three layers of enforcement:**
+
+| Layer | Behaviour after sign-off |
+|---|---|
+| API routes (`/api/onboarding`, `/api/onboarding/upload`, `/api/onboarding/review-edit`) | Each guards on `isOnboardingMutable(prospect.status)`. A POST/PATCH/DELETE on a locked prospect returns 403 with a message redirecting to the customer dashboard's "Need a change?" form. |
+| `OnboardingHub` client component | Computes `hubLocked` from the server prop; propagates it as `readOnly` to every step subcomponent; shows a green "Hub locked" banner with a button to `/account/[token]`. Banner copy explicitly tells the customer the Hub is read-only and points at the dashboard for any further change requests. |
+| Each step subcomponent | `disabled = readOnly` on every input; the `done` state's "Update saved data" button is hidden when `readOnly` is true; Save / Mark Done buttons same. |
+
+**Why the strict gate matters:** without it, a customer could
+submit a 4th review edit by re-marking Step 5 (which would
+also re-fire the customer-completion email), upload extra
+photos, or change their domain after the build pipeline has
+already used the captured value. Locking on `isOnboardingMutable`
+makes the customer's sign-off the irrevocable handoff to Cowork.
+
+The lock is unidirectional in the UI: once `locked` flips true
+mid-session, only a status change in Notion + a fresh page load
+can un-lock. Operator can drop a prospect back to "Onboarding
+Started" via Notion in the rare case a customer needs to amend
+something post-sign-off pre-build, but they shouldn't have to —
+that's what the change-request flow is for.
+
 ## 7. Operational guardrails
 
 A few non-negotiables for Cowork, baked into prompts and code:

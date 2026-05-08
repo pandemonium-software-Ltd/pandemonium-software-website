@@ -23,6 +23,7 @@ import {
   updateProspectOnboarding,
 } from "@/lib/notion-prospects";
 import {
+  isOnboardingMutable,
   isOnboardingUnlocked,
   MAX_REVIEW_EDITS,
   mergeStepData,
@@ -77,6 +78,15 @@ export async function POST(request: Request) {
   if (!isOnboardingUnlocked(prospect.status)) {
     return NextResponse.json(
       { error: "Your onboarding link isn't active yet." },
+      { status: 403 },
+    );
+  }
+  if (!isOnboardingMutable(prospect.status)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your onboarding is signed off — pre-launch revisions are closed. For any change requests, use the 'Need a change?' form on your account dashboard.",
+      },
       { status: 403 },
     );
   }

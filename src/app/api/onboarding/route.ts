@@ -27,6 +27,7 @@ import {
   deriveStepList,
   getDoneFlags,
   isHubComplete,
+  isOnboardingMutable,
   isOnboardingUnlocked,
   mergeStepData,
   onboardingDataSchema,
@@ -119,12 +120,23 @@ export async function POST(request: Request) {
     );
   }
 
-  // Status gate.
+  // View gate: pre-payment prospects can't reach the API at all.
   if (!isOnboardingUnlocked(prospect.status)) {
     return NextResponse.json(
       {
         error:
           "Your onboarding link isn't active yet — payment hasn't been recorded. If you've just paid, give it a minute and refresh.",
+      },
+      { status: 403 },
+    );
+  }
+  // Mutation gate: post-sign-off the Hub is read-only. Customer goes
+  // through the account dashboard for any further changes.
+  if (!isOnboardingMutable(prospect.status)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your onboarding is signed off — the Hub is now read-only. For any change requests, use the 'Need a change?' form on your account dashboard.",
       },
       { status: 403 },
     );

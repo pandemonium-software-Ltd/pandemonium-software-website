@@ -40,7 +40,12 @@ export type OnboardingHubProps = {
   doneFlags: Record<StepId, boolean>;
   initialStepId: StepId;
   initialData: OnboardingData;
-  hubComplete: boolean;
+  /** True when the customer's prospect status is past the mutable
+   *  range (Paid / Onboarding Started). Once locked, the Hub is a
+   *  read-only archive — banner shown, all step inputs disabled,
+   *  Save / Mark Done / Update buttons hidden. Customer is pointed
+   *  at /account/[token] for any further changes. */
+  hubLocked: boolean;
   /** Ops email customers invite as a Cloudflare / Resend team member. */
   benEmail: string;
   /** Public URL base for R2 brand-asset thumbnails. Empty string =
@@ -62,7 +67,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
     steps,
     initialStepId,
     initialData,
-    hubComplete,
+    hubLocked: initialHubLocked,
     benEmail,
     r2PublicUrlBase,
   } = props;
@@ -73,7 +78,13 @@ export default function OnboardingHub(props: OnboardingHubProps) {
     props.doneFlags,
   );
   const [saveState, setSaveState] = useState<SaveState>({ kind: "idle" });
-  const [hubDone, setHubDone] = useState<boolean>(hubComplete);
+  // `locked` is the Hub-level read-only state. Initial value comes
+  // from the server (true if status is past Onboarding Started).
+  // Flipped true mid-session when an API call returns
+  // hubComplete:true (the customer just signed off Step 5). Never
+  // flipped back — once locked, only a status change in Notion
+  // un-locks via a fresh page load.
+  const [locked, setLocked] = useState<boolean>(initialHubLocked);
 
   const applicable = steps.filter((s) => s.applicable);
   const currentStep = steps.find((s) => s.id === currentStepId);
@@ -112,7 +123,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
         setDoneFlags((prev) => ({ ...prev, [stepId]: true }));
       }
       if (json.hubComplete) {
-        setHubDone(true);
+        setLocked(true);
       }
       setSaveState({ kind: "saved", at: Date.now() });
       return true;
@@ -146,15 +157,16 @@ export default function OnboardingHub(props: OnboardingHubProps) {
             {businessName ? ` Setting up ${businessName}.` : ""}
           </p>
 
-          {hubDone && (
+          {locked && (
             <div
               role="status"
               className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-green-600 bg-green-50 p-5 text-sm text-green-800"
             >
               <div className="min-w-0">
-                <strong>All set.</strong> Your handover checklist is
-                complete. I&apos;ll start your build and email you when
-                the preview is ready.
+                <strong>Hub locked.</strong> You&apos;ve signed off and
+                everything below is read-only. For any change
+                requests from now on, use the &ldquo;Need a
+                change?&rdquo; form on your account dashboard.
               </div>
               <a
                 href={`/account/${token}`}
@@ -227,7 +239,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                   benEmail={benEmail}
                   r2PublicUrlBase={r2PublicUrlBase}
                   modules={props.modules}
-                  readOnly={hubDone}
+                  readOnly={locked}
                   savePartial={savePartial}
                   markDone={markDone}
                 />

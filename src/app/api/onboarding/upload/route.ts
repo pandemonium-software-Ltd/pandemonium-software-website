@@ -28,6 +28,7 @@ import {
   updateProspectOnboarding,
 } from "@/lib/notion-prospects";
 import {
+  isOnboardingMutable,
   isOnboardingUnlocked,
   mergeStepData,
   onboardingDataSchema,
@@ -146,6 +147,15 @@ export async function POST(request: Request) {
   if (!isOnboardingUnlocked(prospect.status)) {
     return NextResponse.json(
       { error: "Your onboarding link isn't active yet." },
+      { status: 403 },
+    );
+  }
+  if (!isOnboardingMutable(prospect.status)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your onboarding is signed off — the Hub is now read-only. For any change requests (including new photos), use the 'Need a change?' form on your account dashboard.",
+      },
       { status: 403 },
     );
   }
@@ -297,6 +307,15 @@ export async function DELETE(request: Request) {
   if (!isOnboardingUnlocked(prospect.status)) {
     return NextResponse.json(
       { error: "Your onboarding link isn't active yet." },
+      { status: 403 },
+    );
+  }
+  if (!isOnboardingMutable(prospect.status)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your onboarding is signed off — the Hub is now read-only. For any change requests (including new photos), use the 'Need a change?' form on your account dashboard.",
+      },
       { status: 403 },
     );
   }

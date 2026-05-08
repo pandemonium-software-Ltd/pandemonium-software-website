@@ -69,9 +69,36 @@ const ONBOARDING_UNLOCKED_STATUSES = new Set<ProspectStatus>([
  * True when the prospect has paid (or is otherwise past payment) and
  * is allowed to access /onboarding/[token]. Pre-payment prospects
  * see a "your link isn't active yet" page instead of the Hub.
+ *
+ * Note: this is the VIEW gate. For the MUTATION gate, see
+ * `isOnboardingMutable` — once the customer signs off Step 5 the
+ * Hub becomes a read-only archive even though it stays viewable.
  */
 export function isOnboardingUnlocked(status: string): boolean {
   return ONBOARDING_UNLOCKED_STATUSES.has(status as ProspectStatus);
+}
+
+// Statuses where the customer can still mutate Hub data (save
+// partials, mark steps done, upload assets, submit review edits).
+// Once the customer signs off Step 5 (status flips to Onboarding
+// Complete), the Hub becomes a read-only archive — any further
+// changes go through the customer dashboard's "Need a change?"
+// form and the post-launch monthly content allowance.
+const ONBOARDING_MUTABLE_STATUSES = new Set<ProspectStatus>([
+  "Paid",
+  "Onboarding Started",
+]);
+
+/**
+ * True when the customer is allowed to mutate Hub data. False once
+ * they've signed off (Onboarding Complete / Build Started / Live /
+ * Cancelled). All Hub-mutating API routes guard on this; the UI
+ * propagates the inverse (`hubLocked`) into every step's `readOnly`
+ * prop so inputs are disabled and Save / Mark Done / Update buttons
+ * are hidden once the work is locked in.
+ */
+export function isOnboardingMutable(status: string): boolean {
+  return ONBOARDING_MUTABLE_STATUSES.has(status as ProspectStatus);
 }
 
 // ---------- Step list derivation ----------
