@@ -268,10 +268,17 @@ Stage 2C as Cowork's audit log and approval queue come online.
 request form, `/admin/[token]` operator detail page, `/admin` link
 to detail.
 
-**D2 (TODO):** Inline Notion field editing on `/admin/[token]`.
-Buttons to mark change requests resolved / add resolution notes /
-re-classify. Customer-side: cancel-with-notice flow that triggers
-§6.5 cancellation handover.
+**D1.5 (shipped):** RAG traffic-light status pills (red / amber /
+green / grey) on both dashboards; inline `ChangeRequestEditor` on
+`/admin/[token]` for status updates with required reply on
+resolved/rejected; PATCH `/api/admin/change-request` endpoint
+(Basic Auth gated); customer email on first transition into a
+terminal state with the operator's reply verbatim.
+
+**D2 (TODO):** Inline Notion field editing for the rest of the
+operator detail page (notes, fees, modules — currently read-only).
+Customer-side: cancel-with-notice flow that triggers §6.5
+cancellation handover.
 
 **D3 (TODO, depends on Stage 2C):** Audit-log feed on
 `/admin/[token]` with the last 30 Cowork actions. Approval queue
@@ -648,6 +655,8 @@ cancelled) a clear banner explaining what happened.
 
 ### 8.3 Change request data flow
 
+**Inbound (customer → ModuForge):**
+
 ```
 Customer types message → click Submit
         │
@@ -676,10 +685,62 @@ Return { success: true, request } to client
 Client merges into local state (no refetch needed)
 ```
 
+**Outbound (ModuForge → customer, on resolution):**
+
+```
+Operator (or Cowork in Stage 2C) updates request
+   → status: "resolved" / "rejected"
+   → reply:  customer-visible text
+        │
+        ▼
+PATCH /api/admin/change-request   { token, changeRequestId, status, reply }
+   (auth: Basic Auth via /api/admin/* matcher in middleware.ts)
+        │
+        │  validates that resolved/rejected requires a reply
+        ▼
+updateChangeRequest(prospect.pageId, changeRequestId, { status, reply })
+   → reads inbox JSON, finds entry by id
+   → applies patch
+   → if first transition into a terminal state, stamps resolvedAt
+   → writes back
+   → returns { updated, transitionedToTerminal }
+        │
+        ▼
+If transitionedToTerminal && reply:
+   sendCustomerNotification → customer's email
+     subject: "Your change request — resolved" / "— closed"
+     body:    greeting + reply (verbatim) + original message + dashboard link
+        │
+        ▼
+Return { success, request, customerNotified, emailWarning } to client
+        │
+        ▼
+Operator UI updates locally; customer sees the reply on their
+dashboard immediately if they refresh, or the email if they don't.
+```
+
+### 8.4 RAG status
+
+Both dashboards render the same `<RAGStatus>` pill so the same
+state looks identical to customer and operator:
+
+| Status | Colour | Meaning |
+|---|---|---|
+| `pending` | Red dot, red pill | Received, not yet started |
+| `in-progress` | Amber dot, orange pill | Being worked on |
+| `resolved` | Green dot, green pill | Done; customer was emailed verbatim with the reply |
+| `rejected` | Grey dot, navy pill | Closed without action; reply explains why |
+
+Re-saving an already-terminal request (e.g. fixing a typo in the
+reply) does **not** re-send the email — the
+`transitionedToTerminal` flag in `updateChangeRequest` is the gate.
+Editing a still-pending request is free.
+
 The `Change Requests Inbox` rich_text field is a JSON array of
 ChangeRequest records — see `src/lib/notion-prospects.ts` for the
 type. Stage 2C C1 graduates this into a dedicated `Change
-Requests` Notion DB once Cowork starts processing them at scale.
+Requests` Notion DB once Cowork starts processing them at scale,
+adding classifier outputs and audit trail.
 
 ### 8.4 What this dashboard intentionally doesn't do (yet)
 

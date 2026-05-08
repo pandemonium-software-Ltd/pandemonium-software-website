@@ -15,6 +15,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getProspectByToken } from "@/lib/notion-prospects";
+import ChangeRequestEditor from "@/components/admin/ChangeRequestEditor";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -316,39 +317,33 @@ export default async function AdminDetailPage({
             No change requests yet.
           </p>
         ) : (
-          <ul className="mt-4 space-y-3">
+          <ul className="mt-4 space-y-4">
             {prospect.changeRequests.map((r) => (
               <li
                 key={r.id}
                 className="rounded-xl border border-navy-100 bg-white p-5 shadow-card"
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between gap-3">
                   <div className="text-xs text-navy-500">
                     <span className="font-semibold text-navy-900">
-                      {formatDateTime(r.submittedAt)}
+                      Submitted {formatDateTime(r.submittedAt)}
                     </span>
                     <span className="ml-2 font-mono text-[11px]">
                       {r.id.slice(0, 8)}
                     </span>
                   </div>
-                  <RequestStatusBadge status={r.status} />
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-navy-800">
                   {r.message}
                 </p>
-                {r.resolutionNote && (
-                  <p className="mt-3 rounded-lg bg-cream-50 p-3 text-xs text-navy-600">
-                    <strong>Resolution note:</strong> {r.resolutionNote}
-                  </p>
-                )}
+                <ChangeRequestEditor token={token} request={r} />
               </li>
             ))}
           </ul>
         )}
         <p className="mt-4 text-xs text-navy-500">
-          Mark requests resolved or add resolution notes via Notion for
-          now. Inline controls land alongside Stage 2C Cowork
-          classification.
+          Resolving or rejecting a request emails the customer with
+          your reply verbatim. They also see it on their dashboard.
         </p>
       </div>
 
@@ -435,32 +430,6 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className="inline-block rounded-full bg-navy-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-navy-800">
       {status}
-    </span>
-  );
-}
-
-function RequestStatusBadge({
-  status,
-}: {
-  status: "pending" | "in-progress" | "resolved" | "rejected";
-}) {
-  const tone =
-    status === "resolved"
-      ? "bg-green-100 text-green-800"
-      : status === "in-progress"
-        ? "bg-orange-100 text-orange-800"
-        : status === "rejected"
-          ? "bg-navy-100 text-navy-700"
-          : "bg-blue-100 text-blue-800";
-  const label =
-    status === "in-progress"
-      ? "In progress"
-      : status.charAt(0).toUpperCase() + status.slice(1);
-  return (
-    <span
-      className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${tone}`}
-    >
-      {label}
     </span>
   );
 }

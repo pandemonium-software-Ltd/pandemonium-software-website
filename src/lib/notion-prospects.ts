@@ -112,16 +112,31 @@ export type ProspectRecord = {
  * /account/[token] dashboard's "Need a change?" form. Cowork will
  * pick these up in Stage 2C, classify (content / module / out-of-
  * scope), draft a reply, and forward to Ben for approval. Until
- * then, Ben sees them in /admin/[token] and processes manually.
+ * then, Ben handles them manually from /admin/[token].
+ *
+ * Status is the RAG signal surfaced on both dashboards:
+ *   pending   → Red    (received, not yet started)
+ *   in-progress → Amber (being worked on)
+ *   resolved  → Green  (done; customer was emailed)
+ *   rejected  → Grey   (closed without action; reply explains why)
  */
 export type ChangeRequest = {
   id: string; // UUID
   submittedAt: string; // ISO-8601
   message: string; // raw customer text
   status: "pending" | "in-progress" | "resolved" | "rejected";
+  /** ISO-8601, set automatically when status flips to resolved/rejected. */
   resolvedAt?: string;
-  /** Internal note from Ben/Cowork. Not surfaced to the customer. */
-  resolutionNote?: string;
+  /**
+   * Reply shown to the customer on /account/[token] alongside the
+   * resolved/rejected status, and included verbatim in the
+   * "your change is live" email Cowork sends. Examples:
+   *   "Done — your phone number is updated. Refresh your site to
+   *   see it live."
+   *   "I've quoted this separately because it's bigger than the
+   *   30-min monthly allowance — see my email."
+   */
+  reply?: string;
 };
 
 // --- Property helpers ---
@@ -411,13 +426,25 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     try {
       const parsed = JSON.parse(inboxRaw);
       if (Array.isArray(parsed)) {
-        changeRequests = parsed.filter(
-          (entry): entry is ChangeRequest =>
-            entry &&
-            typeof entry === "object" &&
-            typeof entry.id === "string" &&
-            typeof entry.message === "string",
-        );
+        changeRequests = parsed
+          .filter(
+            (entry): entry is ChangeRequest =>
+              entry &&
+              typeof entry === "object" &&
+              typeof entry.id === "string" &&
+              typeof entry.message === "string",
+          )
+          .map((entry) => {
+            // Backwards compat: if old records have `resolutionNote`
+            // and no `reply`, surface the note as the customer reply.
+            const legacy = (entry as ChangeRequest & {
+              resolutionNote?: string;
+            }).resolutionNote;
+            if (!entry.reply && legacy) {
+              return { ...entry, reply: legacy };
+            }
+            return entry;
+          });
       }
     } catch {
       // ignore malformed
@@ -513,8 +540,7 @@ export async function appendChangeRequest(
 
 /**
  * Replace the entire inbox in one write. Used by the operator
- * dashboard when Ben marks a request resolved or edits the
- * resolution note.
+ * dashboard when Ben marks a request resolved or edits the reply.
  */
 export async function replaceChangeRequests(
   pageId: string,
@@ -528,6 +554,84 @@ export async function replaceChangeRequests(
       },
     },
   });
+}
+
+/**
+ * Patch one change request's status and/or reply. Read-modify-write
+ * on the inbox JSON array. Returns the updated request, plus a
+ * `transitionedToTerminal` flag so callers can fire customer-facing
+ * notifications when a request moves to a final state (resolved or
+ * rejected) for the first time.
+ *
+ * Idempotent: re-running with the same patch is a no-op for status
+ * (because the comparison is "did status just become terminal?")
+ * but will overwrite the reply.
+ */
+export async function updateChangeRequest(
+  pageId: string,
+  changeRequestId: string,
+  patch: { status?: ChangeRequest["status"]; reply?: string },
+): Promise<{
+  updated: ChangeRequest;
+  transitionedToTerminal: boolean;
+}> {
+  // Read current inbox.
+  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
+  const props = page.properties as Record<string, unknown>;
+  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
+    ?.rich_text;
+  let current: ChangeRequest[] = [];
+  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
+    const text = rawTextArr
+      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+      .join("");
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) current = parsed;
+      } catch {
+        // ignore malformed; treat as empty
+      }
+    }
+  }
+
+  const idx = current.findIndex((r) => r.id === changeRequestId);
+  if (idx < 0) {
+    throw new Error(`Change request ${changeRequestId} not found.`);
+  }
+
+  const previous = current[idx];
+  const wasTerminal =
+    previous.status === "resolved" || previous.status === "rejected";
+
+  const next: ChangeRequest = {
+    ...previous,
+    ...(patch.status !== undefined ? { status: patch.status } : {}),
+    ...(patch.reply !== undefined ? { reply: patch.reply } : {}),
+  };
+
+  const isTerminal =
+    next.status === "resolved" || next.status === "rejected";
+
+  // Stamp resolvedAt the first time we cross into a terminal state.
+  if (isTerminal && !wasTerminal) {
+    next.resolvedAt = new Date().toISOString();
+  }
+
+  current[idx] = next;
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Change Requests Inbox": rt(JSON.stringify(current)),
+      },
+    },
+  });
+
+  return {
+    updated: next,
+    transitionedToTerminal: isTerminal && !wasTerminal,
+  };
 }
 
 // --- Update Onboarding (partial saves + per-step done flag + status flips) ---

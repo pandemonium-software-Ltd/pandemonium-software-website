@@ -175,3 +175,69 @@ export function buildPhase3Notification(
       `— Cowork`,
   };
 }
+
+// ---------- Customer-facing notifications ----------
+
+/**
+ * Send an email DIRECTLY to the customer (not Ben). Used for
+ * change-request resolution alerts and (later) DNS-verified /
+ * preview-ready / report-ready notifications. Reply-to is the
+ * ops gmail so customer replies still funnel into Ben's inbox.
+ */
+export async function sendCustomerNotification(args: {
+  toEmail: string;
+  toName: string;
+  subject: string;
+  body: string;
+}): Promise<string | null> {
+  try {
+    const resend = getResend();
+    const { error } = await resend.emails.send({
+      from: FROM_INTERNAL, // Stage 3 swaps to notifications@moduforge.co.uk
+      to: `${args.toName} <${args.toEmail}>`,
+      replyTo: OPS_EMAIL,
+      subject: args.subject,
+      text: args.body,
+    });
+    if (error) {
+      console.error("[email] customer notification error:", error);
+      return error.message ?? "Unknown Resend error";
+    }
+    return null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[email] Unexpected customer notification error:", msg);
+    return msg;
+  }
+}
+
+/**
+ * Build the email body the customer receives when their change
+ * request flips to resolved (or rejected). The reply text is
+ * passed through verbatim — no transformation, so what the operator
+ * (or Cowork) wrote in the dashboard is exactly what the customer
+ * sees in their inbox.
+ */
+export function buildChangeRequestResolvedEmail(args: {
+  customerName: string;
+  businessName: string;
+  originalMessage: string;
+  reply: string;
+  status: "resolved" | "rejected";
+  accountUrl: string;
+}): { subject: string; body: string } {
+  const greeting = (args.customerName.split(/\s+/)[0] ?? "there").trim();
+  const verb = args.status === "resolved" ? "resolved" : "closed";
+  return {
+    subject: `Your change request — ${verb}`,
+    body:
+      `Hi ${greeting},\n\n` +
+      `${args.reply}\n\n` +
+      `--- Your original request ---\n${args.originalMessage}\n--- End ---\n\n` +
+      `You can see this and any future requests on your account dashboard:\n` +
+      `${args.accountUrl}\n\n` +
+      `Reply to this email if anything's not quite right.\n\n` +
+      `Thanks,\n` +
+      `Ben (and the ModuForge ops assistant)`,
+  };
+}

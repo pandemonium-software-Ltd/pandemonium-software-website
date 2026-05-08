@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { ChangeRequest } from "@/lib/notion-prospects";
+import RAGStatus from "@/components/RAGStatus";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -449,43 +450,37 @@ function ChangeRequestsBlock({
                 key={r.id}
                 className="rounded-xl border border-navy-100 bg-cream-50 p-4"
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-wider text-navy-500">
                     {formatRelativeDate(r.submittedAt)}
                   </span>
-                  <RequestStatusBadge status={r.status} />
+                  <RAGStatus status={r.status} />
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-sm text-navy-800">
                   {r.message}
                 </p>
+                {r.reply && (
+                  <div className="mt-3 rounded-lg border-l-2 border-green-500 bg-white p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">
+                      Reply from ModuForge
+                      {r.resolvedAt && (
+                        <>
+                          {" · "}
+                          {formatRelativeDate(r.resolvedAt)}
+                        </>
+                      )}
+                    </p>
+                    <p className="mt-1.5 whitespace-pre-wrap text-sm text-navy-800">
+                      {r.reply}
+                    </p>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         </div>
       )}
     </article>
-  );
-}
-
-function RequestStatusBadge({ status }: { status: ChangeRequest["status"] }) {
-  const tone =
-    status === "resolved"
-      ? "bg-green-100 text-green-800"
-      : status === "in-progress"
-        ? "bg-orange-100 text-orange-800"
-        : status === "rejected"
-          ? "bg-navy-100 text-navy-700"
-          : "bg-blue-100 text-blue-800";
-  const label =
-    status === "in-progress"
-      ? "In progress"
-      : status.charAt(0).toUpperCase() + status.slice(1);
-  return (
-    <span
-      className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${tone}`}
-    >
-      {label}
-    </span>
   );
 }
 

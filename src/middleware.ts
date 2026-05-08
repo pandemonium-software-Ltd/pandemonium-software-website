@@ -74,8 +74,11 @@ function timingSafeEqual(a: string, b: string): boolean {
   return mismatch === 0;
 }
 
-// Match /admin and everything under it. /api/* stays public — those
-// routes implement their own auth (token in body, etc).
+// Match /admin and everything under it, plus the operator-side
+// /api/admin/* routes (e.g. PATCH /api/admin/change-request).
+//
+// /api/* (without the /admin/ prefix) stays public — those routes
+// implement their own auth (token in body, etc).
 export const config = {
-  matcher: ["/admin/:path*", "/admin"],
+  matcher: ["/admin/:path*", "/admin", "/api/admin/:path*"],
 };
