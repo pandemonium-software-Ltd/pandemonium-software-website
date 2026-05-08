@@ -88,7 +88,28 @@ export function deriveStepList(prospect: ProspectRecord): StepDef[] {
   const modules = new Set(prospect.moduleSelections);
   const hasBooking = modules.has("Online Booking");
   const hasGbpAddon = modules.has("Google Business Profile Setup/Audit");
-  const step3Applicable = hasBooking || hasGbpAddon;
+  const hasNewsletter = modules.has("Newsletter");
+  const hasEnquiry = modules.has("Enquiry Form");
+  // Step 3 (Modules) shows whenever the customer bought any module
+  // beyond the base website. Resend covers both Newsletter and
+  // Enquiry Form (single sender domain serves both).
+  const step3Applicable =
+    hasBooking || hasGbpAddon || hasNewsletter || hasEnquiry;
+
+  // Compose a friendly per-customer short blurb listing what they've
+  // got to set up. Order matters: most common first.
+  const moduleNames: string[] = [];
+  if (hasBooking) moduleNames.push("booking page");
+  if (hasNewsletter || hasEnquiry) moduleNames.push("sender email");
+  if (hasGbpAddon) moduleNames.push("Google Business Profile");
+  const moduleBlurb =
+    moduleNames.length === 0
+      ? "Set up the modules you bought."
+      : moduleNames.length === 1
+        ? `Set up your ${moduleNames[0]}.`
+        : moduleNames.length === 2
+          ? `Set up your ${moduleNames[0]} and ${moduleNames[1]}.`
+          : `Set up your ${moduleNames.slice(0, -1).join(", ")} and ${moduleNames[moduleNames.length - 1]}.`;
 
   const draft: Array<Omit<StepDef, "displayIndex" | "displayTotal">> = [
     {
@@ -101,19 +122,15 @@ export function deriveStepList(prospect: ProspectRecord): StepDef[] {
     {
       id: "domain",
       notionStep: 2,
-      title: "Domain & email DNS",
-      shortBlurb: "Register or connect your domain and add the DNS records.",
+      title: "Your domain",
+      shortBlurb: "Register or connect your domain.",
       applicable: true,
     },
     {
       id: "tools",
       notionStep: 3,
-      title: "Connect your tools",
-      shortBlurb: hasBooking && hasGbpAddon
-        ? "Set up your booking page and Google Business Profile."
-        : hasBooking
-          ? "Set up your booking page."
-          : "Set up your Google Business Profile.",
+      title: "Modules",
+      shortBlurb: moduleBlurb,
       applicable: step3Applicable,
     },
     {
@@ -180,28 +197,17 @@ const step1CloudflareSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
-// Step 2 covers the customer's *initiating* actions:
+// Step 2 — Domain only. The customer's *initiating* actions:
 //   - tell me your domain
 //   - tell me where you registered (or will register) it
-//   - if Enquiry or Newsletter is in play: sign up for Resend, invite
-//     me as a team member, share your Resend signup email
 //
 // Marking the step "done" means "the domain exists at a registrar
 // and I'm ready for Cowork to take over" — NOT "I've already
-// connected the nameservers". The customer literally can't connect
-// nameservers before Cowork has added the zone and emailed them the
-// assigned values, so the old "domain connected" checkbox was
-// chicken-and-egg misleading.
+// connected the nameservers". Cowork adds the zone, emails the
+// customer the assigned nameservers, polls until propagated.
 //
-// Cowork's downstream job (after the customer ticks done):
-//   - add the zone to their Cloudflare via API
-//   - read back the assigned nameservers
-//   - email the customer with the values + per-registrar instructions
-//   - poll Cloudflare until the zone status is "active"
-//   - email confirmation when their site goes live
-// All DNS records (Cloudflare Pages CNAMEs, Resend SPF / DKIM /
-// Return-Path) are mine to apply via the Cloudflare API. Customer
-// never pastes a DNS record themselves.
+// Resend, Cal.com and GBP setup all moved to Step 3 (Modules) since
+// they're customer-purchased modules, not universal infrastructure.
 const step2DomainSchema = z.object({
   domain: z
     .string()
@@ -213,26 +219,39 @@ const step2DomainSchema = z.object({
     )
     .optional(),
   registrar: z.enum(["already-have", "cloudflare", "external"]).optional(),
-  resendSignupEmail: z.string().trim().email().max(254).optional(),
-  resendInvitedMe: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
-// Step 3 (Connect tools) — conditional on Booking and/or GBP-addon
-// modules. Cal.com is URL-capture only (we embed their public booking
-// page; no admin access needed). GBP requires manager invite so I can
-// audit / update their listing later.
+// Step 3 — Modules. Each customer-purchased module has its own
+// collapsible sub-card with a RAG status (red / amber / green)
+// shown in the card header. Conditional on at least one of the
+// four supported modules being in `prospect.moduleSelections`;
+// otherwise this step is hidden from the wizard entirely.
+//
+// Internal step ID stays "tools" so existing Notion done-flags
+// and saved data don't break — the user-facing label is "Modules".
+//
+// Sub-modules:
+//   - Sender email (Resend) — applies if Newsletter OR Enquiry Form
+//     is purchased. Customer signs up, invites me to their team,
+//     shares signup email.
+//   - Online booking (Cal.com) — applies if Online Booking is
+//     purchased. Customer signs up, pastes their public booking URL.
+//     I embed it on the built site; no admin access needed.
+//   - Google Business Profile — applies if the GBP addon is
+//     purchased. Customer adds me as a Manager, pastes their public
+//     listing URL.
 const step3ToolsSchema = z.object({
-  // Cal.com booking URL — must be a cal.com domain so the embed
-  // library knows how to render it. Schema is loose-permissive (any
-  // URL); the per-step gate enforces the cal.com host check.
+  // Cal.com — URL-only capture (embed). Schema is loose; the gate
+  // enforces the cal.com host check.
   calcomBookingUrl: z.string().trim().url().max(500).optional(),
-  // GBP listing URL — usually `https://g.page/...` or a full
-  // `https://www.google.com/maps/...` URL. Permissive validation.
+  // GBP — URL + manager-invite confirmation.
   gbpUrl: z.string().trim().url().max(500).optional(),
-  // Tick the customer flips once they've added BEN_OPS_EMAIL
-  // as a Manager on their GBP listing. Required to mark step done.
   gbpManagerInvited: z.boolean().optional(),
+  // Resend — signup email + team-invite confirmation. Domain DNS is
+  // handled by Cowork once both fields are in.
+  resendSignupEmail: z.string().trim().email().max(254).optional(),
+  resendInvitedMe: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -341,29 +360,6 @@ export function canMarkStepDone(
       // Cowork handles the rest (zone add → email the customer the
       // assigned nameservers → poll for propagation → email
       // confirmation when live). See ARCHITECTURE.md §6.2.
-
-      // Resend fields are only required when the prospect bought
-      // Enquiry or Newsletter — those are the modules that actually
-      // need a verified sender domain.
-      const needsResend =
-        ctx.modules.includes("Enquiry Form") ||
-        ctx.modules.includes("Newsletter");
-      if (needsResend) {
-        if (!data.resendSignupEmail) {
-          return {
-            ok: false,
-            reason:
-              "Please share the email you signed up to Resend with.",
-          };
-        }
-        if (!data.resendInvitedMe) {
-          return {
-            ok: false,
-            reason:
-              "Please tick the box once you've added me as a team member in Resend.",
-          };
-        }
-      }
       return { ok: true };
     }
     case "tools": {
@@ -371,6 +367,10 @@ export function canMarkStepDone(
       const hasGbpAddon = ctx.modules.includes(
         "Google Business Profile Setup/Audit",
       );
+      const needsResend =
+        ctx.modules.includes("Enquiry Form") ||
+        ctx.modules.includes("Newsletter");
+
       if (hasBooking) {
         const url = typeof data.calcomBookingUrl === "string"
           ? data.calcomBookingUrl.trim()
@@ -379,13 +379,9 @@ export function canMarkStepDone(
           return {
             ok: false,
             reason:
-              "Please paste your Cal.com booking URL so I can embed it on your site.",
+              "Please complete the Online booking module — paste your Cal.com URL.",
           };
         }
-        // Cal.com hosted URL check. Self-hosted Cal.com (custom
-        // domain) is uncommon for the prospects we serve, so we
-        // require cal.com for now and revisit if a customer needs
-        // self-hosted.
         try {
           const parsed = new URL(url);
           const ok =
@@ -412,7 +408,7 @@ export function canMarkStepDone(
           return {
             ok: false,
             reason:
-              "Please paste your Google Business Profile URL (e.g. https://g.page/...).",
+              "Please complete the Google Business Profile module — paste your GBP URL.",
           };
         }
         if (!data.gbpManagerInvited) {
@@ -420,6 +416,22 @@ export function canMarkStepDone(
             ok: false,
             reason:
               "Please tick the box once you've added me as a Manager on your Google Business Profile.",
+          };
+        }
+      }
+      if (needsResend) {
+        if (!data.resendSignupEmail) {
+          return {
+            ok: false,
+            reason:
+              "Please complete the Sender email module — share the email you signed up to Resend with.",
+          };
+        }
+        if (!data.resendInvitedMe) {
+          return {
+            ok: false,
+            reason:
+              "Please tick the box once you've added me as a team member in Resend.",
           };
         }
       }

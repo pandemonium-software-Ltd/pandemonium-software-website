@@ -1,17 +1,16 @@
 "use client";
 
-// Onboarding Hub — Step 2: Domain & email setup.
+// Onboarding Hub — Step 2: Domain only.
 //
-// Customer's job in this step: tell me your domain, register or
-// connect it, and (if you bought Enquiry or Newsletter) sign up for
-// Resend and add me as a team member.
+// Customer's job: tell me your domain and where it's (going to be)
+// registered. Mark-done = "the domain exists at a registrar and I'm
+// ready for you to take over". My downstream job: add the zone to
+// their Cloudflare, email them the assigned nameservers + per-
+// registrar instructions, poll until propagated, email
+// confirmation.
 //
-// My job (after they tick done): use my Cloudflare Administrator
-// access from Step 1 to add the website's DNS records, then use my
-// Resend team membership to add their domain to Resend, generate the
-// SPF / DKIM / Return-Path records, paste them into Cloudflare DNS
-// (still on my side because I'm Admin there), and verify. The
-// customer pastes nothing.
+// Resend / Cal.com / GBP module setup all moved to Step 3 (Modules)
+// — those are customer-purchased modules, not universal infrastructure.
 
 import { useState } from "react";
 
@@ -19,18 +18,10 @@ type Props = {
   data: Record<string, unknown>;
   done: boolean;
   readOnly: boolean;
-  /** The email customers should invite as a Resend team member. Same
-   *  as the Cloudflare invite from Step 1. */
-  benEmail: string;
-  /** Prospect's purchased module names (e.g. "Enquiry Form",
-   *  "Newsletter"). Drives whether the Resend sub-card is shown. */
-  modules: string[];
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
 
-const RESEND_SIGNUP_URL = "https://resend.com/signup";
-const RESEND_TEAM_HELP_URL = "https://resend.com/docs/dashboard/teams/introduction";
 const CLOUDFLARE_REGISTRAR_URL =
   "https://dash.cloudflare.com/?to=/:account/domains/register";
 
@@ -40,8 +31,6 @@ export default function Step2Domain({
   data,
   done,
   readOnly,
-  benEmail,
-  modules,
   savePartial,
   markDone,
 }: Props) {
@@ -52,15 +41,10 @@ export default function Step2Domain({
     data.registrar === "external"
       ? (data.registrar as Registrar)
       : "";
-  const initialResendEmail =
-    typeof data.resendSignupEmail === "string" ? data.resendSignupEmail : "";
-  const initialResendInvitedMe = data.resendInvitedMe === true;
   const initialNotes = typeof data.notes === "string" ? data.notes : "";
 
   const [domain, setDomain] = useState(initialDomain);
   const [registrar, setRegistrar] = useState<Registrar | "">(initialRegistrar);
-  const [resendEmail, setResendEmail] = useState(initialResendEmail);
-  const [resendInvitedMe, setResendInvitedMe] = useState(initialResendInvitedMe);
   const [notes, setNotes] = useState(initialNotes);
 
   // "update" is the post-done re-save (data correction without
@@ -70,22 +54,13 @@ export default function Step2Domain({
     "none" | "save" | "done" | "update"
   >("none");
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const needsResend =
-    modules.includes("Enquiry Form") || modules.includes("Newsletter");
 
   function buildPatch(): Record<string, unknown> {
-    const patch: Record<string, unknown> = {
+    return {
       domain: domain.trim(),
       registrar: registrar || undefined,
       notes: notes.trim(),
     };
-    if (needsResend) {
-      patch.resendSignupEmail = resendEmail.trim();
-      patch.resendInvitedMe = resendInvitedMe;
-    }
-    return patch;
   }
 
   function validateForDone(): string | null {
@@ -93,14 +68,6 @@ export default function Step2Domain({
       return "Please enter your domain (e.g. yourbusiness.co.uk).";
     if (!registrar)
       return "Please pick where your domain is (or will be) registered.";
-    if (needsResend) {
-      if (!resendEmail.trim())
-        return "Please share the email you signed up to Resend with.";
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resendEmail.trim()))
-        return "That Resend email doesn't look quite right.";
-      if (!resendInvitedMe)
-        return "Please tick the box once you've added me as a team member in Resend.";
-    }
     return null;
   }
 
@@ -126,8 +93,6 @@ export default function Step2Domain({
   }
 
   async function handleUpdate() {
-    // Re-save the patch without toggling done off. Same validation as
-    // mark-done so the saved data stays consistent.
     const err = validateForDone();
     if (err) {
       setError(err);
@@ -138,16 +103,6 @@ export default function Step2Domain({
     const ok = await savePartial(buildPatch());
     setPending("none");
     if (!ok) setError("Couldn't update just now. Try again.");
-  }
-
-  async function handleCopyEmail() {
-    try {
-      await navigator.clipboard.writeText(benEmail);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Older browsers — no-op.
-    }
   }
 
   // Inputs stay editable even after done so the customer can correct
@@ -161,34 +116,19 @@ export default function Step2Domain({
           Step 2
         </p>
         <h2 className="mt-2 font-serif text-2xl font-semibold text-navy-900 md:text-3xl">
-          Domain &amp; email setup
+          Your domain
         </h2>
         <p className="mt-3 text-[1.05rem] leading-relaxed text-navy-700">
-          {needsResend ? (
-            <>
-              Two things in this step: tell me your domain, and (because
-              you bought {modulesPretty(modules)}) get me set up on a free
-              Resend account in your name so your forms and newsletters
-              send from your domain. I&apos;ll handle every DNS record on
-              my side — you don&apos;t paste a thing.
-            </>
-          ) : (
-            <>
-              Tell me which domain you&apos;ll be using, and confirm
-              it&apos;s registered. I&apos;ll handle the DNS records on my
-              side using the Cloudflare access you granted me in Step 1.
-            </>
-          )}
+          Tell me which domain you&apos;ll be using and confirm
+          it&apos;s registered. I&apos;ll handle the DNS records on my
+          side using the Cloudflare access you granted me in Step 1.
+          Module-specific setup (sender email, booking page,
+          Google Business Profile) happens in Step 3.
         </p>
       </header>
 
-      {/* ---------- A. Domain ---------- */}
       <section className="mt-7">
-        <h3 className="font-serif text-lg font-semibold text-navy-900">
-          A. Your domain
-        </h3>
-
-        <label className="mt-5 block">
+        <label className="block">
           <span className="block text-sm font-semibold text-navy-900">
             Domain name
           </span>
@@ -312,7 +252,7 @@ export default function Step2Domain({
           </div>
         )}
 
-        {/* Transfer-vs-nameserver explainer aside. */}
+        {/* Transfer-vs-nameserver-swap explainer aside. */}
         <div className="mt-5 rounded-xl bg-white p-5 text-sm leading-relaxed text-navy-600 ring-1 ring-navy-100">
           <p className="font-semibold text-navy-900">
             Wait — do I need to transfer my domain to Cloudflare?
@@ -330,115 +270,6 @@ export default function Step2Domain({
           </p>
         </div>
       </section>
-
-      {/* ---------- B. Resend (conditional) ---------- */}
-      {needsResend && (
-        <section className="mt-9 rounded-2xl bg-cream-50 p-6">
-          <h3 className="font-serif text-lg font-semibold text-navy-900">
-            B. Resend (your sender plumbing)
-          </h3>
-          <p className="mt-2 text-[0.95rem] leading-relaxed text-navy-700">
-            Resend is a free email-sending service. You sign up, then add
-            me as a team member — I run the technical side from there.
-            Your sender email becomes{" "}
-            <code className="rounded bg-white px-1.5 py-0.5 font-mono text-[0.85rem] text-navy-900">
-              {prettySender(domain) || "yourbusiness.co.uk"}
-            </code>
-            . If you ever leave, you keep your domain and your subscriber
-            list — Resend itself is just plumbing.
-          </p>
-
-          <ol className="mt-5 space-y-4 text-[0.95rem] leading-relaxed text-navy-700">
-            <li className="flex gap-3">
-              <Bullet n={1} />
-              <span>
-                Open{" "}
-                <a
-                  href={RESEND_SIGNUP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="link"
-                >
-                  resend.com/signup
-                </a>{" "}
-                and create a free account. The free tier covers way more
-                volume than a small business will ever send.
-              </span>
-            </li>
-            <li className="flex gap-3">
-              <Bullet n={2} />
-              <span>
-                In Resend, click <strong>Settings</strong> →{" "}
-                <strong>Team</strong> →{" "}
-                <strong>Invite</strong>. (
-                <a
-                  href={RESEND_TEAM_HELP_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="link"
-                >
-                  Resend&apos;s help
-                </a>{" "}
-                if you get stuck.)
-              </span>
-            </li>
-            <li className="flex flex-col gap-3">
-              <div className="flex gap-3">
-                <Bullet n={3} />
-                <span>Invite this email as an <strong>Admin</strong>:</span>
-              </div>
-              <InviteCallout
-                email={benEmail}
-                copied={copied}
-                onCopy={handleCopyEmail}
-              />
-            </li>
-            <li className="flex gap-3">
-              <Bullet n={4} />
-              <span>
-                Tell me your Resend signup email below and tick that
-                you&apos;ve sent the invite. I&apos;ll accept from my end,
-                add your domain, generate the records, and apply them to
-                your Cloudflare DNS — no further action from you.
-              </span>
-            </li>
-          </ol>
-
-          <label className="mt-6 block">
-            <span className="block text-sm font-semibold text-navy-900">
-              Your Resend signup email
-            </span>
-            <input
-              type="email"
-              value={resendEmail}
-              disabled={disabled}
-              onChange={(e) => setResendEmail(e.target.value)}
-              placeholder="you@yourbusiness.co.uk"
-              autoComplete="email"
-              className="mt-2 w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-            />
-          </label>
-
-          <label className="mt-4 flex items-start gap-3">
-            <input
-              type="checkbox"
-              checked={resendInvitedMe}
-              disabled={disabled}
-              onChange={(e) => setResendInvitedMe(e.target.checked)}
-              className="mt-1 h-5 w-5 flex-none rounded border-2 border-navy-300 accent-navy-900"
-            />
-            <span className="min-w-0 text-[0.95rem] leading-relaxed text-navy-700">
-              <span className="font-semibold text-navy-900">
-                I&apos;ve added you as a team member in Resend.
-              </span>
-              <span className="mt-1 block text-xs text-navy-500">
-                I&apos;ll get an invitation email from your account once
-                you&apos;ve sent it.
-              </span>
-            </span>
-          </label>
-        </section>
-      )}
 
       {/* ---------- Notes + buttons ---------- */}
       <section className="mt-7">
@@ -509,33 +340,7 @@ export default function Step2Domain({
   );
 }
 
-// ---------- Tiny helpers ----------
-
-function modulesPretty(modules: string[]): string {
-  const list: string[] = [];
-  if (modules.includes("Enquiry Form")) list.push("Enquiry");
-  if (modules.includes("Newsletter")) list.push("Newsletter");
-  if (list.length === 0) return "Enquiry / Newsletter";
-  if (list.length === 1) return list[0];
-  return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
-}
-
-function prettySender(domain: string): string {
-  const trimmed = domain.trim().toLowerCase();
-  if (!trimmed) return "";
-  return `news@${trimmed}`;
-}
-
-function Bullet({ n }: { n: number }) {
-  return (
-    <span
-      aria-hidden="true"
-      className="mt-0.5 flex h-6 w-6 flex-none items-center justify-center rounded-full bg-navy-900 font-serif text-xs font-semibold text-white"
-    >
-      {n}
-    </span>
-  );
-}
+// ---------- Registrar radio option ----------
 
 function RegistrarOption({
   value,
@@ -582,38 +387,5 @@ function RegistrarOption({
         </span>
       </span>
     </label>
-  );
-}
-
-function InviteCallout({
-  email,
-  copied,
-  onCopy,
-}: {
-  email: string;
-  copied: boolean;
-  onCopy: () => void;
-}) {
-  return (
-    <div className="ml-9 rounded-xl border-2 border-navy-200 bg-white p-4">
-      <p className="text-xs uppercase tracking-wider text-navy-500">
-        Invite this email
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-3">
-        <code className="break-all rounded-lg bg-cream-50 px-3 py-1.5 font-mono text-base text-navy-900">
-          {email}
-        </code>
-        <button
-          type="button"
-          onClick={onCopy}
-          className="rounded-lg bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-navy-700"
-        >
-          {copied ? "Copied!" : "Copy"}
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-navy-600">
-        Role to pick: <strong>Admin</strong>
-      </p>
-    </div>
   );
 }

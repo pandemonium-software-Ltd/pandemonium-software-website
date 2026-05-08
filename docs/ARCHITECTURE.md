@@ -873,6 +873,16 @@ Once Cowork's audit log + Exceptions DB land:
 
 ### 9.3 Per-customer detail (`/admin/[token]`)
 
+(Note on Step 2 / 3 split: in the original Hub design, Resend setup
+was bundled with Step 2 because both involve DNS. That conflated
+universal infrastructure with module-specific work. The current
+shape separates them: **Step 2 is domain-only**, **Step 3 is
+"Modules" — collapsible per-module cards** for each purchased
+module (Cal.com / Resend / GBP). Each card shows a RAG status pill
+and auto-collapses on completion so the customer can scan the page
+and see what still needs work.)
+
+
 The drill-down. One scrollable page with collapsible sections:
 
 1. **Header** — name, business, domain, status, health dot, founding

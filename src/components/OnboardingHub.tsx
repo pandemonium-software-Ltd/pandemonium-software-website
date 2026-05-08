@@ -26,7 +26,7 @@ import {
 } from "@/lib/onboarding";
 import Step1Cloudflare from "@/components/onboarding/Step1Cloudflare";
 import Step2Domain from "@/components/onboarding/Step2Domain";
-import Step3Tools from "@/components/onboarding/Step3Tools";
+import Step3Modules from "@/components/onboarding/Step3Modules";
 import Step4Assets from "@/components/onboarding/Step4Assets";
 import StepPlaceholder from "@/components/onboarding/StepPlaceholder";
 
@@ -284,15 +284,13 @@ function StepRenderer({
           data={slice}
           done={done}
           readOnly={readOnly}
-          benEmail={benEmail}
-          modules={modules}
           savePartial={(patch) => savePartial("domain", patch)}
           markDone={(patch) => markDone("domain", patch)}
         />
       );
     case "tools":
       return (
-        <Step3Tools
+        <Step3Modules
           data={slice}
           done={done}
           readOnly={readOnly}
