@@ -6,6 +6,7 @@
 //   in-progress → Amber  (being worked on)
 //   resolved    → Green  (done, customer was emailed)
 //   rejected    → Grey   (closed without action; reply explains why)
+//   retracted   → Slate  (customer withdrew; cap slot freed)
 
 import type { ChangeRequest } from "@/lib/notion-prospects";
 
@@ -14,6 +15,7 @@ const LABEL: Record<ChangeRequest["status"], string> = {
   "in-progress": "In progress",
   resolved: "Resolved",
   rejected: "Rejected",
+  retracted: "Retracted",
 };
 
 const TONE: Record<
@@ -35,6 +37,10 @@ const TONE: Record<
   rejected: {
     dot: "bg-navy-400",
     pill: "bg-navy-100 text-navy-700",
+  },
+  retracted: {
+    dot: "bg-navy-300",
+    pill: "bg-cream-100 text-navy-500",
   },
 };
 

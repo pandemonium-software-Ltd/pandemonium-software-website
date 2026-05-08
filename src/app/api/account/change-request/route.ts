@@ -25,6 +25,7 @@ import {
   countActiveChangeRequestsThisMonth,
   getProspectByToken,
   MONTHLY_CHANGE_REQUEST_LIMIT,
+  updateChangeRequest,
   type ChangeRequest,
 } from "@/lib/notion-prospects";
 import {
@@ -258,9 +259,119 @@ function formatDateNice(iso: string): string {
   }
 }
 
+// ---------- DELETE: retract a still-pending change request ----------
+//
+// Retraction is customer-initiated and only allowed while the request
+// status is "pending". Once the operator (or Cowork) flips it to
+// "in-progress", retraction is locked out — they're already working
+// on it. The retracted record stays in the inbox with status
+// "retracted" so the customer sees their own history; the cap helper
+// `countActiveChangeRequestsThisMonth` excludes retracted, so the
+// slot is freed.
+
+const deleteSchema = z.object({
+  token: z.string().regex(TOKEN_RE, "Missing or invalid token."),
+  requestId: z.string().min(1, "Missing request id."),
+});
+
+export async function DELETE(request: Request) {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 },
+    );
+  }
+  const parsed = deleteSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid request." },
+      { status: 400 },
+    );
+  }
+  const { token, requestId } = parsed.data;
+
+  let prospect;
+  try {
+    prospect = await getProspectByToken(token);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[api/account/change-request DELETE] Notion lookup error:", msg);
+    return NextResponse.json(
+      { error: "Couldn't look up your account. Please try again." },
+      { status: 500 },
+    );
+  }
+  if (!prospect) {
+    return NextResponse.json({ error: "Account not found." }, { status: 404 });
+  }
+  if (!ELIGIBLE_STATUSES.has(prospect.status)) {
+    return NextResponse.json(
+      { error: "Change requests are paused on this account." },
+      { status: 403 },
+    );
+  }
+
+  // Find the request by ID + verify it's still pending. (Once the
+  // operator marks it in-progress, retraction is locked.)
+  const target = prospect.changeRequests.find((r) => r.id === requestId);
+  if (!target) {
+    return NextResponse.json(
+      { error: "That request wasn't found in your inbox." },
+      { status: 404 },
+    );
+  }
+  if (target.status !== "pending") {
+    return NextResponse.json(
+      {
+        error: `That request is already ${target.status === "in-progress" ? "being worked on" : target.status} — too late to retract. Email me directly if you need to undo something.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  let updateResult;
+  try {
+    updateResult = await updateChangeRequest(prospect.pageId, requestId, {
+      status: "retracted",
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[api/account/change-request DELETE] Notion update error:", msg);
+    return NextResponse.json(
+      { error: "Couldn't retract just now. Please try again." },
+      { status: 500 },
+    );
+  }
+
+  // Notify Ben so he knows the customer changed their mind. Fail-soft.
+  const notif: NotificationPayload = {
+    subject: `[CHANGE REQUEST RETRACTED] ${prospect.name}${prospect.business ? ` (${prospect.business})` : ""}`,
+    body:
+      `${prospect.name}${prospect.business ? ` at ${prospect.business}` : ""} retracted a change request before it was actioned.\n\n` +
+      `--- The retracted request ---\n${target.message}\n--- End ---\n\n` +
+      `Submitted: ${target.submittedAt}\n` +
+      `Status:    ${prospect.status}\n` +
+      `Notion:    ${prospect.notionUrl}\n` +
+      `Admin detail: ${process.env.NEXT_PUBLIC_SITE_URL ?? "https://pandemonium-software-website.benpandher.workers.dev"}/admin/${token}\n\n` +
+      `The slot has been freed — their monthly cap counter has gone down by one.\n\n` +
+      `— Cowork`,
+  };
+  const emailErr = await sendInternalNotification(notif);
+  if (emailErr) {
+    console.warn(
+      `[api/account/change-request DELETE] Notion saved but email failed: ${emailErr}`,
+    );
+  }
+
+  return NextResponse.json({ success: true, request: updateResult.updated });
+}
+
 export async function GET() {
   return NextResponse.json(
-    { error: "Method not allowed. Use POST." },
-    { status: 405, headers: { Allow: "POST" } },
+    { error: "Method not allowed. Use POST or DELETE." },
+    { status: 405, headers: { Allow: "POST, DELETE" } },
   );
 }

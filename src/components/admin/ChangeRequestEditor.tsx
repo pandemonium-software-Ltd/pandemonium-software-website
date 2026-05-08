@@ -244,6 +244,7 @@ const LABEL: Record<ChangeRequest["status"], string> = {
   "in-progress": "In progress",
   resolved: "Resolved",
   rejected: "Rejected",
+  retracted: "Retracted",
 };
 
 // ---------- Helpers ----------

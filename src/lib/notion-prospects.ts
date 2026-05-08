@@ -125,10 +125,11 @@ export const MONTHLY_CHANGE_REQUEST_LIMIT = 3;
 
 /**
  * Counts requests submitted in the current calendar month that
- * count toward the cap. "rejected" requests don't count — those
- * are typically out-of-scope items that Cowork or Ben quoted
- * separately, so the customer's allowance shouldn't be burned by
- * them. Reset is on the 1st of each month, UTC.
+ * count toward the cap. Two statuses are excluded:
+ *   - "rejected" — out-of-scope items quoted separately
+ *   - "retracted" — customer withdrew before work started
+ * Both shouldn't burn the customer's allowance. Reset is on the
+ * 1st of each month, UTC.
  */
 export function countActiveChangeRequestsThisMonth(
   requests: ChangeRequest[],
@@ -138,7 +139,10 @@ export function countActiveChangeRequestsThisMonth(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   ).toISOString();
   return requests.filter(
-    (r) => r.submittedAt >= startOfMonth && r.status !== "rejected",
+    (r) =>
+      r.submittedAt >= startOfMonth &&
+      r.status !== "rejected" &&
+      r.status !== "retracted",
   ).length;
 }
 
@@ -150,17 +154,29 @@ export function countActiveChangeRequestsThisMonth(
  * then, Ben handles them manually from /admin/[token].
  *
  * Status is the RAG signal surfaced on both dashboards:
- *   pending   → Red    (received, not yet started)
- *   in-progress → Amber (being worked on)
- *   resolved  → Green  (done; customer was emailed)
- *   rejected  → Grey   (closed without action; reply explains why)
+ *   pending     → Red    (received, not yet started)
+ *   in-progress → Amber  (being worked on)
+ *   resolved    → Green  (done; customer was emailed)
+ *   rejected    → Grey   (closed without action; reply explains why)
+ *   retracted   → Slate  (customer withdrew before work started;
+ *                         doesn't count toward the monthly cap)
+ *
+ * Retraction is customer-initiated and only allowed while status is
+ * `pending`. Once Ben (or Cowork) flips to `in-progress`, retraction
+ * is locked out — see DELETE /api/account/change-request.
  */
 export type ChangeRequest = {
   id: string; // UUID
   submittedAt: string; // ISO-8601
   message: string; // raw customer text
-  status: "pending" | "in-progress" | "resolved" | "rejected";
-  /** ISO-8601, set automatically when status flips to resolved/rejected. */
+  status:
+    | "pending"
+    | "in-progress"
+    | "resolved"
+    | "rejected"
+    | "retracted";
+  /** ISO-8601, set automatically when status flips to resolved /
+   *  rejected / retracted. */
   resolvedAt?: string;
   /**
    * Reply shown to the customer on /account/[token] alongside the
@@ -637,7 +653,9 @@ export async function updateChangeRequest(
 
   const previous = current[idx];
   const wasTerminal =
-    previous.status === "resolved" || previous.status === "rejected";
+    previous.status === "resolved" ||
+    previous.status === "rejected" ||
+    previous.status === "retracted";
 
   const next: ChangeRequest = {
     ...previous,
@@ -646,7 +664,9 @@ export async function updateChangeRequest(
   };
 
   const isTerminal =
-    next.status === "resolved" || next.status === "rejected";
+    next.status === "resolved" ||
+    next.status === "rejected" ||
+    next.status === "retracted";
 
   // Stamp resolvedAt the first time we cross into a terminal state.
   if (isTerminal && !wasTerminal) {

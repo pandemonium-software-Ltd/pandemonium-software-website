@@ -6,7 +6,7 @@
 // from server-fetched Notion data passed as props.
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   countActiveChangeRequestsThisMonth,
   MONTHLY_CHANGE_REQUEST_LIMIT,
@@ -314,6 +314,15 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 token={token}
                 requests={requests}
                 onSubmitted={(req) => setRequests((prev) => [req, ...prev])}
+                onRetracted={(id) =>
+                  setRequests((prev) =>
+                    prev.map((r) =>
+                      r.id === id
+                        ? { ...r, status: "retracted", resolvedAt: new Date().toISOString() }
+                        : r,
+                    ),
+                  )
+                }
               />
             </div>
           )}
@@ -348,15 +357,30 @@ function ChangeRequestsBlock({
   token,
   requests,
   onSubmitted,
+  onRetracted,
 }: {
   token: string;
   requests: ChangeRequest[];
   onSubmitted: (req: ChangeRequest) => void;
+  onRetracted: (id: string) => void;
 }) {
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Submission confirmation dialog (native <dialog> for built-in
+  // modal behaviour, ESC handling and focus trap).
+  const submitDialogRef = useRef<HTMLDialogElement | null>(null);
+
+  // Retract confirmation dialog. We track which request is being
+  // retracted in state — the dialog shows that request's preview
+  // alongside the confirm action.
+  const retractDialogRef = useRef<HTMLDialogElement | null>(null);
+  const [retractTarget, setRetractTarget] = useState<ChangeRequest | null>(
+    null,
+  );
+  const [retracting, setRetracting] = useState(false);
 
   const usedThisMonth = countActiveChangeRequestsThisMonth(requests);
   const remaining = Math.max(
@@ -365,7 +389,13 @@ function ChangeRequestsBlock({
   );
   const atCap = remaining === 0;
 
-  async function handleSubmit() {
+  /**
+   * "Submit request" button — runs client-side length validation
+   * then opens the confirmation dialog. Server-side validation
+   * (multi-item detector + monthly cap) fires inside `confirmSubmit`
+   * after the customer hits Yes in the dialog.
+   */
+  function handleSubmitClick() {
     setError(null);
     setSuccess(null);
     const trimmed = message.trim();
@@ -377,6 +407,12 @@ function ChangeRequestsBlock({
       setError("That's a lot for one message — please split it up.");
       return;
     }
+    submitDialogRef.current?.showModal();
+  }
+
+  /** Yes-confirm in the submit dialog → fires the API call. */
+  async function confirmSubmit() {
+    const trimmed = message.trim();
     setPending(true);
     try {
       const res = await fetch("/api/account/change-request", {
@@ -391,6 +427,7 @@ function ChangeRequestsBlock({
         error?: string;
         suggestion?: string;
       };
+      submitDialogRef.current?.close();
       if (!res.ok || !json.success || !json.request) {
         setError(json.error ?? "Couldn't submit just now. Try again.");
         return;
@@ -399,13 +436,55 @@ function ChangeRequestsBlock({
       setMessage("");
       const remainingAfter = json.remaining ?? remaining - 1;
       setSuccess(
-        `Got it. ${remainingAfter} request${remainingAfter === 1 ? "" : "s"} remaining this month. I'll come back within 48 working hours.`,
+        `Got it. ${remainingAfter} request${remainingAfter === 1 ? "" : "s"} remaining this month. You can retract it from the list below any time before I start working on it.`,
       );
-      setTimeout(() => setSuccess(null), 8000);
+      setTimeout(() => setSuccess(null), 10000);
     } catch (e) {
+      submitDialogRef.current?.close();
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setPending(false);
+    }
+  }
+
+  /** Open the retract confirmation dialog for a specific request. */
+  function startRetract(r: ChangeRequest) {
+    setError(null);
+    setSuccess(null);
+    setRetractTarget(r);
+    retractDialogRef.current?.showModal();
+  }
+
+  /** Yes-confirm in the retract dialog → fires DELETE. */
+  async function confirmRetract() {
+    if (!retractTarget) return;
+    setRetracting(true);
+    try {
+      const res = await fetch("/api/account/change-request", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, requestId: retractTarget.id }),
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+      retractDialogRef.current?.close();
+      if (!res.ok || !json.success) {
+        setError(json.error ?? "Couldn't retract just now. Try again.");
+        return;
+      }
+      onRetracted(retractTarget.id);
+      setSuccess(
+        "Retracted. That slot's back in your monthly allowance.",
+      );
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (e) {
+      retractDialogRef.current?.close();
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRetracting(false);
+      setRetractTarget(null);
     }
   }
 
@@ -502,7 +581,7 @@ function ChangeRequestsBlock({
 
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={handleSubmitClick}
             disabled={pending || message.trim().length === 0}
             className="btn-primary mt-4"
           >
@@ -520,7 +599,12 @@ function ChangeRequestsBlock({
             {requests.map((r) => (
               <li
                 key={r.id}
-                className="rounded-xl border border-navy-100 bg-cream-50 p-4"
+                className={[
+                  "rounded-xl border border-navy-100 p-4",
+                  r.status === "retracted"
+                    ? "bg-cream-100 opacity-75"
+                    : "bg-cream-50",
+                ].join(" ")}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <span className="text-xs uppercase tracking-wider text-navy-500">
@@ -528,9 +612,38 @@ function ChangeRequestsBlock({
                   </span>
                   <RAGStatus status={r.status} />
                 </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm text-navy-800">
+                <p
+                  className={[
+                    "mt-2 whitespace-pre-wrap text-sm text-navy-800",
+                    r.status === "retracted" ? "line-through opacity-70" : "",
+                  ].join(" ")}
+                >
                   {r.message}
                 </p>
+                {r.status === "pending" && (
+                  <button
+                    type="button"
+                    onClick={() => startRetract(r)}
+                    disabled={retracting}
+                    className="mt-3 inline-flex items-center gap-1 rounded-full border border-navy-200 bg-white px-3 py-1 text-xs font-semibold text-navy-700 transition-colors hover:border-ember-400 hover:text-ember-700 disabled:opacity-60"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 5l14 14M19 5L5 19"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    Retract this request
+                  </button>
+                )}
                 {r.reply && (
                   <div className="mt-3 rounded-lg border-l-2 border-green-500 bg-white p-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">
@@ -552,6 +665,97 @@ function ChangeRequestsBlock({
           </ul>
         </div>
       )}
+
+      {/* ---------- Submit confirmation dialog ---------- */}
+      <dialog
+        ref={submitDialogRef}
+        className="m-auto max-w-md rounded-2xl border-0 p-0 shadow-lift backdrop:bg-navy-900/50"
+        onClose={() => {
+          // No-op; native ESC / backdrop-click closes cleanly. We
+          // don't fire the API on close, only on Yes-confirm.
+        }}
+      >
+        <div className="p-6 md:p-7">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">
+            Confirm your request
+          </h2>
+          <p className="mt-2 text-sm text-navy-700">
+            This will use <strong>1 of your {remaining} remaining</strong>{" "}
+            {remaining === 1 ? "request" : "requests"} this month.
+          </p>
+
+          <div className="mt-4 max-h-48 overflow-y-auto rounded-xl border border-navy-100 bg-cream-50 p-4 text-sm whitespace-pre-wrap text-navy-800">
+            {message.trim() || "(empty)"}
+          </div>
+
+          <p className="mt-3 text-xs leading-relaxed text-navy-600">
+            Once submitted, you can retract this request from the list
+            below any time before I start working on it. Multi-item
+            submissions are auto-declined and don&apos;t burn a slot.
+          </p>
+
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => submitDialogRef.current?.close()}
+              disabled={pending}
+              className="rounded-lg border-2 border-navy-200 px-4 py-2 text-sm font-semibold text-navy-900 transition-colors hover:border-navy-400"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmSubmit}
+              disabled={pending}
+              className="btn-primary"
+            >
+              {pending ? "Submitting…" : "Yes, submit"}
+            </button>
+          </div>
+        </div>
+      </dialog>
+
+      {/* ---------- Retract confirmation dialog ---------- */}
+      <dialog
+        ref={retractDialogRef}
+        className="m-auto max-w-md rounded-2xl border-0 p-0 shadow-lift backdrop:bg-navy-900/50"
+        onClose={() => setRetractTarget(null)}
+      >
+        <div className="p-6 md:p-7">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">
+            Retract this request?
+          </h2>
+          <p className="mt-2 text-sm text-navy-700">
+            You can only retract before I start working on it. The
+            slot goes back into your monthly allowance.
+          </p>
+
+          {retractTarget && (
+            <div className="mt-4 max-h-48 overflow-y-auto rounded-xl border border-navy-100 bg-cream-50 p-4 text-sm whitespace-pre-wrap text-navy-800">
+              {retractTarget.message}
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => retractDialogRef.current?.close()}
+              disabled={retracting}
+              className="rounded-lg border-2 border-navy-200 px-4 py-2 text-sm font-semibold text-navy-900 transition-colors hover:border-navy-400"
+            >
+              Keep it
+            </button>
+            <button
+              type="button"
+              onClick={confirmRetract}
+              disabled={retracting}
+              className="rounded-lg bg-ember-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-ember-700 disabled:opacity-60"
+            >
+              {retracting ? "Retracting…" : "Yes, retract"}
+            </button>
+          </div>
+        </div>
+      </dialog>
     </article>
   );
 }

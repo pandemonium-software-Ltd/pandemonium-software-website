@@ -428,8 +428,13 @@ change is live"            │
 
 #### 6.2.2 API enforcement (current shape, Stage 2D D1.5)
 
-`POST /api/account/change-request` runs three checks before saving
-anything to Notion:
+**Two endpoints** on the customer-facing route:
+
+- `POST /api/account/change-request` — submit a new request
+- `DELETE /api/account/change-request` — retract a still-pending
+  request
+
+**POST flow** runs three checks before saving anything to Notion:
 
 1. **Schema** (zod): token format, message length (5-5000 chars),
    eligible status (Paid through Live)
@@ -437,8 +442,12 @@ anything to Notion:
    this to Cowork's LLM classifier):
    - Numbered list with ≥2 items (e.g. `1.` / `2.`) → 422 decline
    - Bullet list with ≥2 items (e.g. `-` / `*` / `•`) → 422 decline
-   - Conjunctive markers (`Also,`, `and also`, `additionally`,
-     `secondly`, `thirdly`) → 422 decline
+   - Sentence-starting conjunctive markers (`Also,`, `Additionally,`,
+     `Secondly,`, `Thirdly,`) — restricted to sentence-start so
+     mid-sentence "also" filler ("I have also uploaded") doesn't
+     false-positive → 422 decline
+   - `and also` anywhere — compound conjunction joining two asks
+     → 422 decline
    - 2+ instances of `Please` → 422 decline
    - Single-paragraph requests with multiple data points are NOT
      declined (e.g. "Update opening hours: Mon-Fri 8-6, Sat 9-12,
@@ -446,13 +455,50 @@ anything to Notion:
      values, not multiple changes)
 3. **Monthly cap** (`countActiveChangeRequestsThisMonth`): if used
    ≥ MONTHLY_CHANGE_REQUEST_LIMIT, return 429 with the next reset
-   date. Rejected status doesn't count — out-of-scope items quoted
-   separately don't burn the cap.
+   date. Rejected (out-of-scope) and retracted status don't count
+   — neither burns the cap.
 
 Declined submissions are **not saved**. The customer sees the
 decline message, edits their submission (or splits it), and
 re-submits. No request record exists in Notion until the message
 passes all three checks.
+
+**DELETE flow (retraction)** is the customer-initiated way to
+withdraw a pending request before Cowork or Ben starts work:
+
+1. Validate token + requestId (zod)
+2. Look up prospect; verify the request belongs to this token's
+   inbox
+3. Verify status is `pending` — once flipped to `in-progress`, the
+   operator has already started; retraction is locked out (409)
+4. Update status to `retracted` via `updateChangeRequest`; stamp
+   `resolvedAt`
+5. Email Ben so he sees the retraction (and that the slot's freed)
+6. Return the updated record + success
+
+Retraction frees the cap slot immediately:
+`countActiveChangeRequestsThisMonth` excludes both `rejected` and
+`retracted`, so the customer can submit a replacement on the same
+day without burning their allowance.
+
+#### 6.2.3 Customer-side UX (Stage 2D D1.5)
+
+Two confirmation dialogs on `/account/[token]` keep the customer
+from submitting or retracting accidentally:
+
+- **Submit confirmation dialog** — opens after the customer clicks
+  "Submit request" + their message passes client-side length checks.
+  Shows a preview of the message verbatim, the cap impact ("This
+  will use 1 of your N remaining"), and a note that they can retract
+  any time before work starts. Cancel keeps the textarea state;
+  Yes-confirm fires the API.
+- **Retract confirmation dialog** — opens when a Retract button on
+  any pending request is clicked. Shows the message preview and
+  notes that the slot goes back into the monthly allowance.
+
+Both dialogs use the native HTML `<dialog>` element with
+`showModal()` for built-in ESC-to-close, focus trap and backdrop.
+No third-party modal library.
 
 #### 6.2.3 Cowork classification (Stage 2C C1 onwards)
 

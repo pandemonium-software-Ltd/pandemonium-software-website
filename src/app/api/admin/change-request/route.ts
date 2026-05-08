@@ -90,8 +90,12 @@ export async function PATCH(request: Request) {
   }
 
   // Customer email on first transition into a terminal state.
+  // Limited to operator-driven outcomes (resolved / rejected) — a
+  // defensive "retracted" set from this route would NOT email the
+  // customer (they themselves retracted, no need for confirmation).
   let emailErr: string | null = null;
-  if (updateResult.transitionedToTerminal && reply) {
+  const operatorTerminal = status === "resolved" || status === "rejected";
+  if (updateResult.transitionedToTerminal && operatorTerminal && reply) {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
     const email = buildChangeRequestResolvedEmail({
       customerName: prospect.name,
