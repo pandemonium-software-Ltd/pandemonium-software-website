@@ -267,3 +267,50 @@ export function buildChangeRequestResolvedEmail(args: {
       `Ben (and the ModuForge ops assistant)`,
   };
 }
+
+/**
+ * Build the customer email that goes out the moment they sign off
+ * Step 5 (Hub fully complete). Confirms the go-live date and
+ * points them at the customer dashboard, which is now their home
+ * for everything post-launch — change requests, status checks,
+ * subscription details. Sent from /api/onboarding when the
+ * `transitionedToHubComplete` flag fires.
+ */
+export function buildOnboardingCompleteEmail(args: {
+  customerName: string;
+  businessName: string;
+  /** YYYY-MM-DD; rendered as "1 June 2026" in the subject + body. */
+  goLiveDate: string;
+  accountUrl: string;
+}): { subject: string; body: string } {
+  const greeting = (args.customerName.split(/\s+/)[0] ?? "there").trim();
+  const goLivePretty = formatGoLive(args.goLiveDate);
+  return {
+    subject: `Signed off — your site goes live on ${goLivePretty}`,
+    body:
+      `Hi ${greeting},\n\n` +
+      `Thanks for the careful review. You're signed off and your site is going live on ${goLivePretty}.\n\n` +
+      `What happens next:\n` +
+      `1. I'm building your site now. You'll get another email when your preview is ready (typically 3-5 working days).\n` +
+      `2. After your site is live, your account dashboard is your home for everything — site status, subscription details, content change requests, the lot:\n` +
+      `   ${args.accountUrl}\n` +
+      `3. Your monthly subscription includes 30 minutes of content changes per month from launch. Use the "Need a change?" form on the dashboard for anything you'd like updated.\n\n` +
+      `If anything's not right between now and launch, just reply.\n\n` +
+      `Thanks,\n` +
+      `Ben (and the ModuForge ops assistant)`,
+  };
+}
+
+function formatGoLive(iso: string): string {
+  // Keep this in lib/email so it doesn't get import cycles via UI helpers.
+  if (!iso) return "the agreed date";
+  try {
+    return new Date(iso).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}

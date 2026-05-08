@@ -440,23 +440,37 @@ export default function Step5Review({
 
       <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
         {done ? (
-          <>
+          <div className="flex w-full flex-col gap-3">
             <p className="text-sm text-green-700" role="status">
               <strong>Signed off.</strong> Going live on{" "}
-              <strong>{formatDate(goLiveDate)}</strong>. Edit above
-              and click Update if anything changes.
+              <strong>{formatDate(goLiveDate)}</strong>. I&apos;ve emailed
+              you a confirmation with your account dashboard link.
             </p>
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={handleUpdate}
-                disabled={pending !== "none"}
-                className="btn-secondary"
+            <div className="flex flex-wrap items-center gap-3">
+              <a
+                href={`/account/${token}`}
+                className="btn-primary"
               >
-                {pending === "update" ? "Updating…" : "Update saved data"}
-              </button>
-            )}
-          </>
+                Open your account dashboard →
+              </a>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={handleUpdate}
+                  disabled={pending !== "none"}
+                  className="btn-secondary"
+                >
+                  {pending === "update" ? "Updating…" : "Update saved data"}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-navy-500">
+              Your account dashboard is your home for everything from
+              now on — site status, subscription details, and the
+              &ldquo;Need a change?&rdquo; form for any post-launch
+              tweaks (30 minutes/month included).
+            </p>
+          </div>
         ) : (
           <>
             <button

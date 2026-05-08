@@ -38,6 +38,11 @@ import {
   updateProspectOnboarding,
   type OnboardingUpdate,
 } from "@/lib/notion-prospects";
+import {
+  buildOnboardingCompleteEmail,
+  sendCustomerNotification,
+} from "@/lib/email";
+import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
 
@@ -200,11 +205,41 @@ export async function POST(request: Request) {
     );
   }
 
+  // Customer email on first transition into Onboarding Complete:
+  // confirms the go-live date and points them at their account
+  // dashboard (their post-launch home for change requests, status,
+  // subscription details). Fail-soft — never blocks the success
+  // response. Email goes out once and only on the first transition,
+  // so re-saving an already-complete hub doesn't re-notify.
+  let customerEmailWarning: string | null = null;
+  if (update.statusFlip === "Onboarding Complete") {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
+    const reviewSlice = (mergedData.review ?? {}) as { goLiveDate?: string };
+    const email = buildOnboardingCompleteEmail({
+      customerName: prospect.name,
+      businessName: prospect.business ?? "",
+      goLiveDate: reviewSlice.goLiveDate ?? "",
+      accountUrl: `${baseUrl}/account/${token}`,
+    });
+    customerEmailWarning = await sendCustomerNotification({
+      toEmail: prospect.email,
+      toName: prospect.name,
+      subject: email.subject,
+      body: email.body,
+    });
+    if (customerEmailWarning) {
+      console.warn(
+        `[api/onboarding] Hub complete saved but customer email failed: ${customerEmailWarning}`,
+      );
+    }
+  }
+
   return NextResponse.json({
     success: true,
     stepId,
     markedDone: !!markDone,
     hubComplete: update.statusFlip === "Onboarding Complete",
+    customerEmailWarning,
   });
 }
 

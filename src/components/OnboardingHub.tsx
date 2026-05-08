@@ -149,11 +149,19 @@ export default function OnboardingHub(props: OnboardingHubProps) {
           {hubDone && (
             <div
               role="status"
-              className="mt-6 rounded-2xl border-2 border-green-600 bg-green-50 p-4 text-sm text-green-800"
+              className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border-2 border-green-600 bg-green-50 p-5 text-sm text-green-800"
             >
-              <strong>All set.</strong> Your handover checklist is complete.
-              I&apos;ll start your build and email you when the preview is
-              ready.
+              <div className="min-w-0">
+                <strong>All set.</strong> Your handover checklist is
+                complete. I&apos;ll start your build and email you when
+                the preview is ready.
+              </div>
+              <a
+                href={`/account/${token}`}
+                className="inline-flex flex-none items-center gap-1.5 rounded-full bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-green-700"
+              >
+                Open your account dashboard →
+              </a>
             </div>
           )}
         </div>
