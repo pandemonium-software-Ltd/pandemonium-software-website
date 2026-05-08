@@ -258,6 +258,26 @@ dashboard" promise. Estimated 16-20 hours. Five commits:
 - C5: Customer notification email pipeline (drafts → Ben approves
   during first-20-clients period → sends automatically thereafter)
 
+### Stage 2D — Dashboards (PARTIALLY SHIPPED)
+
+The customer-facing post-launch home and the operator drill-down.
+Stage 2B wires the SCAFFOLD now; richer interactions land alongside
+Stage 2C as Cowork's audit log and approval queue come online.
+
+**D1 (shipped):** Customer dashboard `/account/[token]`, change
+request form, `/admin/[token]` operator detail page, `/admin` link
+to detail.
+
+**D2 (TODO):** Inline Notion field editing on `/admin/[token]`.
+Buttons to mark change requests resolved / add resolution notes /
+re-classify. Customer-side: cancel-with-notice flow that triggers
+§6.5 cancellation handover.
+
+**D3 (TODO, depends on Stage 2C):** Audit-log feed on
+`/admin/[token]` with the last 30 Cowork actions. Approval queue
+banner on `/admin` showing Cowork drafts awaiting Ben's review.
+Bulk actions ("apply security patch to all").
+
 ### Stage 3 (LATER)
 Full GBP API integration, custom domain `moduforge.co.uk`,
 Plausible analytics, real photography, real testimonials, paid
@@ -563,7 +583,119 @@ A few non-negotiables for Cowork, baked into prompts and code:
   Stage 2C C1) — every action, success or failure. Never edited or
   deleted.
 
-## 8. Operations interface (Ben's view at scale)
+## 8. Customer dashboard (`/account/[token]`)
+
+The customer's post-launch home. Same UUID token they've had since
+enquiry; same gate pattern as the Onboarding Hub. Read-mostly with
+one interactive piece: the "Need a change?" inbox.
+
+### 8.1 Access gate
+
+Open from `Status: Paid` onwards (so customers can see their record
+while still onboarding). Cancelled customers get a read-only view —
+the change-request form is hidden and a banner explains the state.
+Pre-payment statuses redirect to a friendly "your account isn't
+active yet" message. Same UUID + regex check as every other token-
+gated route in the app.
+
+### 8.2 Surfaces
+
+**Hero:** first name, business name, a coloured status badge
+(`Live` / `Onboarding in progress` / `Build queued` / etc.) and (if
+cancelled) a clear banner explaining what happened.
+
+**Card 1 — Your site:**
+- Domain (clickable link to `https://customer.domain` if Hub Step 2
+  captured one; otherwise a "finish onboarding to add your domain"
+  fallback)
+- Live-status copy that adapts to `Status` (Live = "Live for X
+  days"; Build Started = "I'll email you when the preview is
+  ready"; Onboarding Complete = "Onboarding complete — your build
+  is queued"; etc.)
+- Target go-live date if set
+- "Open your Onboarding Hub →" link (always visible while
+  non-cancelled — even a Live customer might want to look back)
+
+**Card 2 — Your subscription:**
+- Setup fee (one-off) + Monthly fee (with Founding-member tag if
+  applicable)
+- Modules included (Base + each extra)
+- "Want to add or remove a module? Email me" mailto with prefilled
+  subject
+
+**Card 3 — This month:**
+- Content allowance: "X / 30 min used this month" (placeholder
+  showing 0/30 in Stage 2D D1; populated from the Cowork audit log
+  in D3)
+- Note that the monthly performance report contains the detailed
+  tracking
+
+**Card 4 — Get in touch:**
+- Mailto button to `pandamoniumsoftwareltd@gmail.com`
+- Cancellation mailto with "Cancellation - {business}" subject
+  (self-serve flow comes in D2)
+
+**Need a change? (full-width section, hidden when Cancelled):**
+- 5000-char textarea + Submit button (POST `/api/account/change-
+  request`)
+- Pending requests list below, newest first; each shows submitted
+  time (relative if recent, absolute past 30 days), status badge
+  (`pending` / `in-progress` / `resolved` / `rejected`), and
+  message body
+- 5-char minimum prevents accidental empty submits; 5000-char
+  maximum keeps each request scoped (split into separate ones for
+  bigger asks)
+
+### 8.3 Change request data flow
+
+```
+Customer types message → click Submit
+        │
+        ▼
+POST /api/account/change-request   { token, message }
+        │
+        │  zod-validated; status checked against ELIGIBLE_STATUSES
+        │  (Paid / Onboarding * / Build Started / Live)
+        ▼
+Generate ChangeRequest:
+   { id: crypto.randomUUID(), submittedAt: now, message, status: "pending" }
+        │
+        ▼
+appendChangeRequest(prospect.pageId, request)
+   → read current Change Requests Inbox JSON array
+   → prepend new entry (newest first)
+   → write back as rich_text on Prospects DB
+        │
+        ▼
+sendInternalNotification → Ben's gmail with Notion + admin links
+        │
+        ▼
+Return { success: true, request } to client
+        │
+        ▼
+Client merges into local state (no refetch needed)
+```
+
+The `Change Requests Inbox` rich_text field is a JSON array of
+ChangeRequest records — see `src/lib/notion-prospects.ts` for the
+type. Stage 2C C1 graduates this into a dedicated `Change
+Requests` Notion DB once Cowork starts processing them at scale.
+
+### 8.4 What this dashboard intentionally doesn't do (yet)
+
+- Self-serve cancellation (D2)
+- Module add/remove without email (D2)
+- Bill / invoice viewing (deferred to Stripe integration, Stage 2A
+  Part 2)
+- Site analytics widget (deferred to Stage 3, when Plausible is
+  wired)
+- Editing data the customer already submitted in earlier phases
+  (already covered by the Onboarding Hub for Hub data; intake form
+  edits go through email for now)
+- Live chat / inline messaging (probably never — async email is
+  better for everyone at small business scale)
+
+## 9. Operations interface (Ben's view at scale)
 
 ModuForge is designed for hundreds of customers without scaling Ben's
 ops time linearly. That only works if (a) Cowork does the work and
@@ -731,7 +863,7 @@ What Ben DOES do (the irreducible human work):
 - Periodically review the audit log and Cowork's classification
   accuracy; update prompts if drift detected
 
-## 9. Open questions / pending decisions
+## 10. Open questions / pending decisions
 
 - **Encryption library for Resend keys** — Web Crypto API (built into
   Workers) using AES-GCM, key from a Worker secret. Pin the choice in

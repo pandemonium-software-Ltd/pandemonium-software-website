@@ -102,7 +102,26 @@ export type ProspectRecord = {
   onboardingStartedAt?: string;
   onboardingCompletedAt?: string;
   goLiveDate?: string;
+  // --- Customer dashboard (Stage 2D) ---
+  changeRequests: ChangeRequest[];
   notionUrl: string;
+};
+
+/**
+ * One row in the customer's change-requests inbox. Submitted via the
+ * /account/[token] dashboard's "Need a change?" form. Cowork will
+ * pick these up in Stage 2C, classify (content / module / out-of-
+ * scope), draft a reply, and forward to Ben for approval. Until
+ * then, Ben sees them in /admin/[token] and processes manually.
+ */
+export type ChangeRequest = {
+  id: string; // UUID
+  submittedAt: string; // ISO-8601
+  message: string; // raw customer text
+  status: "pending" | "in-progress" | "resolved" | "rejected";
+  resolvedAt?: string;
+  /** Internal note from Ben/Cowork. Not surfaced to the customer. */
+  resolutionNote?: string;
 };
 
 // --- Property helpers ---
@@ -386,6 +405,25 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     }
   }
 
+  let changeRequests: ChangeRequest[] = [];
+  const inboxRaw = readRichText(p["Change Requests Inbox"]);
+  if (inboxRaw) {
+    try {
+      const parsed = JSON.parse(inboxRaw);
+      if (Array.isArray(parsed)) {
+        changeRequests = parsed.filter(
+          (entry): entry is ChangeRequest =>
+            entry &&
+            typeof entry === "object" &&
+            typeof entry.id === "string" &&
+            typeof entry.message === "string",
+        );
+      }
+    } catch {
+      // ignore malformed
+    }
+  }
+
   return {
     pageId: page.id,
     notionUrl: page.url ?? "",
@@ -425,7 +463,71 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     onboardingStartedAt: readDate(p["Onboarding Started At"]),
     onboardingCompletedAt: readDate(p["Onboarding Completed At"]),
     goLiveDate: readDate(p["Go Live Date"]),
+    changeRequests,
   };
+}
+
+// --- Change requests inbox ---
+
+/**
+ * Append a new change request to the customer's inbox. The inbox is
+ * a JSON array stored in a single rich_text field on the Prospects
+ * page. We read-modify-write because Notion has no native list-
+ * append for rich_text. Race conditions on concurrent submits are
+ * extremely unlikely (one customer, one form) and would just lose
+ * one entry — Cowork's audit log catches anything that mattered.
+ */
+export async function appendChangeRequest(
+  pageId: string,
+  request: ChangeRequest,
+): Promise<void> {
+  // Read current inbox.
+  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
+  const props = page.properties as Record<string, unknown>;
+  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
+    ?.rich_text;
+  let current: ChangeRequest[] = [];
+  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
+    const text = rawTextArr
+      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+      .join("");
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) current = parsed;
+      } catch {
+        // ignore malformed; we'll overwrite
+      }
+    }
+  }
+  const next = [request, ...current]; // newest first
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Change Requests Inbox": rt(JSON.stringify(next)),
+      },
+    },
+  });
+}
+
+/**
+ * Replace the entire inbox in one write. Used by the operator
+ * dashboard when Ben marks a request resolved or edits the
+ * resolution note.
+ */
+export async function replaceChangeRequests(
+  pageId: string,
+  requests: ChangeRequest[],
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Change Requests Inbox": rt(JSON.stringify(requests)),
+      },
+    },
+  });
 }
 
 // --- Update Onboarding (partial saves + per-step done flag + status flips) ---

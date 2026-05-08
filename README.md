@@ -46,10 +46,11 @@ The site has three concentric surfaces:
 | `/privacy` | UK GDPR privacy policy |
 | `/terms` | Plain-English working agreement |
 
-### Token-gated prospect pipeline
+### Token-gated customer surface
 
 Each customer's journey is keyed by a UUID token issued at enquiry
-and surfaced through every subsequent email.
+and surfaced through every subsequent email. The token is the same
+for the full lifecycle, from enquiry to live customer dashboard.
 
 | Route | Phase | Status gate |
 | --- | --- | --- |
@@ -57,12 +58,14 @@ and surfaced through every subsequent email.
 | `/intake/[token]` | Phase 3 — full 7-section intake wizard | After Phase 2 acceptance |
 | `/payment/[token]` | Phase 3 → Stripe handoff | After intake submission |
 | `/onboarding/[token]` | Stage 2B — 5-step Onboarding Hub | After payment |
+| `/account/[token]` | Stage 2D — customer dashboard | After payment, persists for life of account |
 
 ### Operator surface
 
 | Route | Purpose | Auth |
 | --- | --- | --- |
-| `/admin` | Pipeline dashboard, prospect list, copy-link tools | HTTP Basic Auth (`ADMIN_PASSWORD`) |
+| `/admin` | Fleet view: every prospect, status, links | HTTP Basic Auth (`ADMIN_PASSWORD`) |
+| `/admin/[token]` | Per-customer drill-down: full Notion record + change requests inbox + drop-in deep links to Notion / customer dashboard / Hub / intake | HTTP Basic Auth |
 
 ### API
 
@@ -72,6 +75,7 @@ and surfaced through every subsequent email.
 | `/api/qualify` | POST | Phase 2 form → compatibility engine → Notion |
 | `/api/intake` | POST | Phase 3 partial saves + final submission |
 | `/api/onboarding` | POST | Hub per-step partial saves + mark-done |
+| `/api/account/change-request` | POST | Customer change request → Notion inbox + email Ben |
 | `/api/prospect/[token]` | GET | Server lookup for token-gated pages |
 
 ---
@@ -115,6 +119,18 @@ and surfaced through every subsequent email.
 │     • Incident response (3-tier escalation)                  │
 │     • Stripe subscription monitoring                         │
 │     • Cancellation handover                                  │
+│                                                              │
+│  Customer's home: /account/[token] (§8)                      │
+│     • Status badge + days-since-launch                       │
+│     • Subscription details + module list                     │
+│     • Submit change requests directly                        │
+│     • This-month allowance + email Ben link                  │
+│                                                              │
+│  Ben's home: /admin + /admin/[token] (§9)                    │
+│     • Fleet view across every customer                       │
+│     • Per-customer drill-down with full Notion record        │
+│     • Change requests inbox per customer                     │
+│     • Drop-in deep links to Cloudflare / Resend / etc.       │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -243,7 +259,8 @@ stays human-reviewed.
 Ben never logs into a customer's SaaS dashboard for routine work.
 But he always has clear paths to see what's happening and step in
 when needed. The full spec is in
-[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §8:
+[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) §9 (the customer-
+facing `/account/[token]` dashboard is §8):
 
 - **Fleet view (`/admin`)** — sortable table of every live customer
   with health badge, content allowance, subscription state, open
@@ -287,22 +304,23 @@ pre-triage path and a self-serve customer change UI for that scale.
   compatibility engine → intake → fee calculation → payment placeholder)
 - Stage 2B Phase H1 — Onboarding Hub scaffolding + Step 1 (Cloudflare)
 - Stage 2B Phase H2 — Step 2 (Domain + conditional Resend Teams flow)
+- Stage 2B Phase H3 — Step 3 (Cal.com URL capture + GBP manager invite)
+- Stage 2D D1 — Customer dashboard (`/account/[token]`) + operator
+  per-customer detail (`/admin/[token]`) + change-requests inbox
 - ModuForge brand introduced; legal entity Pandemonium Software Ltd
   preserved
 - AI transparency disclosures (Privacy §5, About page, enquiry copy)
 
-### In progress
-
-- Stage 2B Phase H3 — Step 3 (Cal.com URL capture + GBP URL capture)
-- Stage 2B Phase H4 — Step 4 (Brand assets + R2 upload binding)
-- Stage 2B Phase H5 — Step 5 (Review + go-live)
-
 ### Next
 
+- Stage 2B Phase H4 — Step 4 (Brand assets + R2 upload binding)
+- Stage 2B Phase H5 — Step 5 (Review + go-live)
 - Stage 2A Part 2 — real Stripe Checkout integration
 - Stage 2C — Cowork Ops automation worker (the milestone that makes
   the "Ben never touches a dashboard" promise real). 5 commits, see
   `docs/ARCHITECTURE.md` §5
+- Stage 2D D2-D3 — inline Notion editing, change-request resolution
+  controls, audit-log feed, approval queue (depends on Stage 2C)
 - Stage 3 — full GBP API integration, custom domain, Plausible
   analytics, real client photography and testimonials
 

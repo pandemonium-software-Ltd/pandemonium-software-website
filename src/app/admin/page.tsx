@@ -219,6 +219,12 @@ export default async function AdminPage() {
                     <Td>
                       <div className="flex flex-col gap-1 text-xs">
                         <a
+                          href={`/admin/${p.token}`}
+                          className="link font-semibold"
+                        >
+                          Detail →
+                        </a>
+                        <a
                           href={p.notionUrl}
                           target="_blank"
                           rel="noopener noreferrer"
