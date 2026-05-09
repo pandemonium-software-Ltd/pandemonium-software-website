@@ -349,10 +349,16 @@ resolved/rejected; PATCH `/api/admin/change-request` endpoint
 (Basic Auth gated); customer email on first transition into a
 terminal state with the operator's reply verbatim.
 
-**D2 (TODO):** Inline Notion field editing for the rest of the
-operator detail page (notes, fees, modules — currently read-only).
-Customer-side: cancel-with-notice flow that triggers §6.5
-cancellation handover.
+**D2 (TODO — required for the §9.0 two-surface rule):** Inline
+Notion field editing for the rest of the operator detail page
+(notes, fees, modules — currently read-only). **Pause Cowork**
+toggle in the `/admin/[token]` header (writes through to the
+`Cowork Paused` boolean per §11.8). **New draft** button on
+`/admin/[token]` for ad-hoc outbound emails (per §11.6). Auth
+hardening: upgrade `/admin` from Basic Auth to a session cookie
++ memorable password (Ben's primary operating surface deserves
+better than a re-prompt every refresh). Customer-side: cancel-with-
+notice flow that triggers §6.5 cancellation handover.
 
 **D3 (TODO, depends on Stage 2C):** Audit-log feed on
 `/admin/[token]` with the last 30 Cowork actions. Approval queue
@@ -389,6 +395,7 @@ them require Ben to log into a customer dashboard.
 | Daily | Stripe subscription status | See §7.7 |
 | Weekly | `npm audit --audit-level=high` against the customer's checked-out site repo | Tier 2 (Cowork applies patch + redeploys; flags major-version bumps for Ben review) |
 | Weekly | Lighthouse / Web Vitals snapshot, stored in Notion `Asset Collection` DB | Used for monthly report; no immediate action |
+| Weekly | Cowork sends a self-test email to Ben (subject `[SELF-TEST] Cowork heartbeat`); Ben replies "ok" within 7 days. No reply → Tier 3 (gmail pipeline broken; Ben's primary surface per §9.0 is unreachable). | Tier 3 if no reply received |
 | Monthly | Generate and send the customer's performance report | See §7.3 |
 
 **Trigger:** Cloudflare Cron Trigger on the Cowork Ops Worker
@@ -676,10 +683,13 @@ Three tiers, set by Cowork classifier:
   notified unless the fix means a visible change. Examples:
   dependency-patch redeploy, DNS record drift, build-config tweak.
 - **Tier 3 (genuinely broken):** site down or customer-impacting.
-  Cowork pages Ben (push notification + email + Slack if connected)
-  AND sends customer a holding email ("we know, we're on it,
-  expected ETA HH:MM"). SLA per Terms §10: aim for response within
-  working hours, fix within 48 hours.
+  Cowork pages Ben **via gmail** (immediate; subject prefixed
+  `[INCIDENT]`) — and via PWA push notification (Stage 3) as
+  redundant transport for the same email content. Ben acts via
+  `/admin/[token]` per §9.5. Cowork sends the customer a holding
+  email ("we know, we're on it, expected ETA HH:MM") in the same
+  cron tick. SLA per Terms §10: aim for response within working
+  hours, fix within 48 hours.
 
 Every incident writes to Notion `Exceptions` DB with:
 - Customer relation
@@ -1043,6 +1053,34 @@ drilling into one customer, and intervening when needed. This
 section is the spec for that interface — built incrementally across
 Stages 2C-3.
 
+### 9.0 The two-surface rule
+
+**Ben's only two interaction surfaces with this business are gmail
+and `/admin`.** Every Cowork-built feature must terminate at one of
+those two — no third surface for Ben to learn, monitor, or
+remember. This is a hard design constraint, not a guideline.
+
+- **gmail** = the Cowork Drafts approval inbox (§11) + Tier 3
+  incident pages (§6.6). Action via inline buttons (Approve /
+  Intervene) or by opening the linked `/admin` page. Ben's gmail
+  client is the inbox.
+- **`/admin`** = the fleet view, per-customer detail
+  (`/admin/[token]`), and Drafts editor (`/admin/drafts/[id]`).
+  Everything Ben can do programmatically lives here.
+
+Anything that doesn't fit (Notion direct edit, SaaS dashboards for
+Cloudflare / Resend / Cal.com / GBP, Stripe Dashboard for disputes)
+is a **documented escape hatch** in §9.5 — there because some
+operations are genuinely outside the system's reach (account-level
+billing, Stripe's UI for disputes, etc.), not as a primary
+interaction path. Cowork must never assume Ben will check or act
+on a third surface.
+
+Slack is **explicitly out of scope.** Push notifications are kept
+as a Stage 3 redundant transport for Tier 3 incidents only — same
+content as the gmail page, faster delivery; Ben still acts via
+gmail or `/admin`.
+
 ### 9.1 Fleet view (`/admin`) — current shape (Stage 2D D2)
 
 Server-rendered table that hydrates into `<AdminProspectList>`
@@ -1149,43 +1187,65 @@ The drill-down. One scrollable page with collapsible sections:
 
 Mirror of §6.6 from Ben's side:
 
-| Tier | Visible to Ben in | Email | Push | Customer notified |
+| Tier | Visible to Ben in | Email | Push (Stage 3) | Customer notified |
 |---|---|---|---|---|
 | 1 (auto-resolvable) | "Recent activity" feed in `/admin` | No | No | No |
-| 2 (config-fix) | "Awaiting approval" queue chip on `/admin` header | Daily digest by default | No | Only if customer-visible change |
-| 3 (genuinely broken) | Banner at top of `/admin` | Immediate | Push (Stage 3 — requires PWA notification setup) | Cowork-drafted holding email goes immediately; full update after fix |
+| 2 (config-fix) | "Awaiting approval" queue chip on `/admin` header + the Cowork Drafts inbox per §11 | Per draft (gmail) | No | Only if customer-visible change |
+| 3 (genuinely broken) | Banner at top of `/admin` + immediate gmail | Immediate | Yes — redundant transport for the same email content (PWA notification, Stage 3) | Cowork-drafted holding email goes immediately; full update after fix |
 
-Slack integration (Stage 3): an `#ops-modforge` channel gets every
-Tier 3, plus a daily digest of Tier 2 approvals.
+Slack integration is **dropped** from the spec — see §9.0 (two-surface
+rule). The previously planned `#ops-modforge` channel is replaced by
+the Cowork Drafts inbox (Tier 2 + the High-tier subset of routine
+work) plus immediate gmail + push (Tier 3).
 
 ### 9.5 Direct intervention paths
 
-Five well-defined ways Ben can override Cowork. None require Ben to
-log into a customer SaaS dashboard for routine work, but all are
-available for emergencies:
+Per §9.0, Ben's primary intervention is via the gmail Drafts inbox
+or `/admin`. The list below is ordered: in-scope paths first, then
+the documented escape hatches for genuinely-out-of-system actions.
 
-1. **Edit Notion directly.** Any field. System reads Notion as
-   source of truth on next cron tick. This is the lowest-friction
-   override — adjust fees, change module selections, extend allowance,
-   change status. Cowork audits the change ("Notion field changed
-   externally") on next read.
-2. **Override Cowork drafts.** Every draft has *Edit*, *Replace*,
-   *Cancel*. Edit lets Ben tweak content; Replace lets Ben write a
-   completely different action; Cancel kills the action and asks
-   Cowork to re-classify or escalate.
-3. **Pause Cowork for one customer.** Single Notion checkbox
-   ("Cowork Paused"). When checked, Cowork stops all automated actions
-   on that customer (audit log records the pause), but health checks
-   keep running so Ben still sees their state. Used when something's
+**Primary (gmail or `/admin`):**
+
+1. **Approve / Intervene on a Cowork draft via gmail.** Inline
+   button → `/api/drafts/[id]?act=…` → Approve sends; Intervene
+   redirects to `/admin/drafts/[id]`. Full spec §11.4-11.5.
+2. **Override Cowork drafts in `/admin/drafts/[id]`.** Edit lets
+   Ben tweak content; Cancel kills the action and asks Cowork to
+   re-classify or escalate. Mobile-friendly (§11.6).
+3. **Edit any customer field in `/admin/[token]`.** Full inline
+   editor on the Notion record (Stage 2D D2). Saves write through
+   to Notion; Cowork picks up changes on next cron tick.
+4. **Pause Cowork for one customer.** Toggle on `/admin/[token]`
+   header. When on, Cowork stops all automated actions on that
+   customer (audit log records the pause), but health checks keep
+   running so Ben still sees their state. Used when something's
    weird and Ben wants Cowork out of the way while he investigates.
-4. **Drop-in deep links to dashboards.** From `/admin/[token]`,
-   one-click opens the customer's Cloudflare / Resend / Cal.com /
-   GBP dashboards. Ben's team-member access means these open
-   authenticated. Use for Tier 3 emergencies only.
-5. **Direct database edit.** All operational state (prospects,
-   clients, audit log, exceptions) is in Notion. Worst case, Ben can
-   bulk-edit in Notion's UI directly. System tolerates external
-   edits (idempotent reconciliation on cron).
+   Underlying state is a `Cowork Paused` boolean in Notion (§11.8) —
+   the toggle writes through, never the other way around.
+5. **Bulk action via fleet view.** Typed-confirmation buttons on
+   `/admin`: security patch, broadcast email, fleet-wide rebuild,
+   force-rerun health checks (D3, alongside Stage 2C).
+
+**Documented escape hatches (used <1×/month, not the primary path):**
+
+6. **Edit Notion directly.** All operational state is in Notion;
+   the system tolerates external edits (idempotent reconciliation
+   on next cron tick). Use only if `/admin` can't reach a field
+   yet (i.e. before Stage 2D D2 lands), or for bulk operations
+   easier in Notion's UI than in the operator dashboard.
+7. **Cloudflare / Resend / Cal.com / GBP dashboards.** Drop-in
+   deep links from `/admin/[token]` open these authenticated
+   (Ben's team-member access). For Tier 3 emergencies and
+   account-level actions only — billing, plan upgrades,
+   account-security incidents that the API doesn't expose. Cowork
+   never assumes Ben will check these dashboards; they exist
+   because some operations are outside the system's reach.
+8. **Stripe Dashboard for dispute responses.** Stripe's UI is the
+   only place to upload dispute evidence. Cowork detects disputes
+   via webhook → emails Ben with a one-click deep link → Ben
+   responds in Stripe UI. Rare (target: <1/year). Acknowledged
+   gap because Stripe's API doesn't surface dispute response
+   composition.
 
 ### 9.6 How the model scales
 
@@ -1214,8 +1274,15 @@ The model scales because:
 Spelling out the negatives so the model is clear. **None** of these
 are part of Ben's working day:
 
+- Open Notion directly for routine work (every field is editable in
+  `/admin/[token]` after Stage 2D D2; Notion is a documented escape
+  hatch in §9.5 #6, not a daily surface)
 - Log into a customer's Cloudflare / Resend / Cal.com / GBP for
-  routine work (only Tier 3 emergencies, via the deep-links in §8.4)
+  routine work (only Tier 3 emergencies / account-level actions, via
+  the deep-links in §9.5 #7)
+- Open Stripe Dashboard except for dispute responses (rare; see
+  §9.5 #8)
+- Open Slack for ops (no ops Slack channel exists — see §9.0)
 - Click "deploy" for a content change (Cowork does it after approval)
 - Manually generate a performance report (template-only render;
   Low risk tier; auto-sends per §6.3)
@@ -1231,18 +1298,28 @@ are part of Ben's working day:
   monthly reports, change-request acknowledgements,
   onboarding-step confirmations) — all templated; see §11
 
-What Ben DOES do (the irreducible human work):
+What Ben DOES do (the irreducible human work) — **all via gmail or
+`/admin`, per §9.0:**
 
-- Maintain the Playbook (the rules Cowork follows)
+- Maintain the Playbook (the rules Cowork follows) — repo edit, not
+  ops work
 - Review High-risk drafts (refunds, complaints, legal-sounding
   language, scope quotes) and Shadow-mode drafts (first 10 of each
-  new template variant) via the Cowork Drafts approval inbox — see §11
-- Make policy decisions (set new prices, add modules, change scope rules)
-- Handle Tier 3 incidents
-- Make business decisions on edge cases Cowork escalates
-- Personally onboard a particularly important customer if he wants to
+  new template variant) **via the Cowork Drafts approval inbox in
+  gmail or `/admin/drafts/[id]`** — see §11
+- Make policy decisions (set new prices, add modules, change scope
+  rules) — repo edit
+- Handle Tier 3 incidents — Cowork pages via gmail (immediate); Ben
+  acts via `/admin/[token]` (Pause Cowork toggle, Notion field
+  edits, deep-link to the failing SaaS if account-level work needed)
+- Make business decisions on edge cases Cowork escalates — Cowork
+  routes the decision to gmail as a draft; Ben Approves / Intervenes
+- Personally onboard a particularly important customer if he wants
+  to — via `/admin/[token]` (the Hub URL is shareable; Ben can drive
+  the customer through it)
 - Periodically review the audit log and Cowork's classification
-  accuracy; update prompts if drift detected
+  accuracy; update prompts if drift detected — `/admin` audit feed
+  + repo edit
 
 ## 10. Open questions / pending decisions
 
@@ -1360,7 +1437,10 @@ using `DRAFT_APPROVAL_SECRET`).
 
 ### 11.6 Operator webpage: `/admin/drafts/[id]`
 
-Server component, Basic-Auth gated. Shows:
+Server component, Basic-Auth gated. **Mobile-friendly layout** —
+Ben must be able to handle a draft from his phone (tap-target sizes,
+single-column layout below 640px). Shows:
+
 - Customer's original message + Cowork's classification + confidence
 - Full Notion record for context
 - Editable textarea pre-filled with the draft body
@@ -1371,6 +1451,15 @@ Server component, Basic-Auth gated. Shows:
   - **Cancel draft** → POST `/api/admin/drafts/[id]/cancel` with
     optional `reason`; Notion → `intervened-cancelled`;
     classifier+template combination flagged in audit log
+
+**Compose ad-hoc draft.** A "New draft" button on `/admin/[token]`
+opens this same editor with `id=new` and an empty body, scoped to
+the current customer. Submission creates a Notion `Cowork Drafts`
+record (Status: `intervened-sent` immediately on send) and routes
+through Resend exactly like any other draft. This is how Ben sends
+a one-off email ("hey, want to grab coffee?") without leaving
+`/admin` — keeping the §9.0 two-surface rule intact for ad-hoc
+outreach too.
 
 ### 11.7 Risk-tier and shadow-mode gate
 
@@ -1392,12 +1481,16 @@ name.
 
 ### 11.8 Per-customer kill switch
 
-A `Cowork Paused` checkbox on the prospect's Notion record halts
-all automation on that customer. The `needsBenReview` helper
-returns true unconditionally when it's set, so every draft routes
-through the approval inbox. Health checks keep running; only the
-mutating actions and auto-sent emails pause. Audit log records the
-pause with timestamp + the operator who set it.
+A **"Pause Cowork" toggle** on `/admin/[token]` header (per §9.3
+header + §9.5 #4) halts all automation on that customer. The toggle
+writes a `Cowork Paused` boolean to Notion; the `needsBenReview`
+helper reads it on next tick and returns true unconditionally, so
+every draft routes through the approval inbox. Health checks keep
+running; only the mutating actions and auto-sent emails pause.
+Audit log records the pause with timestamp + that the operator set
+it via `/admin/[token]`. (Per §9.0 Ben never flips this in Notion
+directly — that's an escape hatch under §9.5 #6, not the primary
+path.)
 
 ### 11.9 Secrets
 
