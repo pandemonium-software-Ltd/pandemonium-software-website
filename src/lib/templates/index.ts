@@ -16,6 +16,8 @@
 import type { Template } from "./types";
 import { dnsVerified } from "./templates/dns-verified";
 import { changeRequestReceived } from "./templates/change-request-received";
+import { domainNameserversPending } from "./templates/domain-nameservers-pending";
+import { domainZoneActive } from "./templates/domain-zone-active";
 
 export type {
   Template,
@@ -28,6 +30,8 @@ export { renderTemplate } from "./render";
 const TEMPLATES = new Map<string, Template>([
   [dnsVerified.id, dnsVerified],
   [changeRequestReceived.id, changeRequestReceived],
+  [domainNameserversPending.id, domainNameserversPending],
+  [domainZoneActive.id, domainZoneActive],
 ]);
 
 export function getTemplate(id: string): Template {

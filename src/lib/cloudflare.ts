@@ -162,3 +162,75 @@ export async function acceptMembership(
 export async function listAccounts(): Promise<Account[]> {
   return cloudflareFetch<Account[]>("/accounts");
 }
+
+// ---------- Zones (Stage 2C C2.2) ----------
+
+export type ZoneStatus =
+  | "pending"
+  | "initializing"
+  | "active"
+  | "moved"
+  | "deleted"
+  | "deactivated";
+
+export type Zone = {
+  id: string;
+  name: string;
+  status: ZoneStatus;
+  /** Nameservers Cloudflare assigned to this zone. Customer must
+   *  point their registrar at these. Two strings for "full" zones. */
+  name_servers: string[];
+  /** Original nameservers as seen at zone-creation time. */
+  original_name_servers?: string[];
+  account: { id: string; name?: string };
+};
+
+/**
+ * List zones — optionally filtered to one account + one name.
+ * Used by step2-domain to check if a zone already exists before
+ * trying to create one (idempotency: customer might have set up
+ * their own zone before paying).
+ */
+export async function listZones(opts: {
+  accountId?: string;
+  name?: string;
+} = {}): Promise<Zone[]> {
+  const params = new URLSearchParams();
+  if (opts.accountId) params.set("account.id", opts.accountId);
+  if (opts.name) params.set("name", opts.name);
+  const qs = params.toString();
+  return cloudflareFetch<Zone[]>(`/zones${qs ? `?${qs}` : ""}`);
+}
+
+/**
+ * Create a "full" zone in the customer's Cloudflare account. "Full"
+ * means the customer will repoint their registrar at Cloudflare's
+ * assigned nameservers (vs "partial" / Cloudflare for SaaS, which
+ * uses CNAMEs and is for SaaS providers).
+ *
+ * Cloudflare returns the created zone including the assigned
+ * `name_servers` array — we email those to the customer immediately.
+ */
+export async function createZone(
+  accountId: string,
+  name: string,
+): Promise<Zone> {
+  return cloudflareFetch<Zone>("/zones", {
+    method: "POST",
+    body: {
+      name,
+      account: { id: accountId },
+      type: "full",
+    },
+  });
+}
+
+/**
+ * Fetch a single zone's current state. Used for status polling —
+ * the zone starts as `pending`, transitions to `active` once the
+ * customer's registrar update propagates (typically 1-2 hours;
+ * max 48).
+ */
+export async function getZone(zoneId: string): Promise<Zone> {
+  return cloudflareFetch<Zone>(`/zones/${zoneId}`);
+}

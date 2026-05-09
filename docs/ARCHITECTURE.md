@@ -369,11 +369,26 @@ dashboard" promise. Estimated 16-20 hours. Seven commits:
     message; if >1 pending, fail (escalate to Ben for
     disambiguation — rare in practice). 12 unit tests cover
     every branch with mocked CF API.
-  - **C2.2 (TODO)**: Step 2.A part 1 — zone create + nameserver
-    email + zone status poll. POST /zones for external
-    registrars; templated email to customer with the assigned
-    nameservers + per-registrar walkthrough; poll zone status
-    until active; mark `Zone Id` + `Zone Status` in Notion.
+  - **C2.2 (DONE & LIVE)**: Step 2.A part 1 — zone create +
+    nameserver email + zone status poll. step2-domain.run() is a
+    3-latch state machine: (A) zone exists? create-or-discover;
+    (B) need NS email? send via templated `domain-nameservers-pending`,
+    set `Nameservers Email Sent At` latch; (C) status active +
+    no DV? send `domain-zone-active`, set `Domain Verified At`
+    latch. Each tick safe to re-run; latches prevent any
+    duplicate emails. New `src/lib/cloudflare.ts` methods:
+    `listZones`, `createZone`, `getZone`. New
+    `src/ops-worker/notify.ts` shared customer-email helper
+    (renders template, sends via Resend, replyTo OPS_EMAIL).
+    Two new templates registered: `domain-nameservers-pending`,
+    `domain-zone-active` (both Low risk tier per §11.2). Four
+    new Notion columns on Prospects: Cloudflare Zone Id,
+    Cloudflare Zone Status (select: pending/initializing/active/
+    moved/deleted/deactivated), Domain Verified At, Nameservers
+    Email Sent At. 19 unit tests cover every branch — shouldRun
+    gating (5), skip paths (3), first-tick happy path (2),
+    nameservers latch (2), polling (2), activation latch (2),
+    error paths (3).
   - **C2.3 (TODO)**: Step 2.A part 2 — per-customer Worker
     provisioning + Custom Domain binding. Deploy a placeholder
     Worker named `mf-<token-prefix>` per §10; bind the

@@ -107,6 +107,20 @@ export type ProspectRecord = {
   cloudflareMembershipVerifiedAt?: string;
   /** Customer's Cloudflare account id, captured by step1-cloudflare after accepting the invitation. */
   cloudflareAccountId?: string;
+  /** Cloudflare zone id for the customer's domain, captured by step2-domain after zone create / discover. */
+  cloudflareZoneId?: string;
+  /** Latest known zone status (one of: pending, initializing, active, moved, deleted, deactivated). */
+  cloudflareZoneStatus?:
+    | "pending"
+    | "initializing"
+    | "active"
+    | "moved"
+    | "deleted"
+    | "deactivated";
+  /** ISO-8601, set when the zone status first flips to "active" (latch — used to send the activation email exactly once). */
+  domainVerifiedAt?: string;
+  /** ISO-8601, set when step2-domain sends the customer their assigned nameservers (latch — never resend). */
+  nameserversEmailSentAt?: string;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
@@ -594,6 +608,12 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     goLiveDate: readDate(p["Go Live Date"]),
     cloudflareMembershipVerifiedAt: readDate(p["Cloudflare Membership Verified At"]),
     cloudflareAccountId: readRichText(p["Cloudflare Account Id"]) || undefined,
+    cloudflareZoneId: readRichText(p["Cloudflare Zone Id"]) || undefined,
+    cloudflareZoneStatus: readSelect(
+      p["Cloudflare Zone Status"],
+    ) as ProspectRecord["cloudflareZoneStatus"],
+    domainVerifiedAt: readDate(p["Domain Verified At"]),
+    nameserversEmailSentAt: readDate(p["Nameservers Email Sent At"]),
     changeRequests,
   };
 }
@@ -617,6 +637,79 @@ export async function recordCloudflareMembership(
       properties: {
         "Cloudflare Membership Verified At": { date: { start: now } },
         "Cloudflare Account Id": rt(accountId),
+      },
+    },
+  });
+}
+
+/**
+ * Capture the customer's zone (id + initial status) when step2-domain
+ * either creates a new zone or discovers an existing one. Idempotent:
+ * subsequent calls just overwrite with whatever Cloudflare reports.
+ */
+export async function recordCloudflareZone(
+  pageId: string,
+  zoneId: string,
+  status: NonNullable<ProspectRecord["cloudflareZoneStatus"]>,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Cloudflare Zone Id": rt(zoneId),
+        "Cloudflare Zone Status": selectProp(status),
+      },
+    },
+  });
+}
+
+/**
+ * Update just the zone status — used by step2-domain on every poll
+ * tick once the zone exists, until the status flips to active.
+ */
+export async function updateZoneStatus(
+  pageId: string,
+  status: NonNullable<ProspectRecord["cloudflareZoneStatus"]>,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Cloudflare Zone Status": selectProp(status),
+      },
+    },
+  });
+}
+
+/**
+ * Stamp Domain Verified At — the latch that step2 uses to send the
+ * "zone active" email exactly once per prospect.
+ */
+export async function markDomainVerified(pageId: string): Promise<void> {
+  const now = new Date().toISOString();
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Domain Verified At": { date: { start: now } },
+      },
+    },
+  });
+}
+
+/**
+ * Stamp Nameservers Email Sent At — the latch that step2 uses to
+ * send the nameservers email exactly once per prospect.
+ */
+export async function markNameserversEmailed(
+  pageId: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Nameservers Email Sent At": { date: { start: now } },
       },
     },
   });
