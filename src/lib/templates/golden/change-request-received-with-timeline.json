@@ -1,0 +1,14 @@
+{
+  "description": "Change-request acknowledgement when classifier predicts a timeline",
+  "template": "change-request-received",
+  "values": {
+    "customerName": "Sam",
+    "requestSummary": "update phone number on the contact page to 020 1234 5678",
+    "remainingDescription": "2 change requests",
+    "expectedTimeline": "tomorrow afternoon"
+  },
+  "expected": {
+    "subject": "Your change request is in the queue",
+    "body": "Hi Sam,\n\nGot it: update phone number on the contact page to 020 1234 5678.\n\nI'll work on this and have it live by tomorrow afternoon.\n\nYou have 2 change requests left for this month. You can\nretract this request from your dashboard any time before I start\nworking on it.\n\n— Cowork (your ModuForge ops assistant)"
+  }
+}

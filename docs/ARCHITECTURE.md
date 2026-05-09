@@ -309,11 +309,19 @@ yet — captures data only.**
 
 This is the milestone that delivers the "Ben never touches a
 dashboard" promise. Estimated 16-20 hours. Seven commits:
-- C0: Template engine + golden eval scenarios (synthetic customer
-  cases that gate any template / classifier change). The
-  template-first cascade (template → Haiku classifier → Haiku
-  generator → Sonnet last resort) needs deterministic fixtures so
-  prompt edits don't silently regress. See §11 for the cascade.
+- C0 (DONE): Template engine + golden eval scenarios. Pure
+  TypeScript renderer at `src/lib/templates/` with `{{key}}`
+  substitution + `{{#if key}}...{{/if}}` conditionals;
+  required-value validation throws on missing slots so callers
+  can't ship empty-substitution emails. Two starter templates
+  (`dns-verified` Low tier; `change-request-received` Medium tier
+  with the optional-timeline conditional) prove the engine across
+  both §11.2 risk tiers. Vitest harness loads `golden/*.json`
+  fixtures and asserts deterministic render — same inputs → same
+  email, every time. 11 engine unit tests + 4 golden fixtures.
+  Run with `npm test`. C5 layers Cowork's notification pipeline
+  on top; the rest of the template set lands as the §6 task
+  contracts get wired in.
 - C1: Ops Worker scaffolding (separate Worker, Cron Trigger, Notion
   poller, audit log table, Exceptions DB schema)
 - C2: Cloudflare automation (membership accept; DNS + per-customer

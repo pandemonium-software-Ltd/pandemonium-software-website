@@ -1,0 +1,12 @@
+{
+  "description": "DNS verified for a www. subdomain (alongside the apex)",
+  "template": "dns-verified",
+  "values": {
+    "customerName": "Pat",
+    "domain": "www.patsplumbing.co.uk"
+  },
+  "expected": {
+    "subject": "Your domain www.patsplumbing.co.uk is verified ✓",
+    "body": "Hi Pat,\n\nQuick update — DNS for www.patsplumbing.co.uk is now verified and pointed at\nyour ModuForge site.\n\nWhat this means:\n  • Your site goes live on this domain on your chosen launch date\n  • Email forwarding (if you configured it) is active now\n  • TLS certificate is provisioned automatically — no action needed\n    from you\n\nNext update from me: when the site goes live.\n\n— Cowork (your ModuForge ops assistant)"
+  }
+}

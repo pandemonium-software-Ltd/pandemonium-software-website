@@ -1,0 +1,13 @@
+{
+  "description": "Change-request acknowledgement when classifier can't confidently predict a timeline (omits the optional clause)",
+  "template": "change-request-received",
+  "values": {
+    "customerName": "Jordan",
+    "requestSummary": "redesign the homepage hero section",
+    "remainingDescription": "1 change request"
+  },
+  "expected": {
+    "subject": "Your change request is in the queue",
+    "body": "Hi Jordan,\n\nGot it: redesign the homepage hero section.\n\nI'll work on this.\n\nYou have 1 change request left for this month. You can\nretract this request from your dashboard any time before I start\nworking on it.\n\n— Cowork (your ModuForge ops assistant)"
+  }
+}
