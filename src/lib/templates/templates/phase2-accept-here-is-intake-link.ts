@@ -15,6 +15,7 @@ export const phase2AcceptHereIsIntakeLink: Template = {
   id: "phase2-accept-here-is-intake-link",
   riskTier: "low",
   required: ["customerName", "intakeUrl"],
+  cta: { urlKey: "intakeUrl", label: "Start the intake form" },
   subject: "Great fit — let's get the details, {{customerName}}",
   body: `Hi {{customerName}},
 

@@ -51,9 +51,27 @@ export type Template = {
    * Use these for slots inside `{{#if}}...{{/if}}` conditionals.
    */
   optional?: readonly string[];
+
+  /**
+   * Optional call-to-action button. When set, the HTML version of
+   * the email rendered by notify.ts wrapInBrandedHtml() includes a
+   * styled button at the URL = values[cta.urlKey], with the
+   * provided label. The text version is unaffected — the URL stays
+   * inline in the body where the template put it. Use only when
+   * there's exactly one primary action; emails without a CTA
+   * (status updates, monthly reports) leave this unset.
+   */
+  cta?: {
+    /** Key in values that holds the URL the button links to. */
+    urlKey: string;
+    /** Button label, e.g. "Open the form". Imperative, ≤30 chars. */
+    label: string;
+  };
 };
 
 export type RenderResult = {
   subject: string;
   body: string;
+  /** Populated iff template.cta was set AND values[urlKey] is a non-empty string. */
+  cta?: { url: string; label: string };
 };

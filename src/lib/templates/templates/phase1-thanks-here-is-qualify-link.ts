@@ -12,6 +12,7 @@ export const phase1ThanksHereIsQualifyLink: Template = {
   id: "phase1-thanks-here-is-qualify-link",
   riskTier: "low",
   required: ["customerName", "businessName", "qualifyUrl"],
+  cta: { urlKey: "qualifyUrl", label: "Open the qualification form" },
   subject: "Thanks for your enquiry — next step inside",
   body: `Hi {{customerName}},
 

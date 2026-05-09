@@ -32,10 +32,20 @@ export function renderTemplate(
       `Template '${template.id}' missing required values: ${missing.join(", ")}`,
     );
   }
-  return {
+  const result: RenderResult = {
     subject: interpolate(template.subject, values),
     body: interpolate(template.body, values),
   };
+  // Populate cta if the template declares one AND the URL value
+  // is present + non-empty. Quietly omitted otherwise so notify.ts
+  // can decide whether to include a button.
+  if (template.cta) {
+    const url = values[template.cta.urlKey];
+    if (typeof url === "string" && url.length > 0) {
+      result.cta = { url, label: template.cta.label };
+    }
+  }
+  return result;
 }
 
 function interpolate(template: string, values: TemplateValues): string {
