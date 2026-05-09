@@ -148,7 +148,6 @@ export function buildPhase2Notification(
       `Monthly enquiry volume: ${data.enquiryVolume}\n` +
       `Booking handling: ${data.bookingHandling}\n` +
       `Google Business Profile: ${data.gbpStatus}\n` +
-      `Logo: ${data.logoStatus}\n` +
       `Modules they want: ${data.modulesInterest.join(", ") || "(none specified)"}\n` +
       `Target go-live: ${data.goLiveDate}\n` +
       (data.specificFeatures

@@ -83,12 +83,14 @@ export const GBP_STATUS_OPTIONS = [
   "Not sure what that is",
 ] as const;
 
-export const LOGO_STATUS_OPTIONS = [
-  "I have a good one",
-  "I have an old one",
-  "No logo",
-  "Need help creating one",
-] as const;
+// LOGO_STATUS_OPTIONS removed: logo capture moved out of Phase 2
+// qualification entirely. Customer-supplied logos live in Phase 4
+// onboarding Step 4 (brand assets, R2 upload). Compatibility engine
+// doesn't gate on logo status, so asking in Phase 2 was redundant
+// + confused prospects. ModuForge does NOT supply logos — if a
+// prospect doesn't have one, they source it themselves (Canva,
+// Fiverr etc.) before completing Step 4. See
+// src/components/onboarding/Step4Assets.tsx for the explainer.
 
 export const MODULE_OPTIONS = [
   "Online Booking",
@@ -158,7 +160,6 @@ export const phase2Schema = z.object({
   enquiryVolume: z.enum(ENQUIRY_VOLUME_OPTIONS),
   bookingHandling: z.enum(BOOKING_HANDLING_OPTIONS),
   gbpStatus: z.enum(GBP_STATUS_OPTIONS),
-  logoStatus: z.enum(LOGO_STATUS_OPTIONS),
   brandColour: z.string().max(20).optional(),
   brandColourUnsure: z.boolean().optional(),
   modulesInterest: z.array(z.enum(MODULE_OPTIONS)).default([]),

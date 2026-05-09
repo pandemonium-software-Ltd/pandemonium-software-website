@@ -12,7 +12,7 @@
 //
 // The exact wording for each comes back in the API response.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -22,7 +22,6 @@ import {
   ENQUIRY_VOLUME_OPTIONS,
   BOOKING_HANDLING_OPTIONS,
   GBP_STATUS_OPTIONS,
-  LOGO_STATUS_OPTIONS,
   MODULE_OPTIONS,
 } from "@/lib/schemas";
 import { site } from "@/lib/site";
@@ -125,6 +124,15 @@ export default function QualificationForm({
     }
   });
 
+  // Mobile UX: scroll to top when success state takes over so the
+  // user sees the confirmation immediately (without having to
+  // scroll back up from where the submit button was).
+  useEffect(() => {
+    if (state.kind === "success") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [state.kind]);
+
   if (state.kind === "success") {
     const isAccept = state.outcome === "accept";
     return (
@@ -222,15 +230,6 @@ export default function QualificationForm({
           register={register("gbpStatus")}
           error={errors.gbpStatus?.message}
           options={GBP_STATUS_OPTIONS}
-          placeholder="Pick whichever fits best…"
-        />
-        <SelectField
-          id="logoStatus"
-          label="Do you have a logo?"
-          required
-          register={register("logoStatus")}
-          error={errors.logoStatus?.message}
-          options={LOGO_STATUS_OPTIONS}
           placeholder="Pick whichever fits best…"
         />
       </Section>

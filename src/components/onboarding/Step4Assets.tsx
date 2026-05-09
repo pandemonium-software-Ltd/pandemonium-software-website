@@ -223,6 +223,54 @@ export default function Step4Assets({
         <p className="mt-2 text-sm text-navy-600">
           One image. New uploads replace the previous logo automatically.
         </p>
+        <details className="mt-3 rounded-lg border-2 border-navy-100 bg-cream-50 p-3 text-sm text-navy-700">
+          <summary className="cursor-pointer font-semibold text-navy-900">
+            Don&apos;t have a logo?
+          </summary>
+          <p className="mt-2">
+            ModuForge doesn&apos;t supply logos — your brand identity
+            should be yours, not mine. A few low-cost ways to get one:
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-6">
+            <li>
+              <a
+                href="https://canva.com"
+                target="_blank"
+                rel="noreferrer"
+                className="link"
+              >
+                Canva
+              </a>{" "}
+              — free DIY logo maker; templates work surprisingly well
+            </li>
+            <li>
+              <a
+                href="https://fiverr.com"
+                target="_blank"
+                rel="noreferrer"
+                className="link"
+              >
+                Fiverr
+              </a>{" "}
+              — designer-made logos from £15-£50 (4-7 days)
+            </li>
+            <li>
+              <a
+                href="https://99designs.co.uk"
+                target="_blank"
+                rel="noreferrer"
+                className="link"
+              >
+                99designs
+              </a>{" "}
+              — competition-style; multiple concepts to pick from
+            </li>
+          </ul>
+          <p className="mt-2">
+            You can save this step and come back once you&apos;ve got
+            something. Your site can&apos;t go live without a logo.
+          </p>
+        </details>
 
         <div className="mt-4 flex flex-wrap items-start gap-4">
           {logo ? (

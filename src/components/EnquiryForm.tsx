@@ -10,7 +10,7 @@
 // Field set is the seven Phase 1 fields from Playbook §7. No "tell us
 // what you want" textarea — that's covered in Phase 2 qualification.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -68,6 +68,16 @@ export default function EnquiryForm() {
       });
     }
   });
+
+  // Mobile UX: when transitioning to success, the user is scrolled
+  // to the bottom (where the submit button was). Without this they
+  // wouldn't see the success card unless they scroll up themselves.
+  // Smooth scroll respects users with prefers-reduced-motion.
+  useEffect(() => {
+    if (state.kind === "success") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [state.kind]);
 
   if (state.kind === "success") {
     return (
