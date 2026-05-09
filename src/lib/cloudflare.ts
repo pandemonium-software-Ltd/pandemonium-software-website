@@ -234,3 +234,158 @@ export async function createZone(
 export async function getZone(zoneId: string): Promise<Zone> {
   return cloudflareFetch<Zone>(`/zones/${zoneId}`);
 }
+
+// ---------- Workers Scripts (Stage 2C C2.3) ----------
+
+/**
+ * Upload (or replace) a per-customer Worker script using the
+ * modern module-Worker format. Endpoint:
+ *   PUT /accounts/{account_id}/workers/scripts/{script_name}
+ * Body is multipart/form-data with two parts:
+ *   - "metadata" (application/json): { main_module, compatibility_date }
+ *   - "<filename>" (application/javascript+module): the script source
+ *
+ * Idempotent on Cloudflare's side — uploading the same name replaces
+ * the existing Worker. We use this to provision the placeholder
+ * "your site is being built" page right after C2.2 verifies the
+ * customer's domain.
+ *
+ * Doesn't go through cloudflareFetch (which expects JSON body)
+ * because multipart needs different headers + body shape.
+ */
+export async function uploadWorkerScript(
+  accountId: string,
+  scriptName: string,
+  scriptSource: string,
+): Promise<{ id: string; etag?: string }> {
+  const env = getServerEnv();
+  if (!env.BEN_CLOUDFLARE_API_TOKEN) {
+    throw new Error("BEN_CLOUDFLARE_API_TOKEN required to upload Workers");
+  }
+
+  const metadata = {
+    main_module: "worker.mjs",
+    compatibility_date: "2026-04-11",
+  };
+
+  const form = new FormData();
+  form.append(
+    "metadata",
+    new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+  );
+  form.append(
+    "worker.mjs",
+    new Blob([scriptSource], { type: "application/javascript+module" }),
+    "worker.mjs",
+  );
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(
+      `${CLOUDFLARE_API_BASE}/accounts/${accountId}/workers/scripts/${scriptName}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${env.BEN_CLOUDFLARE_API_TOKEN}`,
+          // DON'T set Content-Type — fetch + FormData sets the
+          // multipart boundary automatically.
+        },
+        body: form,
+        signal: controller.signal,
+      },
+    );
+
+    if (!res.ok) {
+      let code: number | undefined;
+      let message = res.statusText;
+      try {
+        const errBody = (await res.json()) as {
+          errors?: { code?: number; message?: string }[];
+        };
+        if (errBody?.errors?.[0]?.message) message = errBody.errors[0].message;
+        if (errBody?.errors?.[0]?.code) code = errBody.errors[0].code;
+      } catch {
+        // body wasn't JSON
+      }
+      throw new CloudflareApiError(res.status, message, code);
+    }
+
+    const body = (await res.json()) as { result: { id: string; etag?: string } };
+    return body.result;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ---------- Workers Custom Domains (Stage 2C C2.3) ----------
+
+export type WorkerCustomDomain = {
+  id: string;
+  hostname: string;
+  service: string;
+  zone_id: string;
+  zone_name: string;
+  environment: string;
+  /**
+   * Provisioning status. `pending` while Cloudflare is issuing the
+   * TLS certificate; `active` once routing is live. Some responses
+   * may omit this field — treat absent as `active` (the binding
+   * exists, which is most of what we care about).
+   */
+  status?: "pending" | "active" | "pending_deletion";
+};
+
+/**
+ * List Workers Custom Domains on an account, optionally filtered
+ * to one hostname. Used by step2 for idempotency: don't re-bind
+ * a hostname that's already pointed at our Worker.
+ */
+export async function listWorkerCustomDomains(
+  accountId: string,
+  hostname?: string,
+): Promise<WorkerCustomDomain[]> {
+  const params = new URLSearchParams();
+  if (hostname) params.set("hostname", hostname);
+  const qs = params.toString();
+  return cloudflareFetch<WorkerCustomDomain[]>(
+    `/accounts/${accountId}/workers/domains${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/**
+ * Bind a hostname to a Workers service. Single API call provisions
+ * DNS + TLS + traffic routing. Per §4.3 Step 2 Worker Custom Domain
+ * binding leg.
+ */
+export async function createWorkerCustomDomain(
+  accountId: string,
+  opts: { hostname: string; service: string; zoneId: string },
+): Promise<WorkerCustomDomain> {
+  return cloudflareFetch<WorkerCustomDomain>(
+    `/accounts/${accountId}/workers/domains`,
+    {
+      method: "POST",
+      body: {
+        environment: "production",
+        hostname: opts.hostname,
+        service: opts.service,
+        zone_id: opts.zoneId,
+      },
+    },
+  );
+}
+
+/**
+ * Fetch a single binding's current state. Used for polling the
+ * pending → active transition (TLS cert provisioning, ~few minutes).
+ */
+export async function getWorkerCustomDomain(
+  accountId: string,
+  domainId: string,
+): Promise<WorkerCustomDomain> {
+  return cloudflareFetch<WorkerCustomDomain>(
+    `/accounts/${accountId}/workers/domains/${domainId}`,
+  );
+}

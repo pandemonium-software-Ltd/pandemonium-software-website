@@ -121,6 +121,10 @@ export type ProspectRecord = {
   domainVerifiedAt?: string;
   /** ISO-8601, set when step2-domain sends the customer their assigned nameservers (latch — never resend). */
   nameserversEmailSentAt?: string;
+  /** Per-customer Worker name, captured by step2-domain after the placeholder Worker is uploaded. Latches "Worker exists in customer's CF account". */
+  workerName?: string;
+  /** ISO-8601, set when step2-domain has bound apex+www to the per-customer Worker AND verified the placeholder responds with HTTP 200. The "site is reachable" latch. */
+  siteLiveAt?: string;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
@@ -614,6 +618,8 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     ) as ProspectRecord["cloudflareZoneStatus"],
     domainVerifiedAt: readDate(p["Domain Verified At"]),
     nameserversEmailSentAt: readDate(p["Nameservers Email Sent At"]),
+    workerName: readRichText(p["Worker Name"]) || undefined,
+    siteLiveAt: readDate(p["Site Live At"]),
     changeRequests,
   };
 }
@@ -710,6 +716,43 @@ export async function markNameserversEmailed(
     body: {
       properties: {
         "Nameservers Email Sent At": { date: { start: now } },
+      },
+    },
+  });
+}
+
+/**
+ * Stamp the per-customer Worker name — the latch that step2 uses
+ * to skip Worker upload on subsequent ticks. Set once after
+ * uploadWorkerScript succeeds; never changes for a given prospect
+ * (the name is derived deterministically from the Phase 1 token).
+ */
+export async function recordWorkerName(
+  pageId: string,
+  workerName: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Worker Name": rt(workerName),
+      },
+    },
+  });
+}
+
+/**
+ * Stamp Site Live At — the final latch in step2 indicating the
+ * placeholder Worker is bound to apex+www AND HTTP 200 verified.
+ * Once set, step2 stops firing for this prospect.
+ */
+export async function markSiteLive(pageId: string): Promise<void> {
+  const now = new Date().toISOString();
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Site Live At": { date: { start: now } },
       },
     },
   });

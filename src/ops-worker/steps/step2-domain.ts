@@ -1,49 +1,50 @@
-// Step 2 — Domain (zone create + nameservers email + status poll).
-// Stage 2C C2.2.
+// Step 2 — Domain (zone create + nameservers email + status poll
+// + per-customer Worker provisioning + Custom Domain binding).
+// Stage 2C C2.2 (zone work) + C2.3 (Worker placement).
 //
-// Per §4.3 Step 2.A:
-//   - For external/already-have registrars: POST /zones on the
-//     customer's Cloudflare account, email them the assigned
-//     nameservers, then poll until status:active and email confirm.
-//   - For Cloudflare registrars: zone is auto-created when the
-//     customer registers the domain through Cloudflare. We just
-//     find it and confirm. No nameserver email needed.
+// Per §4.3 Step 2.A. Six idempotency latches in Notion; shouldRun
+// gates on Step 2 done + Cloudflare account known + still-work-to-do.
 //
-// Worker Custom Domain binding (the "bind hostname → mf-<token-prefix>"
-// step) is C2.3, not this commit. step2 stops at "zone is active in
-// the customer's Cloudflare account".
+// run() is a state machine with six independent transitions, each
+// gated on its own latch so re-running the step is always safe:
 //
-// Three idempotency latches — all in Notion. shouldRun gates on:
-//   1. Step 2 done? (customer has marked the Hub step done)
-//   2. Cloudflare account id known? (step1 has accepted membership)
-//   3. Zone status != active OR domainVerifiedAt unset
-//      (still work to do, OR we still owe an activation email)
+//   A. zone exists?              → create or discover, record id+status
+//   B. need NS email?            → render + send, set Nameservers Email Sent At
+//   C. zone status active + no DV?  → render + send, set Domain Verified At
+//   D. zone active + no Worker?  → upload placeholder Worker, set Worker Name
+//   E. Worker exists, hostname not bound? → bind apex + www
+//   F. bindings active + no SiteLiveAt? → HTTP 200 verify, set Site Live At
 //
-// run() is a state machine with three independent transitions:
-//   A. zone exists?           → create or discover, record id+status
-//   B. need to send NS email? → render template + Resend, set latch
-//   C. status active + no DV? → render activation template, set DV latch
-//
-// Each transition is gated on its own latch so re-running the
-// step is always safe. Cloudflare's POST /zones returns 1061
-// "Zone already exists" if duplicated; we sidestep that by listing
-// first.
+// step2 stays in shouldRun=true until F succeeds. Once Site Live At
+// is set, the placeholder is reachable at https://<domain>/ and
+// step2 idles (step5 will replace the Worker with the real site at
+// launch time).
 
 import type { Step } from "../types";
 import {
   listZones,
   createZone,
   getZone,
+  uploadWorkerScript,
+  listWorkerCustomDomains,
+  createWorkerCustomDomain,
   CloudflareApiError,
   type Zone,
+  type WorkerCustomDomain,
 } from "../../lib/cloudflare";
 import {
   recordCloudflareZone,
   updateZoneStatus,
   markDomainVerified,
   markNameserversEmailed,
+  recordWorkerName,
+  markSiteLive,
 } from "../../lib/notion-prospects";
 import { sendCustomerEmail } from "../notify";
+import {
+  placeholderScript,
+  workerNameForProspect,
+} from "../placeholder-worker";
 
 type DomainConfig = {
   domain: string;
@@ -55,10 +56,15 @@ export const step2Domain: Step = {
   shouldRun: (p) => {
     if (!p.onboardingStep2Done) return false;
     if (!p.cloudflareAccountId) return false;
-    // Still work if zone isn't active yet, OR we still owe the
-    // activation email (the latch).
+    // Still work if any latch isn't set yet:
+    //   - zone isn't active  (phase A/B/C still in flight)
+    //   - activation email   (Domain Verified At)
+    //   - placeholder Worker (Worker Name)
+    //   - bindings + verify  (Site Live At)
     if (p.cloudflareZoneStatus !== "active") return true;
     if (!p.domainVerifiedAt) return true;
+    if (!p.workerName) return true;
+    if (!p.siteLiveAt) return true;
     return false;
   },
   async run(prospect, env) {
@@ -171,12 +177,118 @@ export const step2Domain: Step = {
       sentActivationEmail = true;
     }
 
+    // ---------- D. Upload placeholder Worker (latch: workerName) ----------
+    // Only if zone is active. While zone is still pending, the Worker
+    // would have nowhere to bind to.
+    let workerName = prospect.workerName;
+    let workerUploadedThisTick = false;
+    if (zone.status === "active" && !workerName) {
+      const desired = workerNameForProspect(prospect.token);
+      const script = placeholderScript(prospect.name);
+      try {
+        await uploadWorkerScript(
+          prospect.cloudflareAccountId,
+          desired,
+          script,
+        );
+      } catch (e) {
+        throw new Error(
+          `uploadWorkerScript(${desired}) failed: ${cfErrorMessage(e)}`,
+        );
+      }
+      workerName = desired;
+      await recordWorkerName(prospect.pageId, workerName);
+      workerUploadedThisTick = true;
+    }
+
+    // ---------- E. Bind apex + www (no latch — checked dynamically) ----------
+    // Each tick: list current bindings, create the missing ones.
+    // Cloudflare's POST /workers/domains is idempotent on
+    // (hostname, service) — but we list first to keep the audit
+    // log clean (don't claim "bound foo.co.uk" every tick).
+    const bindEvents: string[] = [];
+    let allBindings: WorkerCustomDomain[] = [];
+    if (workerName) {
+      const hostnames = [config.domain, `www.${config.domain}`];
+      for (const hostname of hostnames) {
+        let existing: WorkerCustomDomain[];
+        try {
+          existing = await listWorkerCustomDomains(
+            prospect.cloudflareAccountId,
+            hostname,
+          );
+        } catch (e) {
+          throw new Error(
+            `listWorkerCustomDomains(${hostname}) failed: ${cfErrorMessage(e)}`,
+          );
+        }
+
+        let binding: WorkerCustomDomain;
+        if (existing.length > 0) {
+          binding = existing[0];
+        } else {
+          try {
+            binding = await createWorkerCustomDomain(
+              prospect.cloudflareAccountId,
+              { hostname, service: workerName, zoneId: zone.id },
+            );
+          } catch (e) {
+            throw new Error(
+              `createWorkerCustomDomain(${hostname}) failed: ${cfErrorMessage(e)}`,
+            );
+          }
+          bindEvents.push(`bound ${hostname}`);
+        }
+        allBindings.push(binding);
+      }
+    }
+
+    // ---------- F. HTTP 200 verify (latch: siteLiveAt) ----------
+    // Run only when bindings are in place AND not yet verified.
+    // Status field on binding may be absent for some Cloudflare
+    // responses — treat absent as ready (consistent with
+    // WorkerCustomDomain.status type).
+    let verifiedThisTick = false;
+    if (
+      workerName &&
+      allBindings.length > 0 &&
+      allBindings.every((b) => b.status !== "pending") &&
+      !prospect.siteLiveAt
+    ) {
+      const url = `https://${config.domain}/`;
+      // Sentinel: -1 = fetch threw (network error); else HTTP status.
+      // Avoids constructing a fake Response with status:0 (which the
+      // Web Response API forbids — must be 200-599).
+      let verifyStatus = -1;
+      try {
+        const res = await fetch(url, { redirect: "manual" });
+        verifyStatus = res.status;
+      } catch (e) {
+        bindEvents.push(
+          `HTTP verify ${url} threw (${e instanceof Error ? e.message : String(e)}) — will retry next tick`,
+        );
+      }
+
+      if (verifyStatus >= 200 && verifyStatus < 400) {
+        await markSiteLive(prospect.pageId);
+        verifiedThisTick = true;
+      } else if (verifyStatus > 0) {
+        bindEvents.push(
+          `HTTP ${verifyStatus} from ${url} — TLS likely still provisioning, will retry next tick`,
+        );
+      }
+    }
+
     // ---------- Compose audit notes ----------
     const events: string[] = [];
     if (zoneCreatedThisTick) events.push(`created zone ${zone.id}`);
     else if (!prospect.cloudflareZoneId) events.push(`discovered zone ${zone.id}`);
     if (sentNameserversEmail) events.push("sent nameservers email");
     if (sentActivationEmail) events.push("sent activation email");
+    if (workerUploadedThisTick && workerName)
+      events.push(`uploaded Worker ${workerName}`);
+    events.push(...bindEvents);
+    if (verifiedThisTick) events.push("site verified live");
     if (events.length === 0) events.push(`status: ${zone.status}`);
 
     return {
