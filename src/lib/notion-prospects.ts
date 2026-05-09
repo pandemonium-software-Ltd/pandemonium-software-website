@@ -102,6 +102,11 @@ export type ProspectRecord = {
   onboardingStartedAt?: string;
   onboardingCompletedAt?: string;
   goLiveDate?: string;
+  // --- Cowork Ops state (Stage 2C C2.1+) ---
+  /** ISO-8601, set by step1-cloudflare when Ben's membership in the customer's CF account is accepted + verified. */
+  cloudflareMembershipVerifiedAt?: string;
+  /** Customer's Cloudflare account id, captured by step1-cloudflare after accepting the invitation. */
+  cloudflareAccountId?: string;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
@@ -587,8 +592,34 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     onboardingStartedAt: readDate(p["Onboarding Started At"]),
     onboardingCompletedAt: readDate(p["Onboarding Completed At"]),
     goLiveDate: readDate(p["Go Live Date"]),
+    cloudflareMembershipVerifiedAt: readDate(p["Cloudflare Membership Verified At"]),
+    cloudflareAccountId: readRichText(p["Cloudflare Account Id"]) || undefined,
     changeRequests,
   };
+}
+
+// --- Cowork Ops Notion writers (Stage 2C C2+) ---
+
+/**
+ * Stamp Cloudflare membership verification onto the prospect's
+ * Notion record. Called by ops-worker step1 after a successful
+ * accept + access-verified flow. Idempotent: re-running just
+ * overwrites with the same values.
+ */
+export async function recordCloudflareMembership(
+  pageId: string,
+  accountId: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Cloudflare Membership Verified At": { date: { start: now } },
+        "Cloudflare Account Id": rt(accountId),
+      },
+    },
+  });
 }
 
 // --- Change requests inbox ---

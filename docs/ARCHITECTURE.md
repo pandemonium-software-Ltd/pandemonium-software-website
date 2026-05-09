@@ -354,10 +354,33 @@ dashboard" promise. Estimated 16-20 hours. Seven commits:
     `{status: "skip"}` since their flags are true; step3-5 were
     skipped via shouldRun. End-to-end pipeline (cron → Notion
     list → dispatch → step.run → audit write) confirmed working.
-- C2: Cloudflare automation (membership accept; DNS + per-customer
-  Worker provisioning + Custom Domain binding for Step 1 and Step
-  2-website parts; per-customer Worker named `mf-<token-prefix>`
-  per §10)
+- C2 (IN PROGRESS): Cloudflare automation. Split into 3 sub-commits
+  for shippable increments:
+  - **C2.1 (DONE & LIVE)**: Step 1 — Cloudflare membership accept
+    + verify. New `src/lib/cloudflare.ts` REST client (cloudflareFetch,
+    listMemberships, acceptMembership, listAccounts +
+    CloudflareApiError); new env `BEN_CLOUDFLARE_API_TOKEN`
+    (optional — step1 returns skip if unset, so the cron loop
+    keeps ticking on the rest of the work). step1's run() polls
+    pending memberships; if exactly one, accepts + verifies via
+    /accounts + stamps Notion (`Cloudflare Membership Verified At`,
+    `Cloudflare Account Id` — both new columns); if 0 pending,
+    skip with helpful "customer hasn't sent the invite yet"
+    message; if >1 pending, fail (escalate to Ben for
+    disambiguation — rare in practice). 12 unit tests cover
+    every branch with mocked CF API.
+  - **C2.2 (TODO)**: Step 2.A part 1 — zone create + nameserver
+    email + zone status poll. POST /zones for external
+    registrars; templated email to customer with the assigned
+    nameservers + per-registrar walkthrough; poll zone status
+    until active; mark `Zone Id` + `Zone Status` in Notion.
+  - **C2.3 (TODO)**: Step 2.A part 2 — per-customer Worker
+    provisioning + Custom Domain binding. Deploy a placeholder
+    Worker named `mf-<token-prefix>` per §10; bind the
+    customer's hostname via POST /accounts/{id}/workers/domains
+    with `service: "mf-<token-prefix>"`; poll until
+    status: active; verify via HTTP 200; stamp `Worker Name` +
+    `Site Live At`.
 - C3: Resend automation (Teams accept; domain add; DNS apply via
   Cloudflare; sending key generation; encryption)
 - C4: Cal.com URL capture + GBP URL capture + browser-fallback for

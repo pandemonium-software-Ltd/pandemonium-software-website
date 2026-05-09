@@ -26,6 +26,16 @@ const serverEnvSchema = z.object({
   // Ben sets the DB up.
   NOTION_AUDIT_LOG_DB_ID: z.string().optional(),
 
+  // Ben's user-scoped Cloudflare API token — Stage 2C C2.1. Used
+  // by the Ops Worker to accept customer membership invitations,
+  // create zones, bind Worker custom domains, etc. Required scopes
+  // per §4.4: User Details Read, Account Settings Read, Zone DNS
+  // Edit, Workers Scripts Edit, Pages Edit, Workers Routes Edit.
+  // Optional: if unset, Step 1 (Cloudflare) returns
+  // { status: "skip", reason: "BEN_CLOUDFLARE_API_TOKEN not set" }
+  // so the cron loop keeps ticking on the rest of the work.
+  BEN_CLOUDFLARE_API_TOKEN: z.string().optional(),
+
   // Email
   RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
 
