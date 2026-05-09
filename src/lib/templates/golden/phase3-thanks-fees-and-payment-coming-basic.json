@@ -1,14 +1,14 @@
 {
-  "description": "Phase 3 thanks email — typical customer with one paid module",
+  "description": "Phase 3 receipt — Booking + Enquiry, two-module breakdown",
   "template": "phase3-thanks-fees-and-payment-coming",
   "values": {
     "customerName": "Alex",
-    "setupFee": 199,
-    "monthlyFee": 49,
-    "modulesList": "site, hosting, online booking, enquiry form"
+    "setupFee": 207,
+    "monthlyFee": 27,
+    "moduleList": "  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)"
   },
   "expected": {
-    "subject": "Intake received — your fees + what's next",
-    "body": "Hi Alex,\n\nThanks for completing the intake form. Based on your module\nselections, here's what your site will cost:\n\n  Setup fee:    £199\n  Monthly fee:  £49/month\n\nThat covers: site, hosting, online booking, enquiry form.\n\nNext up: I'll email you the payment link shortly. Once payment is\nconfirmed, you'll get access to the onboarding hub where you'll:\n\n  • Connect your Cloudflare account (free, ~5 min sign-up)\n  • Tell me your domain\n  • Upload your logo and any photos you'd like used\n  • Pick a go-live date\n\nI'll handle everything technical from there — domain, hosting,\nsender email setup, the lot. You'll get an email each time I move\nforward so you can see progress.\n\n— Ben (Pandamonium Software)"
+    "subject": "Intake received — your fee summary",
+    "body": "Hi Alex,\n\nThanks for completing the intake form.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n\nPricing:\n  Setup (one-off):  £207\n  Monthly:          £27/mo\n\nWhat happens next: in a moment you'll get a second email with\nyour onboarding hub link. The hub walks you through 4-5 short\nsteps (~30 minutes total) to set up your Cloudflare account,\nyour domain, your brand assets, and pick a launch date.\n\nI'll handle everything technical from there — DNS, hosting, TLS,\nsender domain setup, the lot. You'll get an email each time I\nmake progress.\n\n— Ben"
   }
 }

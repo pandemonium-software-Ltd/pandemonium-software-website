@@ -758,6 +758,27 @@ export async function markSiteLive(pageId: string): Promise<void> {
   });
 }
 
+/**
+ * Flip a prospect's status to "Paid" — temporary shortcut used by
+ * /api/intake while Stripe Checkout (Stage 2A Part 2) isn't built.
+ * When Stripe lands, this is called from the /api/stripe/webhook
+ * handler instead of /api/intake.
+ *
+ * Idempotent: re-PATCHing the same status is a no-op on Notion's
+ * side. Callers should still gate on existing status to avoid
+ * unnecessary writes (and re-sending the phase4 email).
+ */
+export async function markProspectAsPaid(pageId: string): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        Status: selectProp("Paid"),
+      },
+    },
+  });
+}
+
 // --- Change requests inbox ---
 
 /**

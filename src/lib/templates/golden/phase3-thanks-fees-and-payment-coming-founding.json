@@ -1,0 +1,15 @@
+{
+  "description": "Phase 3 receipt — Founding Member rate (extra paragraph)",
+  "template": "phase3-thanks-fees-and-payment-coming",
+  "values": {
+    "customerName": "Pat",
+    "setupFee": 99,
+    "monthlyFee": 15,
+    "moduleList": "  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)",
+    "foundingMember": true
+  },
+  "expected": {
+    "subject": "Intake received — your fee summary",
+    "body": "Hi Pat,\n\nThanks for completing the intake form.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n\nPricing:\n  Setup (one-off):  £99\n  Monthly:          £15/mo\n\nYou qualified for Founding Member pricing — flat £99 setup +\n£15/month for everything, locked in for as long as you stay\nsubscribed.\n\nWhat happens next: in a moment you'll get a second email with\nyour onboarding hub link. The hub walks you through 4-5 short\nsteps (~30 minutes total) to set up your Cloudflare account,\nyour domain, your brand assets, and pick a launch date.\n\nI'll handle everything technical from there — DNS, hosting, TLS,\nsender domain setup, the lot. You'll get an email each time I\nmake progress.\n\n— Ben"
+  }
+}

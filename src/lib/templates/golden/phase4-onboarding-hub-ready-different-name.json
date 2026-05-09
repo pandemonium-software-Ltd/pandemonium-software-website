@@ -1,0 +1,12 @@
+{
+  "description": "Phase 4 onboarding-hub-ready — different name confirms greeting interpolation",
+  "template": "phase4-onboarding-hub-ready",
+  "values": {
+    "customerName": "Chloe",
+    "onboardingUrl": "https://modu-forge.co.uk/onboarding/3905df69-1a7c-4140-96f9-ea755f89727c"
+  },
+  "expected": {
+    "subject": "You're all set — open your onboarding hub",
+    "body": "Hi Chloe,\n\nYour account is ready and your onboarding hub is set up.\n\nIn the hub, you'll work through 4-5 short steps (~30 minutes\ntotal). You can save your progress in any step and come back\nlater — nothing's lost.\n\n  1. Cloudflare — sign up (free) and invite me as a member\n  2. Domain — tell me your domain and where it's registered\n  3. Modules — connect Cal.com / claim your Google listing\n     (only shown for the modules you bought)\n  4. Brand assets — upload your logo and any photos\n  5. Review & launch — pick a go-live date and sign off\n\nEach time you mark a step done, I get an email and pick up the\ntechnical work — DNS records, TLS certificates, sender domain\nsetup, your site build. You'll get an update from me at every\nmilestone.\n\n— Ben"
+  }
+}

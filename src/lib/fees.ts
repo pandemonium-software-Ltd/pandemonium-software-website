@@ -84,3 +84,39 @@ export function calculateFees(
 
   return { setup, monthly, founding: false, modules };
 }
+
+/**
+ * Build a customer-facing "what you'll get" list for the phase3
+ * receipt email. One bullet per included service, with a one-line
+ * description so the customer sees exactly what each module
+ * unlocks (not just the module name).
+ *
+ * The leading two-space indent matches the bullet style used
+ * elsewhere in our email templates.
+ */
+export function buildModuleListMarkdown(
+  selection: ModuleSelection,
+): string {
+  const lines: string[] = ["  • Site + hosting"];
+  if (selection.moduleBooking) {
+    lines.push(
+      "  • Online booking (Cal.com integration with your branding)",
+    );
+  }
+  if (selection.moduleEnquiry) {
+    lines.push(
+      "  • Enquiry form (emails hit your inbox without exposing your address)",
+    );
+  }
+  if (selection.moduleNewsletter) {
+    lines.push(
+      "  • Newsletter (send up to 1000 emails/month from name@yourdomain)",
+    );
+  }
+  if (selection.gbpAddon) {
+    lines.push(
+      "  • Google Business Profile setup (I'll claim your listing and embed it)",
+    );
+  }
+  return lines.join("\n");
+}

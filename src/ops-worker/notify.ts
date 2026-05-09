@@ -53,6 +53,15 @@ export async function sendCustomerEmail(
   const opsEmail =
     env.BEN_OPS_EMAIL ?? "pandamoniumsoftwareltd@gmail.com";
 
+  // Plain-text fallback gets the CTA URL appended below the body
+  // (templates intentionally don't put URLs inline anymore — keeps
+  // the HTML version clean with just the button + the prose). The
+  // appended line is recognisable to text-only readers as the
+  // call-to-action.
+  const text = rendered.cta
+    ? `${rendered.body}\n\n${rendered.cta.label}:\n${rendered.cta.url}`
+    : rendered.body;
+
   const html = wrapInBrandedHtml({
     subject: rendered.subject,
     body: rendered.body,
@@ -70,7 +79,7 @@ export async function sendCustomerEmail(
       to: recipientEmail,
       reply_to: opsEmail,
       subject: rendered.subject,
-      text: rendered.body,
+      text,
       html,
     }),
   });

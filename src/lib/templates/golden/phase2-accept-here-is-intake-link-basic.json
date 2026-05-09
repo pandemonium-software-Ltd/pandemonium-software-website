@@ -1,12 +1,12 @@
 {
-  "description": "Phase 2 accept email — fits the typical happy path",
+  "description": "Phase 2 accept email — happy path; URL only via cta button",
   "template": "phase2-accept-here-is-intake-link",
   "values": {
     "customerName": "Alex",
-    "intakeUrl": "https://pandemonium-software-website.benpandher.workers.dev/intake/abc123-def456"
+    "intakeUrl": "https://modu-forge.co.uk/intake/abc123-def456"
   },
   "expected": {
     "subject": "Great fit — let's get the details, Alex",
-    "body": "Hi Alex,\n\nI've reviewed your qualification answers — looks like a great fit\nfor what I do.\n\nNext step: a more detailed intake form. This is where we lock in\nthe modules you want (online booking, enquiry form, newsletter,\nGoogle Business Profile setup), your brand colours and fonts,\nopening hours — everything I need to build your site exactly the\nway you want it. About 15-20 minutes; you can save a section and\ncome back later.\n\n  https://pandemonium-software-website.benpandher.workers.dev/intake/abc123-def456\n\nOnce you submit, I'll calculate your setup + monthly fees and\nemail you the payment link.\n\n— Ben (Pandamonium Software)"
+    "body": "Hi Alex,\n\nI've reviewed your qualification answers — looks like a great fit\nfor what I do.\n\nNext step: a more detailed intake form. This is where we lock in\nthe modules you want (online booking, enquiry form, newsletter,\nGoogle Business Profile setup), your brand colours and fonts,\nopening hours — everything I need to build your site exactly the\nway you want it.\n\nAbout 15-20 minutes; you can save a section and come back later.\nUse the button below to open the form.\n\nOnce you submit, I'll calculate your setup + monthly fees and\nwalk you through what happens next.\n\n— Ben"
   }
 }

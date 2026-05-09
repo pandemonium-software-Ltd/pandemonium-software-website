@@ -1,13 +1,13 @@
 {
-  "description": "Phase 1 acknowledgement — tradesperson customer with simple business name",
+  "description": "Phase 1 acknowledgement — tradesperson with simple business name; URL only via cta button",
   "template": "phase1-thanks-here-is-qualify-link",
   "values": {
     "customerName": "Sam",
     "businessName": "Sam's Plumbing",
-    "qualifyUrl": "https://pandemonium-software-website.benpandher.workers.dev/qualify/xyz789"
+    "qualifyUrl": "https://modu-forge.co.uk/qualify/xyz789"
   },
   "expected": {
     "subject": "Thanks for your enquiry — next step inside",
-    "body": "Hi Sam,\n\nThanks for getting in touch about a website for Sam's Plumbing.\n\nBefore I commit either of our time, I just need a few quick\nquestions about what you're after — to make sure we're a good fit\nand I can quote accurately. About 10 minutes:\n\n  https://pandemonium-software-website.benpandher.workers.dev/qualify/xyz789\n\nOnce you submit it, I'll review your answers personally and get\nback to you within 4 hours.\n\n— Ben (Pandamonium Software)"
+    "body": "Hi Sam,\n\nThanks for getting in touch about a website for Sam's Plumbing.\n\nBefore I commit either of our time, I just need a few quick\nquestions about what you're after — to make sure we're a good fit\nand I can quote accurately. About 10 minutes; use the button\nbelow to open the form.\n\nOnce you submit it, I'll review your answers personally and get\nback to you within 4 hours.\n\n— Ben"
   }
 }
