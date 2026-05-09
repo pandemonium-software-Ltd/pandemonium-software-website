@@ -437,17 +437,23 @@ Customer ─ email or /account/[token]/changes form ─► Cowork
    │                      │                              │
 content (within budget)   module add/remove          out-of-scope
    │                      │                              │
-Cowork drafts the          Cowork updates Notion +    Cowork drafts a
+Cowork drafts the         Cowork updates Notion +    Cowork drafts a
 edit + a preview link     Stripe subscription;        quote against the
-   │                       see §7.4                    Playbook §10
-Ben approves               │                              │
-   │                       Cowork drafts customer       Ben reviews +
-Cowork applies             reply with new total         sends quote to
-+ deploys + emails         + new Hub link if ops        customer
-customer "your             needed
-change is live"            │
-                           Ben approves; Cowork sends
+   │                      see §7.4                     Playbook §10
+Apply per §11.2 gate      Auto-send reply per         Ben reviews +
+   │                      §11.2 gate (new total       sends quote to
+Cowork applies            + Hub link if ops needed)   customer
++ deploys + emails
+customer "your
+change is live"
 ```
+
+Two §11.2 gates fire in this flow: one on **applying** the content
+edit (Medium tier auto-apply for routine in-budget edits; High tier
+routes to Ben via Cowork Drafts for anything classifier-flagged);
+one on **sending** the module add/remove confirmation reply (Medium
+tier auto-send via template). The out-of-scope quote always routes
+to Ben (High tier — pricing decisions stay human).
 
 #### 6.2.2 API enforcement (current shape, Stage 2D D1.5)
 
@@ -537,18 +543,16 @@ Customer ─ /account/[token] form ─► API saves (status: pending)
    │                      │                              │
 content (in scope)        module add/remove          out-of-scope
    │                      │                              │
-Cowork drafts the          Cowork updates Notion +    Cowork drafts a
+Cowork drafts the         Cowork updates Notion +    Cowork drafts a
 edit + a preview link     Stripe subscription;        quote against the
-   │                       see §6.4                    Playbook §10
-Ben approves (first       │                              │
-20-clients period);       Cowork drafts customer       Ben reviews +
-auto-applies after.       reply with new total         sends quote to
-   │                       + new Hub link if ops        customer
-Cowork applies             needed                        │
-+ deploys + emails         │                          status: rejected
-customer "your             Ben approves; Cowork sends (does NOT count
-change is live"                                        toward the cap)
-status: applied
+   │                      see §6.4                     Playbook §10
+Apply per §11.2 gate      Auto-send reply per         Ben reviews +
+   │                      §11.2 gate (new total       sends quote to
+Cowork applies            + Hub link if ops needed)   customer
++ deploys + emails                                    │
+customer "your                                        status: rejected
+change is live"                                       (does NOT count
+status: applied                                        toward the cap)
 ```
 
 **Outputs:** preview deploy URL (content changes); updated Notion
@@ -664,10 +668,13 @@ Three tiers, set by Cowork classifier:
 - **Tier 1 (auto-resolvable):** transient errors, retried by Cowork.
   Logged to audit; no customer / Ben notification unless retries
   exhaust. Examples: Cloudflare API 429, transient DNS lookup fail.
-- **Tier 2 (config-level fix):** Cowork drafts a fix → Ben approves
-  → Cowork applies. Customer not notified unless the fix means a
-  visible change. Examples: dependency-patch redeploy, DNS record
-  drift, build-config tweak.
+- **Tier 2 (config-level fix):** Cowork drafts a fix → tagged
+  High-tier per §11.2 → Ben reviews via the Cowork Drafts inbox →
+  Cowork applies on approval. Config changes touch a live customer
+  site, so the risk-tier model treats them as High by default
+  regardless of the fix's apparent simplicity. Customer not
+  notified unless the fix means a visible change. Examples:
+  dependency-patch redeploy, DNS record drift, build-config tweak.
 - **Tier 3 (genuinely broken):** site down or customer-impacting.
   Cowork pages Ben (push notification + email + Slack if connected)
   AND sends customer a holding email ("we know, we're on it,
