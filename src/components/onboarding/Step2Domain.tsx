@@ -175,23 +175,45 @@ export default function Step2Domain({
             current={registrar}
             disabled={disabled}
             onChange={setRegistrar}
-            title="I want to register a new domain through Cloudflare"
+            title="I don&rsquo;t have a domain yet — register one with Cloudflare"
             blurb={
               <>
-                Cleanest setup — no nameservers to point because the
-                domain lives on Cloudflare from day one. From your
-                Cloudflare dashboard, go to{" "}
-                <a
-                  href={CLOUDFLARE_REGISTRAR_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="link"
-                >
-                  Domain Registration
-                </a>{" "}
-                and search for the name you want. £8–£12/year for most
-                .co.uk and .com names. Once registered, mark this step
-                done and I&apos;ll deploy your site straight to it.
+                <strong>Cleanest setup.</strong> No nameservers to
+                point because the domain lives on Cloudflare from day
+                one. £8–£12/year for most <code>.co.uk</code> and{" "}
+                <code>.com</code> names — same price you&apos;d pay
+                anywhere else.
+                <ol className="mt-3 list-decimal space-y-1 pl-5 text-[0.95rem]">
+                  <li>
+                    <a
+                      href={CLOUDFLARE_REGISTRAR_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="link font-semibold"
+                    >
+                      Open Cloudflare Domain Registration ↗
+                    </a>{" "}
+                    in a new tab
+                  </li>
+                  <li>
+                    Search for your business name + a TLD you like
+                    (try <code>.co.uk</code> for UK trades, or{" "}
+                    <code>.com</code> for general business)
+                  </li>
+                  <li>
+                    Pick a name, add your card, complete the purchase
+                    (~2 minutes)
+                  </li>
+                  <li>
+                    Come back here, type the domain into the field
+                    above, then mark this step done
+                  </li>
+                </ol>
+                <p className="mt-3">
+                  Once you&apos;re done, I deploy your site straight
+                  to the new domain — no DNS or nameserver work needed
+                  on your end.
+                </p>
               </>
             }
           />

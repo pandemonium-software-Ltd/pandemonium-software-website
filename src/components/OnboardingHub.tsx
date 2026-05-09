@@ -138,7 +138,30 @@ export default function OnboardingHub(props: OnboardingHubProps) {
     return callApi(stepId, patch, false);
   }
   function markDone(stepId: StepId, patch: Record<string, unknown>) {
-    return callApi(stepId, patch, true);
+    // After successful Mark Done, auto-advance to the next applicable
+    // step in the linear order. Customer can still jump anywhere via
+    // the side nav OR use the "Back" button on the next step. If
+    // we're on the last step (review), stay put — they're done.
+    return callApi(stepId, patch, true).then((success) => {
+      if (success) {
+        const currentIdx = applicable.findIndex((s) => s.id === stepId);
+        if (currentIdx >= 0 && currentIdx < applicable.length - 1) {
+          const nextStep = applicable[currentIdx + 1];
+          setCurrentStepId(nextStep.id);
+          if (typeof window !== "undefined") {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }
+      }
+      return success;
+    });
+  }
+
+  function goToStep(stepId: StepId) {
+    setCurrentStepId(stepId);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   const greetingFirstName = (prospectName.split(/\s+/)[0] || "there").trim();
@@ -231,18 +254,26 @@ export default function OnboardingHub(props: OnboardingHubProps) {
             <div className="min-w-0">
               <SaveStateBar state={saveState} />
               {currentStep && (
-                <StepRenderer
-                  step={currentStep}
-                  data={data}
-                  doneFlags={doneFlags}
-                  token={token}
-                  benEmail={benEmail}
-                  r2PublicUrlBase={r2PublicUrlBase}
-                  modules={props.modules}
-                  readOnly={locked}
-                  savePartial={savePartial}
-                  markDone={markDone}
-                />
+                <>
+                  <StepNav
+                    applicable={applicable}
+                    currentStepId={currentStepId}
+                    locked={locked}
+                    goToStep={goToStep}
+                  />
+                  <StepRenderer
+                    step={currentStep}
+                    data={data}
+                    doneFlags={doneFlags}
+                    token={token}
+                    benEmail={benEmail}
+                    r2PublicUrlBase={r2PublicUrlBase}
+                    modules={props.modules}
+                    readOnly={locked}
+                    savePartial={savePartial}
+                    markDone={markDone}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -349,6 +380,59 @@ function StepRenderer({
   void _exhaustive;
   void STEP_NUMBER; // keep the import used
   return null;
+}
+
+// ---------- Step nav (Back / position / Skip-ahead) ----------
+//
+// Sits above the step content. Three roles:
+//   - "← Back" link to the previous applicable step (hidden on first step)
+//   - "Step X of N" position label
+//   - "Skip ahead →" link to the next applicable step IF it's done already
+//     (lets a customer who's bouncing around see they can move on); hidden
+//     when current is the last applicable step or the next step isn't
+//     unlocked yet (i.e. customer should mark current done first)
+//
+// Note: full free navigation lives in the side nav. This component
+// is the linear-flow shortcut for customers reading top-to-bottom.
+
+function StepNav({
+  applicable,
+  currentStepId,
+  locked,
+  goToStep,
+}: {
+  applicable: StepDef[];
+  currentStepId: StepId;
+  locked: boolean;
+  goToStep: (stepId: StepId) => void;
+}) {
+  const currentIdx = applicable.findIndex((s) => s.id === currentStepId);
+  if (currentIdx < 0) return null;
+  const prev = currentIdx > 0 ? applicable[currentIdx - 1] : null;
+
+  // Hide the whole nav when locked — there's no further work to do
+  // and the locked banner is the right call-to-action then.
+  if (locked) return null;
+
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3 text-sm">
+      <div>
+        {prev && (
+          <button
+            type="button"
+            onClick={() => goToStep(prev.id)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium text-navy-700 transition-colors hover:bg-navy-100 hover:text-navy-900"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Back to {prev.title}</span>
+          </button>
+        )}
+      </div>
+      <div className="text-xs uppercase tracking-wider text-navy-500">
+        Step {currentIdx + 1} of {applicable.length}
+      </div>
+    </div>
+  );
 }
 
 // ---------- Save status bar ----------
