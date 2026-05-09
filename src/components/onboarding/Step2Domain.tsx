@@ -322,6 +322,109 @@ export default function Step2Domain({
             </div>
           )}
 
+        {/* Per-registrar nameserver-change walkthroughs. Visible
+            only for external/already-have paths (cloudflare-registered
+            customers don't change nameservers). UK-market focus:
+            covers the main registrars + a generic fallback. Each
+            opens in a <details> so the customer expands only the
+            one matching their setup.
+
+            Video walkthroughs are TODO (mentioned at the end of the
+            block). */}
+        {(registrar === "external" || registrar === "already-have") && (
+          <div className="mt-5 rounded-xl border-2 border-navy-100 bg-white p-5 text-sm leading-relaxed text-navy-700">
+            <p className="font-semibold text-navy-900">
+              How to change nameservers at your registrar
+            </p>
+            <p className="mt-2 text-navy-600">
+              Once I email you the two assigned nameservers, expand
+              the matching guide below — every registrar puts the
+              setting in a slightly different place.
+            </p>
+            <div className="mt-4 space-y-2">
+              <RegistrarGuide
+                name="123-reg"
+                steps={[
+                  "Log in at 123-reg.co.uk → Control Panel",
+                  "Click 'Manage' next to the domain",
+                  "Open the 'Nameservers' tab",
+                  'Choose "Use custom nameservers"',
+                  "Replace the two nameserver values with the ones I emailed you",
+                  'Click "Update nameservers" and confirm. Changes propagate within 1-2 hours typically (max 48).',
+                ]}
+              />
+              <RegistrarGuide
+                name="GoDaddy"
+                steps={[
+                  "Log in at godaddy.com → My Products",
+                  "Find your domain, click the three-dot menu → 'Manage DNS'",
+                  "Scroll to the 'Nameservers' section, click 'Change'",
+                  'Choose "I’ll use my own nameservers"',
+                  "Paste the two nameservers I emailed you (one per line)",
+                  '"Save" and confirm any 2FA prompts. Changes propagate within 1-2 hours typically (max 48).',
+                ]}
+              />
+              <RegistrarGuide
+                name="Namecheap"
+                steps={[
+                  "Log in at namecheap.com → Domain List",
+                  "Click 'Manage' next to your domain",
+                  "Find the 'Nameservers' section near the top",
+                  'Change the dropdown from "Namecheap BasicDNS" to "Custom DNS"',
+                  "Enter the two nameservers I emailed you",
+                  "Click the green tick to save. Propagation usually takes 30 min to 2 hours.",
+                ]}
+              />
+              <RegistrarGuide
+                name="IONOS (1&1)"
+                steps={[
+                  "Log in at ionos.co.uk → 'Domains & SSL'",
+                  "Click your domain → 'DNS' (or 'Manage DNS')",
+                  "Look for 'Nameserver' settings — click 'Change' or the pencil icon",
+                  'Choose "Use custom name servers"',
+                  "Enter the two nameservers I emailed you",
+                  "Save. IONOS sometimes takes 4-8 hours to propagate.",
+                ]}
+              />
+              <RegistrarGuide
+                name="Fasthosts"
+                steps={[
+                  "Log in at fasthosts.co.uk → Control Panel → Domains",
+                  "Click your domain → 'Nameservers' tab",
+                  'Choose "Use custom nameservers"',
+                  "Replace any existing nameservers with the two I emailed you",
+                  "Click 'Save changes'. Propagation typically 1-4 hours.",
+                ]}
+              />
+              <RegistrarGuide
+                name="Names.co.uk"
+                steps={[
+                  "Log in at names.co.uk → 'My Domains'",
+                  "Click your domain → 'Nameservers'",
+                  'Choose "Use custom nameservers"',
+                  "Enter the two nameservers I emailed you",
+                  'Click "Save". Propagation typically 1-2 hours.',
+                ]}
+              />
+              <RegistrarGuide
+                name="Other registrar"
+                steps={[
+                  "Log in to your registrar and find the domain in your account",
+                  'Look for "DNS", "Nameservers", "DNS settings", or "Domain settings"',
+                  'There’ll be an option like "Use custom nameservers" or "Change nameservers"',
+                  "Replace whatever's there with the two I emailed you",
+                  "Save. Reply to my email with a screenshot if anything’s confusing — I’ll talk you through it.",
+                ]}
+              />
+            </div>
+            <p className="mt-4 text-xs text-navy-500">
+              Heads up: video walkthroughs are coming soon. For now,
+              if anything in the steps above doesn&apos;t match what
+              you see on screen, reply to my email with a screenshot.
+            </p>
+          </div>
+        )}
+
         {/* Transfer-vs-nameserver-swap explainer aside. */}
         <div className="mt-5 rounded-xl bg-white p-5 text-sm leading-relaxed text-navy-600 ring-1 ring-navy-100">
           <p className="font-semibold text-navy-900">
@@ -472,4 +575,28 @@ function formatConfirmedAt(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Collapsible per-registrar nameserver-change walkthrough. Native
+ * <details>/<summary> for accessibility (keyboard, screen readers,
+ * no JS needed). Customer expands the one matching their registrar.
+ */
+function RegistrarGuide({
+  name,
+  steps,
+}: {
+  name: string;
+  steps: readonly string[];
+}) {
+  return (
+    <details className="rounded-lg border border-navy-100 bg-cream-50 p-3 text-sm text-navy-700 [&_summary]:cursor-pointer">
+      <summary className="font-semibold text-navy-900">{name}</summary>
+      <ol className="mt-3 list-decimal space-y-1.5 pl-6">
+        {steps.map((step, i) => (
+          <li key={i}>{step}</li>
+        ))}
+      </ol>
+    </details>
+  );
 }

@@ -1,0 +1,14 @@
+{
+  "description": "Change request rejected — typical out-of-scope ask",
+  "template": "change-request-rejected",
+  "values": {
+    "customerName": "Alex",
+    "originalMessage": "Add a full booking system with payment, customer accounts, and a loyalty programme",
+    "reply": "This is a bigger build than the existing booking module — let me put together a separate quote for it. I'll email you within 24 hours.",
+    "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
+  },
+  "expected": {
+    "subject": "About your change request",
+    "body": "Hi Alex,\n\nYour change request:\n\n  Add a full booking system with payment, customer accounts, and a loyalty programme\n\nMy reply:\n\nThis is a bigger build than the existing booking module — let me put together a separate quote for it. I'll email you within 24 hours.\n\nThis one's outside what's covered by your monthly allowance, so\nit doesn't count against your 3 requests this month. If you'd\nlike to discuss the bigger piece, just hit reply — happy to\nquote separately.\n\nYou can see the full history (and submit other requests) on your\naccount dashboard.\n\n— Ben"
+  }
+}

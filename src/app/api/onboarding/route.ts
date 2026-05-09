@@ -39,11 +39,9 @@ import {
   updateProspectOnboarding,
   type OnboardingUpdate,
 } from "@/lib/notion-prospects";
-import {
-  buildOnboardingCompleteEmail,
-  sendCustomerNotification,
-} from "@/lib/email";
 import { site } from "@/lib/site";
+import { getServerEnv } from "@/lib/env";
+import { sendCustomerEmail } from "@/ops-worker/notify";
 
 export const runtime = "nodejs";
 
@@ -223,23 +221,27 @@ export async function POST(request: Request) {
   // subscription details). Fail-soft — never blocks the success
   // response. Email goes out once and only on the first transition,
   // so re-saving an already-complete hub doesn't re-notify.
+  //
+  // Routes through the branded HTML wrapper (sendCustomerEmail)
+  // for visual parity with all other customer-facing emails.
   let customerEmailWarning: string | null = null;
   if (update.statusFlip === "Onboarding Complete") {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
     const reviewSlice = (mergedData.review ?? {}) as { goLiveDate?: string };
-    const email = buildOnboardingCompleteEmail({
-      customerName: prospect.name,
-      businessName: prospect.business ?? "",
-      goLiveDate: reviewSlice.goLiveDate ?? "",
-      accountUrl: `${baseUrl}/account/${token}`,
-    });
-    customerEmailWarning = await sendCustomerNotification({
-      toEmail: prospect.email,
-      toName: prospect.name,
-      subject: email.subject,
-      body: email.body,
-    });
-    if (customerEmailWarning) {
+    try {
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "signoff-confirmation",
+        {
+          customerName: firstName(prospect.name),
+          goLiveDate: formatGoLiveDate(reviewSlice.goLiveDate ?? ""),
+          accountUrl: `${baseUrl}/account/${token}`,
+        },
+      );
+    } catch (e) {
+      customerEmailWarning =
+        e instanceof Error ? e.message : String(e);
       console.warn(
         `[api/onboarding] Hub complete saved but customer email failed: ${customerEmailWarning}`,
       );
@@ -265,3 +267,24 @@ export async function GET() {
 // Keep a typed reference so unused-import lint stays quiet. Actual
 // type re-export happens implicitly via the route response shape.
 export type { StepId };
+
+/** "Alex Smith" → "Alex". Fallback to "there" on empty. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
+}
+
+/** "2026-06-01" → "1 June 2026" for the signoff email subject + body. */
+function formatGoLiveDate(iso: string): string {
+  if (!iso) return "the agreed date";
+  try {
+    return new Date(iso).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}

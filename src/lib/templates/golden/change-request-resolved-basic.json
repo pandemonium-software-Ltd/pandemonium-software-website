@@ -1,0 +1,14 @@
+{
+  "description": "Change request resolved — typical content edit",
+  "template": "change-request-resolved",
+  "values": {
+    "customerName": "Alex",
+    "originalMessage": "Update phone number on the contact page to 020 1234 5678",
+    "reply": "Done — your phone number is updated. Refresh your site to see it live.",
+    "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
+  },
+  "expected": {
+    "subject": "Your change request is done ✓",
+    "body": "Hi Alex,\n\nYour change request:\n\n  Update phone number on the contact page to 020 1234 5678\n\nMy reply:\n\nDone — your phone number is updated. Refresh your site to see it live.\n\nYou can see the full history (and submit anything else) on your\naccount dashboard.\n\n— Ben"
+  }
+}

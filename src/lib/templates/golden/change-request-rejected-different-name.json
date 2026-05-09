@@ -1,0 +1,14 @@
+{
+  "description": "Change request rejected — different name confirms greeting interpolation",
+  "template": "change-request-rejected",
+  "values": {
+    "customerName": "Pat",
+    "originalMessage": "Redesign the whole homepage from scratch",
+    "reply": "A full redesign is outside the monthly allowance — I'd treat this as a new build. Let me know if you'd like a fresh quote.",
+    "accountUrl": "https://modu-forge.co.uk/account/pat123"
+  },
+  "expected": {
+    "subject": "About your change request",
+    "body": "Hi Pat,\n\nYour change request:\n\n  Redesign the whole homepage from scratch\n\nMy reply:\n\nA full redesign is outside the monthly allowance — I'd treat this as a new build. Let me know if you'd like a fresh quote.\n\nThis one's outside what's covered by your monthly allowance, so\nit doesn't count against your 3 requests this month. If you'd\nlike to discuss the bigger piece, just hit reply — happy to\nquote separately.\n\nYou can see the full history (and submit other requests) on your\naccount dashboard.\n\n— Ben"
+  }
+}

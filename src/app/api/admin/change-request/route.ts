@@ -17,11 +17,9 @@ import {
   getProspectByToken,
   updateChangeRequest,
 } from "@/lib/notion-prospects";
-import {
-  buildChangeRequestResolvedEmail,
-  sendCustomerNotification,
-} from "@/lib/email";
 import { site } from "@/lib/site";
+import { getServerEnv } from "@/lib/env";
+import { sendCustomerEmail } from "@/ops-worker/notify";
 
 export const runtime = "nodejs";
 
@@ -93,25 +91,31 @@ export async function PATCH(request: Request) {
   // Limited to operator-driven outcomes (resolved / rejected) — a
   // defensive "retracted" set from this route would NOT email the
   // customer (they themselves retracted, no need for confirmation).
+  //
+  // Routes through the branded HTML wrapper (sendCustomerEmail)
+  // for visual parity with all other customer-facing emails.
   let emailErr: string | null = null;
   const operatorTerminal = status === "resolved" || status === "rejected";
   if (updateResult.transitionedToTerminal && operatorTerminal && reply) {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
-    const email = buildChangeRequestResolvedEmail({
-      customerName: prospect.name,
-      businessName: prospect.business ?? "",
-      originalMessage: updateResult.updated.message,
-      reply,
-      status: status as "resolved" | "rejected",
-      accountUrl: `${baseUrl}/account/${token}`,
-    });
-    emailErr = await sendCustomerNotification({
-      toEmail: prospect.email,
-      toName: prospect.name,
-      subject: email.subject,
-      body: email.body,
-    });
-    if (emailErr) {
+    const templateId =
+      status === "resolved"
+        ? "change-request-resolved"
+        : "change-request-rejected";
+    try {
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        templateId,
+        {
+          customerName: firstName(prospect.name),
+          originalMessage: updateResult.updated.message,
+          reply,
+          accountUrl: `${baseUrl}/account/${token}`,
+        },
+      );
+    } catch (e) {
+      emailErr = e instanceof Error ? e.message : String(e);
       console.warn(
         `[api/admin/change-request] Notion updated but customer email failed: ${emailErr}`,
       );
@@ -132,4 +136,11 @@ export async function GET() {
     { error: "Method not allowed. Use PATCH." },
     { status: 405, headers: { Allow: "PATCH" } },
   );
+}
+
+/** "Alex Smith" → "Alex". Fallback to "there" on empty. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
 }

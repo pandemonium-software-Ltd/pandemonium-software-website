@@ -1,0 +1,14 @@
+{
+  "description": "Change request resolved — multi-line reply preserves newlines",
+  "template": "change-request-resolved",
+  "values": {
+    "customerName": "Sam",
+    "originalMessage": "Add the new opening hours to the homepage",
+    "reply": "Done.\n\nThe footer now shows: Mon-Fri 8-6, Sat 9-12, closed Sundays.\nAlso updated the booking page to match.",
+    "accountUrl": "https://modu-forge.co.uk/account/xyz789"
+  },
+  "expected": {
+    "subject": "Your change request is done ✓",
+    "body": "Hi Sam,\n\nYour change request:\n\n  Add the new opening hours to the homepage\n\nMy reply:\n\nDone.\n\nThe footer now shows: Mon-Fri 8-6, Sat 9-12, closed Sundays.\nAlso updated the booking page to match.\n\nYou can see the full history (and submit anything else) on your\naccount dashboard.\n\n— Ben"
+  }
+}

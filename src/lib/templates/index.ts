@@ -22,6 +22,9 @@ import { phase1ThanksHereIsQualifyLink } from "./templates/phase1-thanks-here-is
 import { phase2AcceptHereIsIntakeLink } from "./templates/phase2-accept-here-is-intake-link";
 import { phase3ThanksFeesAndPaymentComing } from "./templates/phase3-thanks-fees-and-payment-coming";
 import { phase4OnboardingHubReady } from "./templates/phase4-onboarding-hub-ready";
+import { signoffConfirmation } from "./templates/signoff-confirmation";
+import { changeRequestResolved } from "./templates/change-request-resolved";
+import { changeRequestRejected } from "./templates/change-request-rejected";
 
 export type {
   Template,
@@ -40,6 +43,9 @@ const TEMPLATES = new Map<string, Template>([
   [phase2AcceptHereIsIntakeLink.id, phase2AcceptHereIsIntakeLink],
   [phase3ThanksFeesAndPaymentComing.id, phase3ThanksFeesAndPaymentComing],
   [phase4OnboardingHubReady.id, phase4OnboardingHubReady],
+  [signoffConfirmation.id, signoffConfirmation],
+  [changeRequestResolved.id, changeRequestResolved],
+  [changeRequestRejected.id, changeRequestRejected],
 ]);
 
 export function getTemplate(id: string): Template {

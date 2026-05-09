@@ -160,34 +160,43 @@ export default function Step1Cloudflare({
               >
                 cloudflare.com/sign-up
               </a>{" "}
-              in a new tab and sign up with the email you&apos;d like to
-              keep your hosting login under. Confirm the verification
-              email Cloudflare sends.
+              in a new tab and sign up with the email you&apos;d like
+              to keep your hosting login under.
             </span>
           </li>
           <li className="flex gap-3">
             <Bullet n={2} />
             <span>
-              Once signed in, click <strong>Manage Account</strong> in
-              the left sidebar, then <strong>Members</strong>, then{" "}
-              <strong>Invite</strong>. (
-              <a
-                href={MEMBERS_HELP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="link"
-              >
-                Cloudflare&apos;s help page
-              </a>{" "}
-              if you get stuck.)
+              <strong>Verify your email first.</strong> Cloudflare
+              sends a confirmation link the moment you sign up — open
+              it before going further. <em>Check your spam / junk
+              folder</em> if it doesn&apos;t show up in a minute.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <Bullet n={3} />
+            <span>
+              On the setup screens that appear after sign-in (add a
+              site, plans, etc.), <strong>click &ldquo;Skip&rdquo; in
+              the bottom-right corner</strong> of each screen until
+              you reach the dashboard. We&apos;ll do all that the
+              right way later.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <Bullet n={4} />
+            <span>
+              In the left sidebar, scroll to the bottom and click{" "}
+              <strong>Manage Account</strong>, then{" "}
+              <strong>Members</strong>, then{" "}
+              <strong>Invite Members</strong>.
             </span>
           </li>
           <li className="flex flex-col gap-3">
             <div className="flex gap-3">
-              <Bullet n={3} />
+              <Bullet n={5} />
               <span>
-                Invite this email as an{" "}
-                <strong>Administrator</strong>:
+                Enter this email address into the invite form:
               </span>
             </div>
             <InviteCallout
@@ -197,14 +206,43 @@ export default function Step1Cloudflare({
             />
           </li>
           <li className="flex gap-3">
-            <Bullet n={4} />
+            <Bullet n={6} />
             <span>
-              Send the invite. Then come back here, paste your signup
-              email below so I know which invitation to look out for,
-              and tick <em>Mark this step done</em>.
+              Under <strong>Add Permission Policies</strong>, search
+              for &ldquo;Administrator&rdquo; and tick the one called
+              just <strong>Administrator</strong> (NOT &ldquo;Super
+              Administrator&rdquo; and NOT &ldquo;Administrator Read
+              Only&rdquo; — those won&apos;t give me what I need).
+              Then click <strong>Create Policy</strong>.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <Bullet n={7} />
+            <span>
+              Click <strong>Invite Members</strong> to send.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <Bullet n={8} />
+            <span>
+              Come back here, paste your Cloudflare signup email
+              below so I know which invitation to look out for, then
+              tick <em>Mark this step done</em>.
             </span>
           </li>
         </ol>
+        <p className="mt-3 text-xs text-navy-500">
+          Stuck on any step?{" "}
+          <a
+            href={MEMBERS_HELP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link"
+          >
+            Cloudflare&apos;s help page
+          </a>{" "}
+          or hit reply to my last email and I&apos;ll walk you through.
+        </p>
       </section>
 
       <section className="mt-8 rounded-2xl bg-cream-50 p-5">
