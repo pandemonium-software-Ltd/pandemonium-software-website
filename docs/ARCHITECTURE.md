@@ -322,10 +322,10 @@ dashboard" promise. Estimated 16-20 hours. Seven commits:
   Run with `npm test`. C5 layers Cowork's notification pipeline
   on top; the rest of the template set lands as the §6 task
   contracts get wired in.
-- C1 (DONE): Ops Worker scaffolding. Separate Cloudflare Worker
-  (`pandemonium-software-ops`) at `src/ops-worker/` with its own
-  `wrangler-ops.jsonc`. Cron Trigger fires every minute (per §4.2);
-  the tick handler lists prospects in {Onboarding Started,
+- C1 (DONE & LIVE): Ops Worker scaffolding. Separate Cloudflare
+  Worker (`pandemonium-software-ops`) at `src/ops-worker/` with its
+  own `wrangler-ops.jsonc`. Cron Trigger fires every minute (per
+  §4.2); the tick handler lists prospects in {Onboarding Started,
   Onboarding Complete} and dispatches per-step automation through
   the §4.6 audit-and-exception wrapping pattern. Five per-step
   files (`steps/step{1..5}-*.ts`) — all stubs returning
@@ -338,11 +338,22 @@ dashboard" promise. Estimated 16-20 hours. Seven commits:
   9 unit tests cover the dispatcher's wrapping invariants
   (skip/ok/fail audit shapes, thrown-error → fail conversion,
   no-side-effect when shouldRun=false, ISO timestamps,
-  non-negative durations). Ben runs `npm run deploy:ops` once the
-  three new Notion DBs / fields exist and the secrets are
-  duplicated onto the ops Worker (`wrangler secret put NOTION_API_KEY
-  --config wrangler-ops.jsonc` etc. — full list in
-  `wrangler-ops.jsonc` head comment).
+  non-negative durations).
+  - **Live URL:** https://pandemonium-software-ops.benpandher.workers.dev
+    (returns "Cowork Ops Worker — ok" on GET; cron fires
+    `* * * * *`)
+  - **Notion DBs:**
+    - Cowork Audit Log: 8d6f609f8f8d4602bab2014d820d9a98 (data
+      source a4ba91a0-fd03-4a03-9d8b-b37b4e93e1e7)
+    - Exceptions: 340d3f31e94380df8a1ef58015d59883 (data source
+      340d3f31-e943-807a-bb6b-000ba1d39596)
+    - Both live under the "Pandemonium Ops" parent page
+      (340d3f31-e943-801f-8f4f-fdfe12a1dcde)
+  - **First-tick verification (5 audit entries written for the
+    H1 SmokeTest prospect):** step1 + step2 stubs returned
+    `{status: "skip"}` since their flags are true; step3-5 were
+    skipped via shouldRun. End-to-end pipeline (cron → Notion
+    list → dispatch → step.run → audit write) confirmed working.
 - C2: Cloudflare automation (membership accept; DNS + per-customer
   Worker provisioning + Custom Domain binding for Step 1 and Step
   2-website parts; per-customer Worker named `mf-<token-prefix>`
