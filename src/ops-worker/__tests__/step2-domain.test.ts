@@ -244,12 +244,15 @@ describe("step2Domain.run — first-tick happy path (external registrar)", () =>
       env,
       baseProspect.email,
       "domain-nameservers-pending",
-      {
+      expect.objectContaining({
         customerName: "Test Customer",
         domain: "test.co.uk",
         ns1: "aron.ns.cloudflare.com",
         ns2: "nina.ns.cloudflare.com",
-      },
+        confirmUrl: expect.stringContaining(
+          "/api/onboarding/dns-confirm/tok_test",
+        ),
+      }),
     );
     expect(markNameserversEmailed).toHaveBeenCalledWith("page_test");
     expect(markDomainVerified).not.toHaveBeenCalled();

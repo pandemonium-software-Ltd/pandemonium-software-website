@@ -51,6 +51,9 @@ export type OnboardingHubProps = {
   /** Public URL base for R2 brand-asset thumbnails. Empty string =
    *  thumbnails fall back to filename tiles in Step 4. */
   r2PublicUrlBase: string;
+  /** Top-level prospect fields the hub shows beyond the per-step
+   *  data slices. Threaded through to the relevant step component. */
+  customerConfirmedNameserversAt?: string;
 };
 
 type SaveState =
@@ -272,6 +275,9 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     readOnly={locked}
                     savePartial={savePartial}
                     markDone={markDone}
+                    customerConfirmedNameserversAt={
+                      props.customerConfirmedNameserversAt
+                    }
                   />
                 </>
               )}
@@ -296,6 +302,7 @@ function StepRenderer({
   readOnly,
   savePartial,
   markDone,
+  customerConfirmedNameserversAt,
 }: {
   step: StepDef;
   data: OnboardingData;
@@ -313,6 +320,7 @@ function StepRenderer({
     stepId: StepId,
     patch: Record<string, unknown>,
   ) => Promise<boolean>;
+  customerConfirmedNameserversAt?: string;
 }) {
   const slice = (data[step.id] ?? {}) as Record<string, unknown>;
   const done = doneFlags[step.id];
@@ -335,6 +343,8 @@ function StepRenderer({
           data={slice}
           done={done}
           readOnly={readOnly}
+          token={token}
+          customerConfirmedNameserversAt={customerConfirmedNameserversAt}
           savePartial={(patch) => savePartial("domain", patch)}
           markDone={(patch) => markDone("domain", patch)}
         />

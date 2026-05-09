@@ -20,6 +20,12 @@ type Props = {
   readOnly: boolean;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
+  /** Token used to build the dns-confirm URL for the
+   *  "I've updated my nameservers" button. */
+  token: string;
+  /** ISO-8601 if the customer has already clicked confirm
+   *  (in email or here). undefined if they haven't yet. */
+  customerConfirmedNameserversAt?: string;
 };
 
 const CLOUDFLARE_REGISTRAR_URL =
@@ -33,6 +39,8 @@ export default function Step2Domain({
   readOnly,
   savePartial,
   markDone,
+  token,
+  customerConfirmedNameserversAt,
 }: Props) {
   const initialDomain = typeof data.domain === "string" ? data.domain : "";
   const initialRegistrar =
@@ -274,6 +282,46 @@ export default function Step2Domain({
           </div>
         )}
 
+        {/* "I've updated my nameservers" confirmation panel.
+            Visible after Step 2 is marked done AND only for the
+            external/already-have registrar paths (cloudflare-registered
+            domains don't need nameserver changes). Two states:
+              - Not yet confirmed: prominent button → /api/onboarding/dns-confirm
+              - Confirmed: green status pill with the timestamp
+            Mirrors the same button in the nameservers email; either
+            path stamps `Customer Confirmed Nameservers At` in Notion. */}
+        {done &&
+          (registrar === "external" || registrar === "already-have") && (
+            <div className="mt-5 rounded-xl border-2 border-ember-300 bg-ember-50 p-5 text-sm leading-relaxed text-navy-800">
+              <p className="font-semibold text-navy-900">
+                Once you&apos;ve updated your nameservers
+              </p>
+              {customerConfirmedNameserversAt ? (
+                <p
+                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-green-100 px-3 py-1.5 text-green-800"
+                  role="status"
+                >
+                  <span aria-hidden="true">✓</span>
+                  Confirmed at {formatConfirmedAt(customerConfirmedNameserversAt)}
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2">
+                    Click the button below so I know to check Cloudflare
+                    sooner. (Same button as the one in the
+                    nameservers email — either works.)
+                  </p>
+                  <a
+                    href={`/api/onboarding/dns-confirm/${token}`}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-navy-700"
+                  >
+                    I&apos;ve updated my nameservers
+                  </a>
+                </>
+              )}
+            </div>
+          )}
+
         {/* Transfer-vs-nameserver-swap explainer aside. */}
         <div className="mt-5 rounded-xl bg-white p-5 text-sm leading-relaxed text-navy-600 ring-1 ring-navy-100">
           <p className="font-semibold text-navy-900">
@@ -410,4 +458,18 @@ function RegistrarOption({
       </span>
     </label>
   );
+}
+
+function formatConfirmedAt(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
 }

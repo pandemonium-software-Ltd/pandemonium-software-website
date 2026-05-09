@@ -156,11 +156,14 @@ export const step2Domain: Step = {
           `Cloudflare returned zone ${zone.id} without 2 nameservers (got ${zone.name_servers?.length ?? 0}); can't email customer`,
         );
       }
+      const baseUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? "https://modu-forge.co.uk";
       await sendCustomerEmail(env, prospect.email, "domain-nameservers-pending", {
         customerName: prospect.name,
         domain: config.domain,
         ns1,
         ns2,
+        confirmUrl: `${baseUrl}/api/onboarding/dns-confirm/${prospect.token}`,
       });
       await markNameserversEmailed(prospect.pageId);
       sentNameserversEmail = true;

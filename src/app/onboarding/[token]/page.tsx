@@ -101,6 +101,7 @@ export default async function OnboardingPage({
       hubLocked={!isOnboardingMutable(prospect.status)}
       benEmail={benEmail}
       r2PublicUrlBase={r2PublicUrlBase}
+      customerConfirmedNameserversAt={prospect.customerConfirmedNameserversAt}
     />
   );
 }

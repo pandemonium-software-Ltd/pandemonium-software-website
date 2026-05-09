@@ -1,14 +1,15 @@
 {
-  "description": "Nameservers pending — .com customer with different assigned nameservers",
+  "description": "Nameservers pending — .com with confirmUrl for cta button",
   "template": "domain-nameservers-pending",
   "values": {
     "customerName": "Sam",
     "domain": "sams-plumbing.com",
     "ns1": "kayla.ns.cloudflare.com",
-    "ns2": "rick.ns.cloudflare.com"
+    "ns2": "rick.ns.cloudflare.com",
+    "confirmUrl": "https://modu-forge.co.uk/api/onboarding/dns-confirm/xyz789"
   },
   "expected": {
     "subject": "Action needed: point sams-plumbing.com at Cloudflare",
-    "body": "Hi Sam,\n\nTo set up secure hosting for sams-plumbing.com, I need it pointed at\nCloudflare's nameservers.\n\nIn your domain registrar's dashboard, find the section called\n\"Nameservers\" or \"DNS\" and replace whatever's there with these\ntwo:\n\n  kayla.ns.cloudflare.com\n  rick.ns.cloudflare.com\n\nThat's it. Cloudflare will detect the change automatically — usually\nwithin 1-2 hours, sometimes up to 48. I'll email you again as soon\nas it's confirmed and your domain is ready for launch.\n\nIf anything's confusing, reply to this email with a screenshot of\nwhere you've got stuck and I'll walk you through it.\n\n— Cowork (your ModuForge ops assistant)"
+    "body": "Hi Sam,\n\nTo set up secure hosting for sams-plumbing.com, I need it pointed at\nCloudflare's nameservers.\n\nIn your domain registrar's dashboard, find the section called\n\"Nameservers\" or \"DNS\" and replace whatever's there with these\ntwo:\n\n  kayla.ns.cloudflare.com\n  rick.ns.cloudflare.com\n\nOnce you've done that, click the button below to let me know —\nI'll check Cloudflare sooner. Otherwise it'll detect the change\nautomatically (usually within 1-2 hours, sometimes up to 48).\n\nEither way, I'll email you again as soon as your domain is\nverified and ready for launch.\n\nIf anything's confusing, reply to this email with a screenshot of\nwhere you've got stuck and I'll walk you through it.\n\n— Ben"
   }
 }

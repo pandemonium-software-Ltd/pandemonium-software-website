@@ -121,6 +121,8 @@ export type ProspectRecord = {
   domainVerifiedAt?: string;
   /** ISO-8601, set when step2-domain sends the customer their assigned nameservers (latch — never resend). */
   nameserversEmailSentAt?: string;
+  /** ISO-8601, set when the customer clicks "I've updated my nameservers" (in the email or on the hub). Hint to Cowork that the registrar update is supposedly done — useful for prioritising poll order; not authoritative (Cloudflare's zone status is the truth). */
+  customerConfirmedNameserversAt?: string;
   /** Per-customer Worker name, captured by step2-domain after the placeholder Worker is uploaded. Latches "Worker exists in customer's CF account". */
   workerName?: string;
   /** ISO-8601, set when step2-domain has bound apex+www to the per-customer Worker AND verified the placeholder responds with HTTP 200. The "site is reachable" latch. */
@@ -618,6 +620,9 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     ) as ProspectRecord["cloudflareZoneStatus"],
     domainVerifiedAt: readDate(p["Domain Verified At"]),
     nameserversEmailSentAt: readDate(p["Nameservers Email Sent At"]),
+    customerConfirmedNameserversAt: readDate(
+      p["Customer Confirmed Nameservers At"],
+    ),
     workerName: readRichText(p["Worker Name"]) || undefined,
     siteLiveAt: readDate(p["Site Live At"]),
     changeRequests,
@@ -736,6 +741,30 @@ export async function recordWorkerName(
     body: {
       properties: {
         "Worker Name": rt(workerName),
+      },
+    },
+  });
+}
+
+/**
+ * Stamp the moment the customer clicked "I've updated my nameservers"
+ * (either from the email button or the on-hub button). Idempotent:
+ * second click overwrites with the new timestamp (cheap; no harm).
+ *
+ * NB: this is a HINT, not the truth. Cloudflare's zone status
+ * remains authoritative. step2-domain still polls Cloudflare on
+ * every tick — this confirmation just helps Ben know the customer
+ * has done their part and is waiting for propagation.
+ */
+export async function markCustomerConfirmedNameservers(
+  pageId: string,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Customer Confirmed Nameservers At": { date: { start: now } },
       },
     },
   });
