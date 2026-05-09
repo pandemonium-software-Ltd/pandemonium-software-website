@@ -15,7 +15,10 @@
 //   5. Calculate setup + monthly fees from the modules section
 //   6. Update Notion with fees + Phase 3 Submitted At + status
 //   7. Send Ben buildPhase3Notification with the calculated fees
-//   8. Return { success, redirect: "/payment/<token>" }
+//   8. Send customer the templated phase3-thanks-fees-and-payment-coming
+//      email with the calculated fees (Low risk tier per §11.2 — fees
+//      from deterministic engine, no LLM)
+//   9. Return { success, redirect: "/payment/<token>" }
 
 import { NextResponse } from "next/server";
 import {
@@ -32,6 +35,8 @@ import {
   buildPhase3Notification,
   sendInternalNotification,
 } from "@/lib/email";
+import { getServerEnv } from "@/lib/env";
+import { sendCustomerEmail } from "@/ops-worker/notify";
 
 export const runtime = "nodejs";
 
@@ -216,11 +221,42 @@ export async function POST(request: Request) {
     );
   }
 
+  // Customer-facing receipt with the calculated fees + a heads-up
+  // about what comes next. NB: doesn't include the onboarding URL
+  // (that's gated on Status: Paid per onboarding.ts isOnboardingUnlocked,
+  // and Stripe isn't built yet — for now Ben manually flips status
+  // to Paid and follows up with the hub link).
+  try {
+    await sendCustomerEmail(
+      getServerEnv(),
+      prospect.email,
+      "phase3-thanks-fees-and-payment-coming",
+      {
+        customerName: firstName(prospect.name),
+        setupFee: fees.setup,
+        monthlyFee: fees.monthly,
+        modulesList: fees.modules.join(", "),
+      },
+    );
+  } catch (e) {
+    console.warn(
+      `[api/intake] Customer fees email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
   return NextResponse.json({
     success: true,
     isFinal: true,
     redirect: `/payment/${token}`,
   });
+}
+
+/** Extract first name (or full string if it's a single word) for the
+ * "Hi X," greeting. Defensive: trims, falls back to "there" on empty. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
 }
 
 export async function GET() {

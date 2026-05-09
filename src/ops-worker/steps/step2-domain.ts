@@ -156,7 +156,7 @@ export const step2Domain: Step = {
           `Cloudflare returned zone ${zone.id} without 2 nameservers (got ${zone.name_servers?.length ?? 0}); can't email customer`,
         );
       }
-      await sendCustomerEmail(env, prospect, "domain-nameservers-pending", {
+      await sendCustomerEmail(env, prospect.email, "domain-nameservers-pending", {
         customerName: prospect.name,
         domain: config.domain,
         ns1,
@@ -169,7 +169,7 @@ export const step2Domain: Step = {
     // ---------- C. Send activation email (status active + latch) ----------
     let sentActivationEmail = false;
     if (zone.status === "active" && !prospect.domainVerifiedAt) {
-      await sendCustomerEmail(env, prospect, "domain-zone-active", {
+      await sendCustomerEmail(env, prospect.email, "domain-zone-active", {
         customerName: prospect.name,
         domain: config.domain,
       });

@@ -8,13 +8,19 @@
 //   5. Run runCompatibilityCheck(phase1, phase2)
 //   6. updateProspectPhase2() writes Phase 2 + outcome to Notion
 //   7. Send Ben an internal notification with the outcome + summary
-//   8. Return { success, outcome, message } with a prospect-facing message
+//   8. If outcome === "accept", auto-send templated phase2-accept-here-is-intake-link
+//      email to prospect (Low risk tier per §11.2 — compatibility
+//      engine is deterministic, not LLM, so safe to auto-send)
+//   9. Non-accept outcomes (soft_reject, flag_for_review,
+//      clarification_needed) stay routed via the Cowork Drafts inbox
+//      for Ben to handle until C6 lands the personalised templates
+//   10. Return { success, outcome, message } with a generic prospect-
+//       facing message (the real outcome is in the email Cowork just
+//       sent OR in the Drafts inbox for Ben)
 //
-// The user-facing `message` is intentionally generic — it tells the
-// prospect what to expect ("I'll come back within X hours") without
-// revealing the rules engine's verdict. The real reply (acceptance,
-// rejection, clarification) is drafted by Cowork and approved by Ben
-// before sending to the prospect.
+// The user-facing `message` is still generic — it tells the prospect
+// what to expect without revealing the rules engine's verdict, in
+// case email delivery is delayed.
 
 import { NextResponse } from "next/server";
 import { phase2Schema, type Phase1Data } from "@/lib/schemas";
@@ -27,6 +33,8 @@ import {
   buildPhase2Notification,
   sendInternalNotification,
 } from "@/lib/email";
+import { getServerEnv } from "@/lib/env";
+import { sendCustomerEmail } from "@/ops-worker/notify";
 
 export const runtime = "nodejs";
 
@@ -179,6 +187,29 @@ export async function POST(request: Request) {
     );
   }
 
+  // Customer-facing email — only on Accept. Non-Accept outcomes
+  // need careful copy and stay manual (Drafts inbox post-C6).
+  if (outcome.outcome === "accept") {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      "https://pandemonium-software-website.benpandher.workers.dev";
+    try {
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "phase2-accept-here-is-intake-link",
+        {
+          customerName: firstName(prospect.name),
+          intakeUrl: `${baseUrl}/intake/${token}`,
+        },
+      );
+    } catch (e) {
+      console.warn(
+        `[api/qualify] Customer accept email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
   return NextResponse.json({
     success: true,
     outcome: outcome.outcome,
@@ -193,4 +224,12 @@ export async function GET() {
     { error: "Method not allowed. Use POST." },
     { status: 405, headers: { Allow: "POST" } },
   );
+}
+
+/** Extract first name (or full string if it's a single word) for the
+ * "Hi X," greeting. Defensive: trims, falls back to "there" on empty. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
 }

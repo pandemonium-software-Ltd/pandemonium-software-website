@@ -18,6 +18,9 @@ import { dnsVerified } from "./templates/dns-verified";
 import { changeRequestReceived } from "./templates/change-request-received";
 import { domainNameserversPending } from "./templates/domain-nameservers-pending";
 import { domainZoneActive } from "./templates/domain-zone-active";
+import { phase1ThanksHereIsQualifyLink } from "./templates/phase1-thanks-here-is-qualify-link";
+import { phase2AcceptHereIsIntakeLink } from "./templates/phase2-accept-here-is-intake-link";
+import { phase3ThanksFeesAndPaymentComing } from "./templates/phase3-thanks-fees-and-payment-coming";
 
 export type {
   Template,
@@ -32,6 +35,9 @@ const TEMPLATES = new Map<string, Template>([
   [changeRequestReceived.id, changeRequestReceived],
   [domainNameserversPending.id, domainNameserversPending],
   [domainZoneActive.id, domainZoneActive],
+  [phase1ThanksHereIsQualifyLink.id, phase1ThanksHereIsQualifyLink],
+  [phase2AcceptHereIsIntakeLink.id, phase2AcceptHereIsIntakeLink],
+  [phase3ThanksFeesAndPaymentComing.id, phase3ThanksFeesAndPaymentComing],
 ]);
 
 export function getTemplate(id: string): Template {

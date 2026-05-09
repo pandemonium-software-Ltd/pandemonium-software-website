@@ -17,7 +17,6 @@
 import { renderTemplate, getTemplate } from "../lib/templates";
 import type { TemplateValues } from "../lib/templates";
 import type { ServerEnv } from "../lib/env";
-import type { ProspectRecord } from "../lib/notion-prospects";
 
 const FROM_NOTIFICATIONS = "ModuForge Notifications <onboarding@resend.dev>";
 
@@ -28,14 +27,20 @@ export type SendResult = {
 
 /**
  * Render the named template with `values`, then send to
- * `prospect.email` with replyTo = OPS_EMAIL (so any reply lands
+ * `recipientEmail` with replyTo = OPS_EMAIL (so any reply lands
  * in Ben's gmail per §9.0).
+ *
+ * Takes a plain email string (not a full ProspectRecord) so it
+ * works equally well from the ops-worker (where we have the full
+ * record after listProspectsNeedingOps) and from the customer-
+ * facing API routes (where we may have just-validated form data
+ * without yet touching Notion).
  *
  * Returns { messageId } on success; throws on failure.
  */
 export async function sendCustomerEmail(
   env: ServerEnv,
-  prospect: ProspectRecord,
+  recipientEmail: string,
   templateId: string,
   values: TemplateValues,
 ): Promise<SendResult> {
@@ -53,7 +58,7 @@ export async function sendCustomerEmail(
     },
     body: JSON.stringify({
       from: FROM_NOTIFICATIONS,
-      to: prospect.email,
+      to: recipientEmail,
       reply_to: opsEmail,
       subject: rendered.subject,
       text: rendered.body,
@@ -63,7 +68,7 @@ export async function sendCustomerEmail(
   if (!res.ok) {
     const errText = await res.text().catch(() => "(no body)");
     throw new Error(
-      `Resend ${res.status} sending '${templateId}' to ${prospect.email}: ${errText}`,
+      `Resend ${res.status} sending '${templateId}' to ${recipientEmail}: ${errText}`,
     );
   }
 

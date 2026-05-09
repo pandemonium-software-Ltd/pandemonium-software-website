@@ -6,10 +6,12 @@
 //   3. Generate UUID v4 token (links the email → /qualify/[token] URL)
 //   4. Create Notion Prospects record (status "Phase 1 Complete")
 //   5. Send internal notification to Ben with qualification link
-//   6. Return { success: true }
+//   6. Send customer the templated phase1-thanks-here-is-qualify-link email
+//      (Low risk tier per §11.2 — auto-sends; templated, no LLM)
+//   7. Return { success: true }
 //
-// Token NEVER goes back to the browser — it's only emailed to Ben so
-// he can paste the qualify link into the L1 reply he sends manually.
+// Token still NEVER goes back in the response body — it goes ONLY in
+// the customer's email + Ben's notification.
 
 import { NextResponse } from "next/server";
 import { phase1Schema } from "@/lib/schemas";
@@ -18,6 +20,8 @@ import {
   buildPhase1Notification,
   sendInternalNotification,
 } from "@/lib/email";
+import { getServerEnv } from "@/lib/env";
+import { sendCustomerEmail } from "@/ops-worker/notify";
 
 // Force Node runtime (OpenNext on Cloudflare Workers serves this via
 // nodejs_compat). Notion + Resend SDKs both need real fetch + Buffer
@@ -93,7 +97,38 @@ export async function POST(request: Request) {
     );
   }
 
+  // Customer-facing acknowledgement with the qualify link. Same
+  // never-fail-the-request policy as Ben's notification — log on
+  // failure, keep the success response.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://pandemonium-software-website.benpandher.workers.dev";
+  try {
+    await sendCustomerEmail(
+      getServerEnv(),
+      data.email,
+      "phase1-thanks-here-is-qualify-link",
+      {
+        customerName: firstName(data.name),
+        businessName: data.business,
+        qualifyUrl: `${baseUrl}/qualify/${token}`,
+      },
+    );
+  } catch (e) {
+    console.warn(
+      `[api/enquiry] Customer ack email failed for ${data.email}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
   return NextResponse.json({ success: true });
+}
+
+/** Extract first name (or full string if it's a single word) for the
+ * "Hi X," greeting. Defensive: trims, falls back to "there" on empty. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
 }
 
 // Other methods get a 405. Defensive — Next would 404 anyway, but a

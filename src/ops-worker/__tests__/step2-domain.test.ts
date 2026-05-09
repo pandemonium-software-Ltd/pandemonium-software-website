@@ -242,7 +242,7 @@ describe("step2Domain.run — first-tick happy path (external registrar)", () =>
     );
     expect(sendCustomerEmail).toHaveBeenCalledWith(
       env,
-      baseProspect,
+      baseProspect.email,
       "domain-nameservers-pending",
       {
         customerName: "Test Customer",
@@ -370,7 +370,7 @@ describe("step2Domain.run — activation email", () => {
 
     expect(sendCustomerEmail).toHaveBeenCalledWith(
       env,
-      expect.any(Object),
+      "test@example.com",
       "domain-zone-active",
       { customerName: "Test Customer", domain: "test.co.uk" },
     );
