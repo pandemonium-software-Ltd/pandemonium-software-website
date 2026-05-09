@@ -11,8 +11,10 @@
 // `wrangler tail`) so the ops worker still ticks while the user
 // gets the DB set up.
 //
-// Notion schema for "Cowork Audit Log":
-//   Title              (text, auto: "<step> <status> for <prospect.name>")
+// Notion schema for "Cowork Audit Log" (matches the live DB created
+// at id 8d6f609f8f8d4602bab2014d820d9a98 / data source
+// a4ba91a0-fd03-4a03-9d8b-b37b4e93e1e7):
+//   Name               (title, auto: "<step> <status> for <prospect.name>")
 //   Prospect           (relation → Prospects DB)
 //   Step               (select: step1 / step2 / step3 / step4 / step5)
 //   Status             (select: ok / skip / fail)
@@ -46,7 +48,7 @@ export async function writeAudit(
     body: {
       parent: { database_id: dbId },
       properties: {
-        Title: {
+        Name: {
           title: [{ type: "text", text: { content: title } }],
         },
         Prospect: {

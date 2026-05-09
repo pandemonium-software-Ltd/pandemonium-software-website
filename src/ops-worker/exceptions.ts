@@ -9,11 +9,12 @@
 // Both are best-effort: if either fails, we log to stdout and
 // proceed so the cron tick still completes for other prospects.
 //
-// Notion schema for "Exceptions" (NOTION_EXCEPTIONS_DB_ID):
-//   Title              (text, auto: "[<step>] <prospect.name>: <error message head>")
+// Notion schema for "Exceptions" — matches the live DB at
+// NOTION_EXCEPTIONS_DB_ID (data source 340d3f31-e943-807a-bb6b-000ba1d39596):
+//   Name               (title, auto: "[<step>] <prospect.name>: <error message head>")
 //   Prospect           (relation → Prospects DB)
 //   Step               (select: step1 / step2 / step3 / step4 / step5)
-//   Action             (text — describes what was being attempted)
+//   Action             (rich text — describes what was being attempted)
 //   Error message      (rich text)
 //   Stack trace        (rich text)
 //   Resolved           (checkbox, default false)
@@ -44,7 +45,7 @@ export async function writeException(
         body: {
           parent: { database_id: dbId },
           properties: {
-            Title: {
+            Name: {
               title: [
                 {
                   type: "text",
