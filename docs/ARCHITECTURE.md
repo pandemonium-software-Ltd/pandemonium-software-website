@@ -247,7 +247,7 @@ The final pre-launch step. Three sub-sections in the Hub:
 
 | Secret / state | Where | Notes |
 |---|---|---|
-| My Cloudflare API token (high-scope, account-level) | Cloudflare Worker secret `BEN_CLOUDFLARE_API_TOKEN` | Scopes: `User: User Details:Read`, `Account: Account Settings:Read`, `Zone: DNS:Edit`, `Account: Workers Scripts:Edit`, `Account: Pages:Edit`, `Account: Workers Routes:Edit` |
+| My Cloudflare API token (high-scope, account-level) | Cloudflare Worker secret `BEN_CLOUDFLARE_API_TOKEN` | User-scoped token. Scopes (validated live during C2.1): `User: Memberships: Edit` (gates `/memberships` list+accept), `Account: Account Settings: Read` (gates `/accounts`), `Zone: Zone: Edit` (gates `POST /zones` in C2.2), `Zone: DNS: Edit` (gates DNS record edits in C3 Resend), `Account: Workers Scripts: Edit` (gates Workers deploy + Custom Domains in C2.3). Resources: Include all accounts; All zones. NB: `Pages: Edit` and `Workers Routes: Edit` from earlier drafts are NOT needed — Pages is superseded by per-customer Workers (§10), Workers Routes is bundled into Workers Scripts. |
 | My Resend API key | Worker secret `RESEND_API_KEY` (already exists) | Used as the team-member identity for accepting invites |
 | Per-customer Resend sending API key | Notion `Onboarding Data` JSON, AES-encrypted; key in `RESEND_KEY_ENCRYPTION_KEY` Worker secret | Used for sending campaigns / transactional from their domain |
 | Customer Cloudflare account ID | Notion `Onboarding Data.cloudflare.accountId` | Discovered after invitation acceptance |

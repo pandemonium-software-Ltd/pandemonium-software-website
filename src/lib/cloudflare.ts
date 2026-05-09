@@ -12,13 +12,20 @@
 //
 // Auth: User-scoped API token (NOT account-scoped). Created in
 // Cloudflare dashboard → My Profile → API Tokens → Create. Required
-// scopes per §4.4:
-//   - User: User Details: Read
-//   - Account: Account Settings: Read
-//   - Zone: DNS: Edit
-//   - Account: Workers Scripts: Edit
-//   - Account: Pages: Edit
-//   - Account: Workers Routes: Edit
+// scopes (validated live during C2.1 deploy):
+//   - User: Memberships: Edit         ← gates GET/PUT /memberships
+//   - Account: Account Settings: Read ← gates GET /accounts
+//   - Zone: Zone: Edit                ← gates POST /zones (for C2.2)
+//   - Zone: DNS: Edit                 ← gates DNS record edits (C3 Resend)
+//   - Account: Workers Scripts: Edit  ← gates Workers + Custom Domains (C2.3)
+// Resources: "Include all accounts" (so Ben's future memberships
+// in customer accounts are auto-covered). Zone Resources: "All zones".
+//
+// NB: "User: User Details: Read" was in the original §4.4 spec but
+// is NOT what /memberships needs (it gates /user only). "Account:
+// Pages: Edit" and "Account: Workers Routes: Edit" were also in
+// §4.4 but are unused — Pages is superseded by per-customer
+// Workers (§10), and Workers Routes is bundled into Workers Scripts.
 
 import { getServerEnv } from "./env";
 
