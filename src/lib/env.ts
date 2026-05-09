@@ -19,6 +19,12 @@ const serverEnvSchema = z.object({
   NOTION_CLIENTS_DB_ID: z.string().optional(),
   NOTION_ASSETS_DB_ID: z.string().optional(),
   NOTION_EXCEPTIONS_DB_ID: z.string().optional(),
+  // Cowork Ops audit log — Stage 2C C1. Each Step result (per
+  // src/ops-worker/dispatch.ts) writes one entry. Optional: if
+  // unset, the ops worker degrades gracefully and logs to stdout
+  // (visible in `wrangler tail`) so the cron tick still runs while
+  // Ben sets the DB up.
+  NOTION_AUDIT_LOG_DB_ID: z.string().optional(),
 
   // Email
   RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),

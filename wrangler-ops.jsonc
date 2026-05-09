@@ -1,0 +1,42 @@
+// Cowork Ops Worker — separate from the customer-facing site Worker
+// per §4.1 ("Why a separate Worker"): the ops worker runs minute-cron
+// tasks that may include long DNS waits, retry loops, and SaaS API
+// rate-limit backoffs. Mixing those with the customer-facing
+// Next.js SSR risks user-visible latency.
+//
+// Deploy:
+//   npm run deploy:ops
+//
+// Local dev (no actual cron firing — invoke /__scheduled manually
+// per Wrangler docs):
+//   npm run dev:ops
+//
+// Secrets — set on this Worker SEPARATELY from the main site Worker
+// (Cloudflare scopes secrets per-Worker):
+//   wrangler secret put NOTION_API_KEY --config wrangler-ops.jsonc
+//   wrangler secret put RESEND_API_KEY --config wrangler-ops.jsonc
+//   wrangler secret put ADMIN_PASSWORD --config wrangler-ops.jsonc
+//   (plus, once Stage 2C C2/C3 land:)
+//   wrangler secret put BEN_CLOUDFLARE_API_TOKEN --config wrangler-ops.jsonc
+//   wrangler secret put RESEND_KEY_ENCRYPTION_KEY --config wrangler-ops.jsonc
+//
+// Plain text vars (set via the dashboard or vars: block below):
+//   NOTION_PROSPECTS_DB_ID, NOTION_AUDIT_LOG_DB_ID,
+//   NOTION_EXCEPTIONS_DB_ID, BEN_OPS_EMAIL
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pandemonium-software-ops",
+  "main": "src/ops-worker/index.ts",
+  "compatibility_date": "2026-04-11",
+  "compatibility_flags": ["nodejs_compat"],
+  // Every minute. Cf §4.2 ("Cron Triggers, every 60 seconds"). The
+  // tick is no-op fast (~50ms) when no prospects need work, so this
+  // is cheap. If 60s polling becomes insufficient (Stage 2C C5+),
+  // we graduate to Cloudflare Workflows per §4.2.
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

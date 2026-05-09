@@ -308,6 +308,52 @@ export async function listAllProspects(): Promise<ProspectRecord[]> {
     .filter((p): p is ProspectRecord => p !== null);
 }
 
+// --- List prospects in onboarding (Cowork Ops Worker) ---
+
+/**
+ * Lists prospects in active onboarding — `Status` is either
+ * `Onboarding Started` or `Onboarding Complete`. Used by the Cowork
+ * Ops Worker (§4.2 cron tick): every minute it pulls this set,
+ * dispatches per-step automation for each, and writes audit /
+ * exception entries.
+ *
+ * Server-side filter via Notion's query API so we don't pull the
+ * whole prospects table on every tick. At low volume (1-20 customers)
+ * this returns ≤ that many rows; we keep page_size = 100 as a
+ * safety bound. If the fleet grows past 100 active onboardings, we
+ * paginate via `next_cursor`.
+ */
+export async function listProspectsNeedingOps(): Promise<ProspectRecord[]> {
+  const env = getServerEnv();
+
+  const result = await notionFetch<NotionQueryResponse>(
+    `/databases/${env.NOTION_PROSPECTS_DB_ID}/query`,
+    {
+      method: "POST",
+      body: {
+        filter: {
+          or: [
+            {
+              property: "Status",
+              select: { equals: "Onboarding Started" },
+            },
+            {
+              property: "Status",
+              select: { equals: "Onboarding Complete" },
+            },
+          ],
+        },
+        sorts: [{ property: "Phase 1 Submitted At", direction: "ascending" }],
+        page_size: 100,
+      },
+    },
+  );
+
+  return result.results
+    .map((p) => pageToProspect(p))
+    .filter((p): p is ProspectRecord => p !== null);
+}
+
 // --- Update Phase 2 + compatibility ---
 
 export async function updateProspectPhase2(

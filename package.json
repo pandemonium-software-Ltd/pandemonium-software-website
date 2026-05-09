@@ -9,6 +9,8 @@
     "build:next": "next build",
     "preview": "npm run build && opennextjs-cloudflare preview",
     "deploy": "npm run build && opennextjs-cloudflare deploy",
+    "deploy:ops": "wrangler deploy --config wrangler-ops.jsonc",
+    "dev:ops": "wrangler dev --config wrangler-ops.jsonc --test-scheduled",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",

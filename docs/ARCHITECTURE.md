@@ -322,8 +322,27 @@ dashboard" promise. Estimated 16-20 hours. Seven commits:
   Run with `npm test`. C5 layers Cowork's notification pipeline
   on top; the rest of the template set lands as the §6 task
   contracts get wired in.
-- C1: Ops Worker scaffolding (separate Worker, Cron Trigger, Notion
-  poller, audit log table, Exceptions DB schema)
+- C1 (DONE): Ops Worker scaffolding. Separate Cloudflare Worker
+  (`pandemonium-software-ops`) at `src/ops-worker/` with its own
+  `wrangler-ops.jsonc`. Cron Trigger fires every minute (per §4.2);
+  the tick handler lists prospects in {Onboarding Started,
+  Onboarding Complete} and dispatches per-step automation through
+  the §4.6 audit-and-exception wrapping pattern. Five per-step
+  files (`steps/step{1..5}-*.ts`) — all stubs returning
+  `{ status: "skip" }` so the dispatch wiring is exercised end-to-
+  end without doing real Cloudflare/Resend/etc. work; replaced one
+  by one in C2-C4. Audit writes to a Notion `Cowork Audit Log` DB
+  (graceful stdout fallback if `NOTION_AUDIT_LOG_DB_ID` unset);
+  exceptions write to `NOTION_EXCEPTIONS_DB_ID` AND page Ben via
+  gmail (the §9.0 incident channel — subject prefix `[INCIDENT]`).
+  9 unit tests cover the dispatcher's wrapping invariants
+  (skip/ok/fail audit shapes, thrown-error → fail conversion,
+  no-side-effect when shouldRun=false, ISO timestamps,
+  non-negative durations). Ben runs `npm run deploy:ops` once the
+  three new Notion DBs / fields exist and the secrets are
+  duplicated onto the ops Worker (`wrangler secret put NOTION_API_KEY
+  --config wrangler-ops.jsonc` etc. — full list in
+  `wrangler-ops.jsonc` head comment).
 - C2: Cloudflare automation (membership accept; DNS + per-customer
   Worker provisioning + Custom Domain binding for Step 1 and Step
   2-website parts; per-customer Worker named `mf-<token-prefix>`
