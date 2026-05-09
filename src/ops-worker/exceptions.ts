@@ -144,7 +144,7 @@ Open the Notion Exceptions DB to triage and mark resolved.
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "ModuForge Notifications <onboarding@resend.dev>",
+      from: "Cowork (ModuForge) <cowork@modu-forge.co.uk>",
       to: opsEmail,
       reply_to: opsEmail,
       subject,

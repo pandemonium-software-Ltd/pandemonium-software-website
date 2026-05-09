@@ -18,7 +18,13 @@ import { renderTemplate, getTemplate } from "../lib/templates";
 import type { TemplateValues } from "../lib/templates";
 import type { ServerEnv } from "../lib/env";
 
-const FROM_NOTIFICATIONS = "ModuForge Notifications <onboarding@resend.dev>";
+// Verified Resend sending domain (modu-forge.co.uk verified
+// 2026-05-09). Required for sending to arbitrary customer email
+// addresses — Resend's free shared sender (onboarding@resend.dev)
+// only delivers to the account owner's email, which broke real
+// customer notifications. Same FROM as src/lib/email.ts so all
+// outbound from us has one identity.
+const FROM_NOTIFICATIONS = "Cowork (ModuForge) <cowork@modu-forge.co.uk>";
 
 export type SendResult = {
   /** Resend's message id — useful for audit logs and tracing. */

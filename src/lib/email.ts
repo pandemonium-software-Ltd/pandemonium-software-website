@@ -26,7 +26,12 @@ import { getServerEnv } from "./env";
  * email Resend sends, so all human-side correspondence funnels here.
  */
 const OPS_EMAIL = "pandamoniumsoftwareltd@gmail.com";
-const FROM_INTERNAL = "ModuForge Notifications <onboarding@resend.dev>";
+// Sender identity now uses our verified modu-forge.co.uk domain
+// (Resend verification completed 2026-05-09). The shared
+// onboarding@resend.dev sender used previously could only deliver
+// to the Resend account owner email, breaking customer emails to
+// arbitrary addresses. With a verified domain we can send to anyone.
+const FROM_INTERNAL = "Cowork (ModuForge) <cowork@modu-forge.co.uk>";
 const TO_BEN = OPS_EMAIL;
 
 let cachedResend: Resend | null = null;
