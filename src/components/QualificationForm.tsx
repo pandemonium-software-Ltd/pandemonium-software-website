@@ -126,6 +126,7 @@ export default function QualificationForm({
   });
 
   if (state.kind === "success") {
+    const isAccept = state.outcome === "accept";
     return (
       <div
         role="status"
@@ -137,9 +138,22 @@ export default function QualificationForm({
         <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
           {state.message}
         </p>
+        {isAccept && (
+          <div className="mt-5 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-semibold">
+              📬 The intake form link should be in your inbox now.
+            </p>
+            <p className="mt-2">
+              If you can&apos;t find it in a minute or two, check your
+              spam or junk folder — <code>modu-forge.co.uk</code> is a
+              new sender domain so some inboxes are over-cautious at
+              first. Marking it &quot;Not spam&quot; will help future
+              emails reach you.
+            </p>
+          </div>
+        )}
         <p className="mt-4 text-sm text-navy-600">
-          Every reply is reviewed by me before it sends. If you need me
-          before then,{" "}
+          Need me before the email lands?{" "}
           <a href={`mailto:${site.contactEmail}`} className="link">
             {site.contactEmail}
           </a>

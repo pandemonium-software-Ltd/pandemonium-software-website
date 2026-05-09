@@ -154,11 +154,23 @@ export default async function PaymentPage({
                     Payment in a moment.
                   </p>
                   <p className="mt-2">
-                    Stripe Checkout integration is being finalised. A
-                    payment link will be drafted and sent to you within 24
-                    hours (reviewed by me before it goes out). After that
-                    you&apos;re straight into the Onboarding Hub.
+                    I&apos;ve also just emailed you a summary with these
+                    same fees. Stripe Checkout integration is being
+                    finalised — I&apos;ll send the payment link next.
+                    Once it&apos;s paid, you&apos;re straight into the
+                    Onboarding Hub.
                   </p>
+                  <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900">
+                    <p className="font-semibold">
+                      📬 Email not in your inbox?
+                    </p>
+                    <p className="mt-1">
+                      Check your spam / junk folder —{" "}
+                      <code>modu-forge.co.uk</code> is a new sender
+                      domain so some inboxes are extra cautious at
+                      first.
+                    </p>
+                  </div>
                   <p className="mt-3">
                     Questions before then?{" "}
                     <a href={`mailto:${site.contactEmail}`} className="link">

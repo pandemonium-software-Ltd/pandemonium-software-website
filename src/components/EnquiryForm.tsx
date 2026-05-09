@@ -77,14 +77,22 @@ export default function EnquiryForm() {
       >
         <h3 className="font-serif text-2xl font-semibold">Thanks — got it.</h3>
         <p className="mt-3 text-[1rem] leading-relaxed text-navy-700">
-          An AI assistant is reading your enquiry now and drafting a reply
-          for me to review. You&apos;ll have a reply within 4 working hours
-          (UK time), with a short follow-up form so I can put together a
-          fixed quote and a target go-live date.
+          I&apos;ve just emailed you a short qualification form — about
+          10 minutes to fill in. Once you submit it, I&apos;ll review
+          your answers personally and reply within 4 working hours
+          (UK time) with a fixed quote and target go-live date.
         </p>
-        <p className="mt-4 text-sm text-navy-600">
-          Nothing more to do for now. Watch your inbox.
-        </p>
+        <div className="mt-5 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">
+            📬 Can&apos;t find the email in a minute or two?
+          </p>
+          <p className="mt-2">
+            Check your spam or junk folder — <code>modu-forge.co.uk</code>{" "}
+            is a brand-new sender domain, so some inboxes are extra
+            cautious at first. If you find it there, marking it &quot;Not
+            spam&quot; will help future emails from me reach you.
+          </p>
+        </div>
       </div>
     );
   }
