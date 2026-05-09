@@ -1,25 +1,35 @@
 "use client";
 
-// Onboarding Hub — Step 5: Review & launch.
+// Onboarding Hub — Step 5: Review & launch (two-stage).
 //
-// Final pre-launch step. Three sub-sections:
+// Two explicit submits at the end of onboarding:
 //
-//   A. Preview your site
-//      - If Cowork has set previewUrl: iframe + open-in-new-tab link
-//      - If not: a "preview being built" placeholder card
+//   Stage 1: "Request site preview" — only button visible initially.
+//            Clicking it stamps `previewSubmittedAt` in Notion;
+//            Cowork picks up the cue and builds the preview.
 //
-//   B. Request edits (max MAX_REVIEW_EDITS = 3)
-//      - Counter: "X of 3 edits remaining" with visual pill row
-//      - Scope guardrails callout: in-scope vs out-of-scope
-//      - Structured-feedback template + 2 good examples
-//      - Textarea + Submit (disabled if 0 remaining or not signed-off
-//        path)
-//      - History list of submitted edits with status pills
+//   Stage 2: "Submit and commit site" — appears once previewSubmittedAt
+//            is set. Disabled until previewUrl is also set (i.e. the
+//            preview Cowork built is ready to view). Click locks in
+//            the launch and starts the build.
 //
-//   C. Go-live date + final sign-off
-//      - HTML date picker (min: today)
-//      - "I'm happy to launch on this date" checkbox
-//      - Mark step done is gated by both
+// Three rendering phases driven by the two timestamps:
+//
+//   Phase 1 (no previewSubmittedAt):
+//     - Section A: intro + the "Request site preview" button only
+//     - Sections B + C: HIDDEN
+//
+//   Phase 2 (previewSubmittedAt set, no previewUrl):
+//     - Section A: "Preview being built" placeholder
+//     - Section B: edits section visible (3 max), submit functional
+//     - Section C: visible but commit button DISABLED with
+//       "preview pending" message
+//
+//   Phase 3 (previewUrl set):
+//     - Section A: iframe + open-in-new-tab link
+//     - Section B: edits section + 3-cap submit
+//     - Section C: commit button ENABLED once go-live date + sign-off
+//       checkbox are filled
 //
 // The cap on edits is the scope-creep guardrail. New pages, new
 // features and full redesigns are quoted separately under Terms §10.
@@ -49,16 +59,52 @@ export default function Step5Review({
   // Initial state from saved data.
   const initialPreviewUrl =
     typeof data.previewUrl === "string" ? data.previewUrl : "";
+  const initialPreviewSubmittedAt =
+    typeof data.previewSubmittedAt === "string"
+      ? data.previewSubmittedAt
+      : "";
   const initialEdits = (Array.isArray(data.edits) ? data.edits : []) as ReviewEdit[];
   const initialGoLive =
     typeof data.goLiveDate === "string" ? data.goLiveDate : "";
   const initialSignOff = data.finalSignOff === true;
   const initialNotes = typeof data.notes === "string" ? data.notes : "";
 
+  const [previewSubmittedAt, setPreviewSubmittedAt] = useState(
+    initialPreviewSubmittedAt,
+  );
   const [edits, setEdits] = useState<ReviewEdit[]>(initialEdits);
   const [goLiveDate, setGoLiveDate] = useState(initialGoLive);
   const [signOff, setSignOff] = useState(initialSignOff);
   const [notes, setNotes] = useState(initialNotes);
+
+  // Three-phase render based on the two timestamps.
+  // Once the step is marked done, the existing read-only path takes
+  // over (commit captured, hub locks).
+  const phase: 1 | 2 | 3 =
+    !previewSubmittedAt ? 1 : !initialPreviewUrl ? 2 : 3;
+  const previewBeingBuilt = phase === 2;
+  const showEditsAndCommit = phase === 2 || phase === 3;
+  const commitEnabled = phase === 3;
+
+  // Stage 1 → Stage 2: customer requests the preview build.
+  const [requestingPreview, setRequestingPreview] = useState(false);
+  async function handleRequestPreview() {
+    setError(null);
+    setRequestingPreview(true);
+    const now = new Date().toISOString();
+    const ok = await savePartial({ previewSubmittedAt: now });
+    setRequestingPreview(false);
+    if (ok) {
+      setPreviewSubmittedAt(now);
+      // Smooth scroll to top so the new "preview being built" state
+      // is visible immediately.
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    } else {
+      setError("Couldn't request your preview just now. Try again.");
+    }
+  }
 
   // Edit submission UI state.
   const [editDraft, setEditDraft] = useState("");
@@ -188,11 +234,10 @@ export default function Step5Review({
           Review &amp; launch
         </h2>
         <p className="mt-3 text-[1.05rem] leading-relaxed text-navy-700">
-          Last step. Have a proper look at your preview, request up to{" "}
-          {MAX_REVIEW_EDITS} rounds of revisions if anything needs
-          tweaking, then pick a launch date and sign off. Marking this
-          step done is the trigger for me to push your site live on
-          the date you chose.
+          Two stages to launch:{" "}
+          <strong>request your preview</strong>, then{" "}
+          <strong>commit when you&apos;re happy</strong>. You get up
+          to {MAX_REVIEW_EDITS} rounds of edits between the two.
         </p>
       </header>
 
@@ -201,7 +246,49 @@ export default function Step5Review({
         <h3 className="font-serif text-lg font-semibold text-navy-900">
           A. Preview your site
         </h3>
-        {initialPreviewUrl ? (
+
+        {phase === 1 && (
+          <div className="mt-4 space-y-4">
+            <p className="text-sm text-navy-700">
+              Click the button below to ask me to build your site
+              preview. I&apos;ll take everything you gave me in
+              Steps 1-4 and assemble it into a working site you can
+              view + critique. Typically ready within 5 working days.
+            </p>
+            <button
+              type="button"
+              onClick={handleRequestPreview}
+              disabled={disabled || requestingPreview}
+              className="btn-primary"
+            >
+              {requestingPreview
+                ? "Requesting…"
+                : "Request site preview"}
+            </button>
+            <p className="text-xs text-navy-500">
+              Once requested, the Edits section unlocks for revisions
+              and the final &ldquo;Submit and commit&rdquo; button
+              appears below.
+            </p>
+          </div>
+        )}
+
+        {phase === 2 && (
+          <div className="mt-4 rounded-2xl border-2 border-dashed border-navy-200 bg-cream-50 p-6 text-sm leading-relaxed text-navy-700">
+            <p className="font-semibold text-navy-900">
+              Your preview is being built.
+            </p>
+            <p className="mt-2">
+              Requested {formatRelative(previewSubmittedAt)}. I&apos;m
+              putting together your site from everything you gave me
+              in Steps 1-4 — typically ready within 5 working days.
+              You&apos;ll get an email when it&apos;s live and the
+              preview iframe will appear here on refresh.
+            </p>
+          </div>
+        )}
+
+        {phase === 3 && (
           <div className="mt-4">
             <p className="text-sm text-navy-700">
               Live preview at{" "}
@@ -213,8 +300,8 @@ export default function Step5Review({
               >
                 {initialPreviewUrl}
               </a>
-              . Look at it on your phone too — we get most of our
-              traffic from mobile.
+              . Look at it on your phone too — most traffic comes from
+              mobile.
             </p>
             <div className="mt-3 overflow-hidden rounded-xl border-2 border-navy-100">
               <iframe
@@ -224,25 +311,11 @@ export default function Step5Review({
               />
             </div>
           </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border-2 border-dashed border-navy-200 bg-cream-50 p-6 text-sm leading-relaxed text-navy-700">
-            <p className="font-semibold text-navy-900">
-              Your preview is being built.
-            </p>
-            <p className="mt-2">
-              I&apos;m putting together your site from everything you
-              gave me in Steps 1 to 4. You&apos;ll get an email when
-              the preview is ready (typically within 5 working days
-              after you finished onboarding) — refresh this page and
-              you&apos;ll see it embedded here, plus a link to open
-              it on your phone. The Edits section below unlocks at
-              the same time.
-            </p>
-          </div>
         )}
       </section>
 
-      {/* ---------- B. Request edits ---------- */}
+      {/* ---------- B. Request edits (only after preview requested) ---------- */}
+      {showEditsAndCommit && (
       <section className="mt-9">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h3 className="font-serif text-lg font-semibold text-navy-900">
@@ -365,8 +438,10 @@ export default function Step5Review({
           </div>
         )}
       </section>
+      )}
 
-      {/* ---------- C. Go-live + sign-off ---------- */}
+      {/* ---------- C. Go-live + sign-off (only after preview requested) ---------- */}
+      {showEditsAndCommit && (
       <section className="mt-9">
         <h3 className="font-serif text-lg font-semibold text-navy-900">
           C. Pick a launch date &amp; sign off
@@ -438,7 +513,13 @@ export default function Step5Review({
           </p>
         )}
       </section>
+      )}
 
+      {/* ---------- Footer: Save / Submit & commit ----------
+          Hidden in phase 1 (only the "Request site preview" button
+          in Section A is visible at that point). The commit button
+          stays visible in phase 2 but disabled with a clear reason. */}
+      {showEditsAndCommit && (
       <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
         {done ? (
           <div className="flex w-full flex-col gap-3">
@@ -474,28 +555,44 @@ export default function Step5Review({
             </p>
           </div>
         ) : (
-          <>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={pending !== "none" || disabled}
-              className="btn-secondary"
-            >
-              {pending === "save" ? "Saving…" : "Save progress"}
-            </button>
-            <button
-              type="button"
-              onClick={handleMarkDone}
-              disabled={pending !== "none" || disabled}
-              className="btn-primary"
-            >
-              {pending === "done"
-                ? "Marking done…"
-                : "Sign off &amp; launch"}
-            </button>
-          </>
+          <div className="flex w-full flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={pending !== "none" || disabled}
+                className="btn-secondary"
+              >
+                {pending === "save" ? "Saving…" : "Save progress"}
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkDone}
+                disabled={
+                  pending !== "none" || disabled || !commitEnabled
+                }
+                className="btn-primary"
+                title={
+                  !commitEnabled
+                    ? "Locked until your preview is built and you've reviewed it."
+                    : undefined
+                }
+              >
+                {pending === "done"
+                  ? "Committing…"
+                  : "Submit and commit site"}
+              </button>
+            </div>
+            {!commitEnabled && (
+              <p className="text-xs text-navy-500">
+                The commit button unlocks once your preview is built.
+                I&apos;ll email you the moment it&apos;s ready.
+              </p>
+            )}
+          </div>
         )}
       </footer>
+      )}
     </article>
   );
 }

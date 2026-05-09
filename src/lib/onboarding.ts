@@ -344,6 +344,13 @@ const reviewEditSchema = z.object({
 export type ReviewEdit = z.infer<typeof reviewEditSchema>;
 
 const step5ReviewSchema = z.object({
+  /** ISO-8601, set when the customer clicks "Request site preview"
+   *  (the first of the two end-of-onboarding submits). Until this
+   *  is set, the edits section + commit button are hidden — the
+   *  customer hasn't asked for a build yet. After it's set, the
+   *  edits section unlocks and the commit button appears (disabled
+   *  until previewUrl is also set). */
+  previewSubmittedAt: z.string().optional(),
   /** URL Cowork sets once a preview is built. Empty until then. */
   previewUrl: z.string().trim().url().max(500).optional(),
   /** Customer's revision requests; capped at MAX_REVIEW_EDITS by
