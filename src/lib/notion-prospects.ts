@@ -221,7 +221,13 @@ export type ModuleChangeLogEntry = {
  * classification (in scope vs out of scope) tractable, and gives
  * Cowork a clean unit to apply or reject.
  */
-export const MONTHLY_CHANGE_REQUEST_LIMIT = 3;
+// Tightened 3 → 2 on 2026-05-10 (per user direction). The
+// pre-commit Hub Step 5 review-edit cap (separate constant
+// MAX_REVIEW_EDITS in src/lib/onboarding.ts) stays at 3 — those
+// are scoped to launch prep, this cap is the ongoing post-commit
+// allowance. Anything bigger or more urgent gets quoted separately
+// per the cap-exceeded copy on /account/[token].
+export const MONTHLY_CHANGE_REQUEST_LIMIT = 2;
 
 /**
  * Counts requests submitted in the current calendar month that
