@@ -406,7 +406,32 @@ function StepRenderer({
           markDone={(patch) => markDone("content", patch)}
         />
       );
-    case "assets":
+    case "assets": {
+      // Canonical service list for the D. Service photos slot grid:
+      // prefer the customer's Site Content edits (renames, deletes,
+      // adds), fall back to Phase 3 intake. Mirrors the adapter's
+      // merge logic in src/lib/site-generator/adapter.ts so the slot
+      // names here match the names that ship to the live site.
+      // Without this, renaming "Loft conversion" to "Loft conversions"
+      // in Site Content leaves the upload slot stuck at the old name
+      // — and any photo uploaded against it would not match a service.
+      const contentServicesRaw = (data.content as { services?: unknown })
+        ?.services;
+      const contentServiceNames = Array.isArray(contentServicesRaw)
+        ? contentServicesRaw
+            .map((s) => {
+              if (!s || typeof s !== "object") return null;
+              const name = (s as { serviceName?: unknown }).serviceName;
+              return typeof name === "string" && name.trim().length > 0
+                ? { name: name.trim() }
+                : null;
+            })
+            .filter((s): s is { name: string } => s !== null)
+        : [];
+      const canonicalServices =
+        contentServiceNames.length > 0
+          ? contentServiceNames
+          : phase3Services;
       return (
         <Step4Assets
           data={slice}
@@ -414,11 +439,12 @@ function StepRenderer({
           readOnly={readOnly}
           r2PublicUrlBase={r2PublicUrlBase}
           token={token}
-          services={phase3Services}
+          services={canonicalServices}
           savePartial={(patch) => savePartial("assets", patch)}
           markDone={(patch) => markDone("assets", patch)}
         />
       );
+    }
     case "review":
       return (
         <Step5Review

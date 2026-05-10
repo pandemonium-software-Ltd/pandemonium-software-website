@@ -342,9 +342,9 @@ export default function Step4Assets({
         </p>
         {services.length === 0 ? (
           <p className="mt-4 rounded-lg border border-navy-100 bg-cream-50 p-4 text-sm text-navy-700">
-            Your services list is empty. Complete the Phase 3 intake
-            form first — once your services are set, this section will
-            list each one with its own upload slot.
+            Your services list is empty. Add at least one service in
+            the Site content step (or fill in the Phase 3 intake) and
+            this section will list each one with its own upload slot.
           </p>
         ) : (
           <ul className="mt-5 space-y-3">
