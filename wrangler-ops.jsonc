@@ -38,5 +38,14 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Plain-text vars. Secrets are set separately via
+  // `wrangler secret put <NAME> --config wrangler-ops.jsonc`.
+  "vars": {
+    // Stage 2C C5.4 — GitHub repo for the customer-site-build
+    // workflow. step5-review uses these to dispatch the workflow.
+    // GITHUB_TOKEN is set via wrangler secret put.
+    "GITHUB_OWNER": "pandemonium-software-Ltd",
+    "GITHUB_REPO": "pandemonium-software-website"
   }
 }
