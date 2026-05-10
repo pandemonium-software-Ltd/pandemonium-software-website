@@ -16,16 +16,29 @@
 //   - User: Memberships: Edit         ← gates GET/PUT /memberships
 //   - Account: Account Settings: Read ← gates GET /accounts
 //   - Zone: Zone: Edit                ← gates POST /zones (for C2.2)
-//   - Zone: DNS: Edit                 ← gates DNS record edits (C3 Resend)
-//   - Account: Workers Scripts: Edit  ← gates Workers + Custom Domains (C2.3)
+//   - Zone: DNS: Edit                 ← gates DNS record edits (proxied
+//                                       A records for Worker routing,
+//                                       and Resend domain SPF/DKIM)
+//   - Account: Workers Scripts: Edit  ← gates Workers script upload (C2.3)
+//   - Zone: Workers Routes: Edit      ← gates POST /zones/:id/workers/routes
 // Resources: "Include all accounts" (so Ben's future memberships
 // in customer accounts are auto-covered). Zone Resources: "All zones".
 //
 // NB: "User: User Details: Read" was in the original §4.4 spec but
 // is NOT what /memberships needs (it gates /user only). "Account:
-// Pages: Edit" and "Account: Workers Routes: Edit" were also in
-// §4.4 but are unused — Pages is superseded by per-customer
-// Workers (§10), and Workers Routes is bundled into Workers Scripts.
+// Pages: Edit" was also in §4.4 but is unused — Pages is superseded
+// by per-customer Workers (§10).
+//
+// IMPORTANT — what we DON'T use and why:
+// The modern Workers Custom Domains API at
+//   POST /accounts/{id}/workers/domains
+// rejects user-scoped tokens with code 10405 ("Method not allowed
+// for this authentication scheme"), regardless of which permissions
+// the token holds. It only accepts account-owned tokens — which
+// would mean creating a separate token in EACH customer account,
+// breaking the "one token, all accounts" model. Step 2 therefore
+// uses the legacy zone-level Workers Routes API + proxied DNS A
+// records instead (see step2-domain.ts phase E).
 
 import { getServerEnv } from "./env";
 
@@ -319,7 +332,14 @@ export async function uploadWorkerScript(
   }
 }
 
-// ---------- Workers Custom Domains (Stage 2C C2.3) ----------
+// ---------- Workers Custom Domains (UNUSED — see head comment) ----------
+//
+// These three helpers wrap POST /accounts/{id}/workers/domains.
+// They are NOT used by step2-domain — that endpoint rejects
+// user-scoped tokens with code 10405. Kept here so the wrappers
+// exist if Cloudflare ever changes the auth scheme. Live code
+// uses listDnsRecords + createDnsRecord + listWorkerRoutes +
+// createWorkerRoute instead (further down).
 
 export type WorkerCustomDomain = {
   id: string;
@@ -387,5 +407,121 @@ export async function getWorkerCustomDomain(
 ): Promise<WorkerCustomDomain> {
   return cloudflareFetch<WorkerCustomDomain>(
     `/accounts/${accountId}/workers/domains/${domainId}`,
+  );
+}
+
+// ---------- Legacy Workers Routes + DNS records (Stage 2C C2.3 fallback) ----------
+//
+// The modern Workers Custom Domains API at
+// POST /accounts/{id}/workers/domains rejects user-scoped tokens
+// with code 10405 ("Method not allowed for this authentication
+// scheme"), regardless of permissions. It only accepts
+// account-owned tokens — which would mean creating a separate
+// token in EACH customer's account, breaking the "one token, all
+// accounts" model.
+//
+// Workaround: use the legacy zone-level Workers Routes API +
+// explicit DNS records. Same end result (customer's domain serves
+// the placeholder Worker over HTTPS), just two API calls per
+// hostname instead of one. Universal SSL is automatic on
+// Cloudflare zones, so TLS still works.
+
+export type DnsRecord = {
+  id: string;
+  type: string;
+  name: string;
+  content: string;
+  proxied: boolean;
+};
+
+export type WorkerRoute = {
+  id: string;
+  pattern: string;
+  /** Worker script name. Cloudflare names it `script` here even
+   *  though the modern API calls the same field `service`. */
+  script: string;
+};
+
+/**
+ * List DNS records on a zone, optionally filtered by name + type.
+ * Used by step2-domain for idempotency (don't duplicate records).
+ */
+export async function listDnsRecords(
+  zoneId: string,
+  opts: { name?: string; type?: string } = {},
+): Promise<DnsRecord[]> {
+  const params = new URLSearchParams();
+  if (opts.name) params.set("name", opts.name);
+  if (opts.type) params.set("type", opts.type);
+  const qs = params.toString();
+  return cloudflareFetch<DnsRecord[]>(
+    `/zones/${zoneId}/dns_records${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/**
+ * Create a DNS record on a zone. For our Worker-routing case we
+ * create a proxied A record pointing to 192.0.2.1 (RFC 5737
+ * reserved-for-docs IP) — the IP itself is never reached because
+ * the Cloudflare edge intercepts requests matching the Worker
+ * route pattern BEFORE they leave Cloudflare's network. The IP
+ * is just a signalling value to keep the DNS record valid.
+ */
+export async function createDnsRecord(
+  zoneId: string,
+  opts: {
+    type: string;
+    name: string;
+    content: string;
+    proxied?: boolean;
+    ttl?: number;
+    comment?: string;
+  },
+): Promise<DnsRecord> {
+  return cloudflareFetch<DnsRecord>(`/zones/${zoneId}/dns_records`, {
+    method: "POST",
+    body: {
+      type: opts.type,
+      name: opts.name,
+      content: opts.content,
+      proxied: opts.proxied ?? true,
+      ttl: opts.ttl ?? 1, // 1 = automatic
+      comment: opts.comment,
+    },
+  });
+}
+
+/**
+ * List Workers Routes on a zone, optionally filtered by exact
+ * pattern. For idempotency in step2-domain.
+ */
+export async function listWorkerRoutes(
+  zoneId: string,
+  pattern?: string,
+): Promise<WorkerRoute[]> {
+  const all = await cloudflareFetch<WorkerRoute[]>(
+    `/zones/${zoneId}/workers/routes`,
+  );
+  return pattern ? all.filter((r) => r.pattern === pattern) : all;
+}
+
+/**
+ * Create a Workers Route — bind a request pattern to a Worker
+ * script on the zone. Cloudflare's edge intercepts matching
+ * requests before they hit DNS resolution.
+ */
+export async function createWorkerRoute(
+  zoneId: string,
+  opts: { pattern: string; script: string },
+): Promise<WorkerRoute> {
+  return cloudflareFetch<WorkerRoute>(
+    `/zones/${zoneId}/workers/routes`,
+    {
+      method: "POST",
+      body: {
+        pattern: opts.pattern,
+        script: opts.script,
+      },
+    },
   );
 }

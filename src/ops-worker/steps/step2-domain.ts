@@ -1,5 +1,5 @@
 // Step 2 — Domain (zone create + nameservers email + status poll
-// + per-customer Worker provisioning + Custom Domain binding).
+// + per-customer Worker provisioning + DNS + Workers Routes).
 // Stage 2C C2.2 (zone work) + C2.3 (Worker placement).
 //
 // Per §4.3 Step 2.A. Six idempotency latches in Notion; shouldRun
@@ -12,8 +12,13 @@
 //   B. need NS email?            → render + send, set Nameservers Email Sent At
 //   C. zone status active + no DV?  → render + send, set Domain Verified At
 //   D. zone active + no Worker?  → upload placeholder Worker, set Worker Name
-//   E. Worker exists, hostname not bound? → bind apex + www
-//   F. bindings active + no SiteLiveAt? → HTTP 200 verify, set Site Live At
+//   E. Worker exists, hostname not bound? → DNS A (proxied) + Worker Route
+//   F. bindings ready + no SiteLiveAt? → HTTP 200 verify, set Site Live At
+//
+// Phase E note: we use the legacy zone-level Workers Routes API +
+// proxied DNS records (NOT POST /accounts/{id}/workers/domains).
+// The latter rejects user-scoped tokens with code 10405. See
+// src/lib/cloudflare.ts head comment for the full rationale.
 //
 // step2 stays in shouldRun=true until F succeeds. Once Site Live At
 // is set, the placeholder is reachable at https://<domain>/ and
@@ -26,11 +31,14 @@ import {
   createZone,
   getZone,
   uploadWorkerScript,
-  listWorkerCustomDomains,
-  createWorkerCustomDomain,
+  listDnsRecords,
+  createDnsRecord,
+  listWorkerRoutes,
+  createWorkerRoute,
   CloudflareApiError,
   type Zone,
-  type WorkerCustomDomain,
+  type DnsRecord,
+  type WorkerRoute,
 } from "../../lib/cloudflare";
 import {
   recordCloudflareZone,
@@ -204,58 +212,95 @@ export const step2Domain: Step = {
       workerUploadedThisTick = true;
     }
 
-    // ---------- E. Bind apex + www (no latch — checked dynamically) ----------
-    // Each tick: list current bindings, create the missing ones.
-    // Cloudflare's POST /workers/domains is idempotent on
-    // (hostname, service) — but we list first to keep the audit
-    // log clean (don't claim "bound foo.co.uk" every tick).
+    // ---------- E. Bind apex + www via DNS + Workers Routes ----------
+    // Workaround for the modern Workers Custom Domains API rejecting
+    // user-scoped tokens (10405). See cloudflare.ts head comment.
+    //
+    // Two idempotent operations per hostname:
+    //   1. Proxied A record → 192.0.2.1 (RFC 5737 reserved). The IP
+    //      is a placeholder; the Cloudflare edge intercepts requests
+    //      matching the Worker route before they leave the network.
+    //   2. Worker route: pattern `<hostname>/*` → workerName.
+    //
+    // Universal SSL handles TLS automatically on proxied records, so
+    // there's no per-binding "pending" status to wait for — the
+    // HTTP 200 fetch in phase F is the actual readiness signal.
     const bindEvents: string[] = [];
-    let allBindings: WorkerCustomDomain[] = [];
+    let routesAndDnsReady = false;
     if (workerName) {
       const hostnames = [config.domain, `www.${config.domain}`];
       for (const hostname of hostnames) {
-        let existing: WorkerCustomDomain[];
+        // (1) Proxied A record
+        let dnsExisting: DnsRecord[];
         try {
-          existing = await listWorkerCustomDomains(
-            prospect.cloudflareAccountId,
-            hostname,
-          );
+          dnsExisting = await listDnsRecords(zone.id, {
+            name: hostname,
+            type: "A",
+          });
         } catch (e) {
           throw new Error(
-            `listWorkerCustomDomains(${hostname}) failed: ${cfErrorMessage(e)}`,
+            `listDnsRecords(${hostname}) failed: ${cfErrorMessage(e)}`,
           );
         }
-
-        let binding: WorkerCustomDomain;
-        if (existing.length > 0) {
-          binding = existing[0];
-        } else {
+        const dnsExists = dnsExisting.some((r) => r.proxied);
+        if (!dnsExists) {
           try {
-            binding = await createWorkerCustomDomain(
-              prospect.cloudflareAccountId,
-              { hostname, service: workerName, zoneId: zone.id },
-            );
+            await createDnsRecord(zone.id, {
+              type: "A",
+              name: hostname,
+              content: "192.0.2.1",
+              proxied: true,
+              comment: "ModuForge: proxied → Worker route",
+            });
           } catch (e) {
             throw new Error(
-              `createWorkerCustomDomain(${hostname}) failed: ${cfErrorMessage(e)}`,
+              `createDnsRecord(${hostname}) failed: ${cfErrorMessage(e)}`,
             );
           }
-          bindEvents.push(`bound ${hostname}`);
+          bindEvents.push(`created A record ${hostname}`);
         }
-        allBindings.push(binding);
+
+        // (2) Worker route
+        const pattern = `${hostname}/*`;
+        let routeExisting: WorkerRoute[];
+        try {
+          routeExisting = await listWorkerRoutes(zone.id, pattern);
+        } catch (e) {
+          throw new Error(
+            `listWorkerRoutes(${pattern}) failed: ${cfErrorMessage(e)}`,
+          );
+        }
+        const routeExists = routeExisting.some(
+          (r) => r.script === workerName,
+        );
+        if (!routeExists) {
+          try {
+            await createWorkerRoute(zone.id, {
+              pattern,
+              script: workerName,
+            });
+          } catch (e) {
+            throw new Error(
+              `createWorkerRoute(${pattern}) failed: ${cfErrorMessage(e)}`,
+            );
+          }
+          bindEvents.push(`bound ${pattern} → ${workerName}`);
+        }
       }
+      // If we got here without throwing, both hostnames have DNS + route.
+      routesAndDnsReady = true;
     }
 
     // ---------- F. HTTP 200 verify (latch: siteLiveAt) ----------
-    // Run only when bindings are in place AND not yet verified.
-    // Status field on binding may be absent for some Cloudflare
-    // responses — treat absent as ready (consistent with
-    // WorkerCustomDomain.status type).
+    // Run only when DNS + routes are in place AND not yet verified.
+    // Universal SSL provisions in the background after the proxied
+    // DNS record exists (typically 5-15 min on a new zone), so HTTP
+    // verify may 5xx for a few ticks before succeeding — handled by
+    // the retry-next-tick branch below.
     let verifiedThisTick = false;
     if (
       workerName &&
-      allBindings.length > 0 &&
-      allBindings.every((b) => b.status !== "pending") &&
+      routesAndDnsReady &&
       !prospect.siteLiveAt
     ) {
       const url = `https://${config.domain}/`;

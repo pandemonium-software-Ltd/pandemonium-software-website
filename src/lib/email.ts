@@ -206,6 +206,118 @@ export function buildReviewEditNotification(args: {
   };
 }
 
+/**
+ * Internal Ben-facing email when a customer requests their site
+ * preview (Hub Step 5 Phase 1 → Phase 2 transition). Subject is
+ * Gmail-filterable + carries the token-prefix:
+ *   `[MF #<token-short> · preview-request] <name> (<biz>) · go-live <date>`
+ *
+ * Body has the actionable summary: customer name + business + go-
+ * live target + module list + admin URL (where Ben pastes the
+ * preview URL once it's built).
+ */
+export function buildPreviewRequestNotification(args: {
+  prospectName: string;
+  business: string;
+  tokenShort: string;
+  goLiveDate: string; // pretty-formatted
+  moduleSelections: string[];
+  notionUrl: string;
+  adminDetailUrl: string;
+}): NotificationPayload {
+  const businessTag = args.business ? ` (${args.business})` : "";
+  const moduleLine = args.moduleSelections.length
+    ? args.moduleSelections.join(", ")
+    : "Base only (no modules)";
+  return {
+    subject: `[MF #${args.tokenShort} · preview-request] ${args.prospectName}${businessTag} · go-live ${args.goLiveDate}`,
+    body:
+      `${args.prospectName}${businessTag} just requested their site preview.\n\n` +
+      `Target go-live:  ${args.goLiveDate}\n` +
+      `Modules:         ${moduleLine}\n\n` +
+      `--- What to do ---\n` +
+      `1. Build the preview site from their intake + brand assets.\n` +
+      `2. Deploy it to a preview URL (subdomain, Vercel preview, Loom mockup, etc.).\n` +
+      `3. Open admin: ${args.adminDetailUrl}\n` +
+      `4. Paste the preview URL into the "Preview URL" panel and hit Send.\n` +
+      `5. Customer auto-emailed the preview-ready template + their hub flips to Phase 3.\n\n` +
+      `Notion: ${args.notionUrl}\n\n` +
+      `— Cowork`,
+  };
+}
+
+/**
+ * Internal Ben-facing email when a customer hits Confirm on the
+ * module re-selector. Subject is structured for Gmail filter rules
+ * (and the future Cowork-reads-Gmail automation):
+ *   `[MF #<token-short> · module-change] <name> (<biz>) · <delta-headline>`
+ *
+ * The body has everything Ben needs to action the Stripe op manually:
+ *   - old → new module diff
+ *   - setup delta (charge or refund amount)
+ *   - monthly delta (subscription proration)
+ *   - links to /admin and Notion
+ *   - the change ID (for matching against future Stripe metadata)
+ *   - a checklist of what to do in Stripe + which admin button to hit
+ */
+export function buildModuleChangeNotification(args: {
+  prospectName: string;
+  business: string;
+  tokenShort: string; // first 8 chars of the prospect token
+  changeId: string;
+  fromModules: string[];
+  toModules: string[];
+  added: string[];
+  removed: string[];
+  setupDelta: number;
+  monthlyDelta: number;
+  newSetupTotal: number;
+  newMonthlyTotal: number;
+  notionUrl: string;
+  adminDetailUrl: string;
+}): NotificationPayload {
+  const businessTag = args.business ? ` (${args.business})` : "";
+  // Headline = which way money moves, at a glance.
+  const headline =
+    args.setupDelta > 0
+      ? `setup +£${args.setupDelta}`
+      : args.setupDelta < 0
+        ? `setup −£${Math.abs(args.setupDelta)}`
+        : "no setup change";
+  const monthlyHeadline =
+    args.monthlyDelta > 0
+      ? `monthly +£${args.monthlyDelta}/mo`
+      : args.monthlyDelta < 0
+        ? `monthly −£${Math.abs(args.monthlyDelta)}/mo`
+        : "no monthly change";
+
+  return {
+    subject: `[MF #${args.tokenShort} · module-change] ${args.prospectName}${businessTag} · ${headline} · ${monthlyHeadline}`,
+    body:
+      `${args.prospectName}${businessTag} just confirmed a module change.\n\n` +
+      `--- Diff ---\n` +
+      `Added:   ${args.added.length ? args.added.join(", ") : "(none)"}\n` +
+      `Removed: ${args.removed.length ? args.removed.join(", ") : "(none)"}\n` +
+      `From:    ${args.fromModules.join(", ") || "(base only)"}\n` +
+      `To:      ${args.toModules.join(", ") || "(base only)"}\n\n` +
+      `--- Money ---\n` +
+      `Setup delta:    £${args.setupDelta} (${args.setupDelta > 0 ? "CHARGE customer" : args.setupDelta < 0 ? "REFUND customer" : "no Stripe op"})\n` +
+      `Monthly delta:  £${args.monthlyDelta} (${args.monthlyDelta !== 0 ? "update Stripe subscription" : "no subscription change"})\n` +
+      `New totals:     setup £${args.newSetupTotal}, monthly £${args.newMonthlyTotal}\n\n` +
+      `--- What to do (Stripe Phase 1: manual) ---\n` +
+      `1. Open Stripe dashboard, find the customer's subscription.\n` +
+      `2. ${args.setupDelta > 0 ? `Create a one-off invoice for £${args.setupDelta}, send to customer.` : args.setupDelta < 0 ? `Issue a refund of £${Math.abs(args.setupDelta)} against the original payment intent.` : "(no setup-fee Stripe op)"}\n` +
+      `3. ${args.monthlyDelta !== 0 ? `Update the subscription's monthly amount to £${args.newMonthlyTotal} (proration enabled).` : "(no subscription Stripe op)"}\n` +
+      `4. Open admin: ${args.adminDetailUrl}\n` +
+      `5. Hit "Mark Stripe done — apply" if it all worked.\n` +
+      `   Hit "Mark billing failed" if the card declined (auto-emails customer).\n` +
+      `   Hit "Reject" only if you're refusing the change altogether.\n\n` +
+      `Change ID (for Stripe metadata): ${args.changeId}\n` +
+      `Notion: ${args.notionUrl}\n\n` +
+      `— Cowork`,
+  };
+}
+
 // ---------- Customer-facing notifications ----------
 
 /**

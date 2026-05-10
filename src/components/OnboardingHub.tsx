@@ -27,8 +27,11 @@ import {
 import Step1Cloudflare from "@/components/onboarding/Step1Cloudflare";
 import Step2Domain from "@/components/onboarding/Step2Domain";
 import Step3Modules from "@/components/onboarding/Step3Modules";
+import Step4Content from "@/components/onboarding/Step4Content";
 import Step4Assets from "@/components/onboarding/Step4Assets";
 import Step5Review from "@/components/onboarding/Step5Review";
+import type { ChangeEligibility } from "@/lib/billing/module-policy";
+import type { ModuleChangeLogEntry } from "@/lib/notion-prospects";
 
 export type OnboardingHubProps = {
   token: string;
@@ -54,6 +57,21 @@ export type OnboardingHubProps = {
   /** Top-level prospect fields the hub shows beyond the per-step
    *  data slices. Threaded through to the relevant step component. */
   customerConfirmedNameserversAt?: string;
+  /** Module-change eligibility — derived from canChangeModules() in
+   *  the page. Step 3 uses this to render the re-selector button
+   *  enabled / disabled with the right messaging. */
+  moduleChangeEligibility: ChangeEligibility;
+  /** Latest pending-stripe entry from the change log, if any.
+   *  Drives the "your change is being processed" UI in Step 3. */
+  pendingModuleChange: ModuleChangeLogEntry | null;
+  /** Canonical service list for the Hub. Content-step services
+   *  preferred (post-edit canonical); Phase 3 intake as the
+   *  fallback seed. Threaded to BOTH Step 4 Content (as initial
+   *  list) AND Step 5 Brand Assets (as photo-slot list). Empty
+   *  if the customer hasn't done Phase 3 OR added services in
+   *  Step 4 yet. The variable name is historical — see page.tsx
+   *  for the derivation logic. */
+  phase3Services: ReadonlyArray<{ name: string }>;
 };
 
 type SaveState =
@@ -272,12 +290,16 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     benEmail={benEmail}
                     r2PublicUrlBase={r2PublicUrlBase}
                     modules={props.modules}
+                    foundingMember={props.foundingMember}
                     readOnly={locked}
                     savePartial={savePartial}
                     markDone={markDone}
                     customerConfirmedNameserversAt={
                       props.customerConfirmedNameserversAt
                     }
+                    moduleChangeEligibility={props.moduleChangeEligibility}
+                    pendingModuleChange={props.pendingModuleChange}
+                    phase3Services={props.phase3Services}
                   />
                 </>
               )}
@@ -299,10 +321,14 @@ function StepRenderer({
   benEmail,
   r2PublicUrlBase,
   modules,
+  foundingMember,
   readOnly,
   savePartial,
   markDone,
   customerConfirmedNameserversAt,
+  moduleChangeEligibility,
+  pendingModuleChange,
+  phase3Services,
 }: {
   step: StepDef;
   data: OnboardingData;
@@ -311,6 +337,7 @@ function StepRenderer({
   benEmail: string;
   r2PublicUrlBase: string;
   modules: string[];
+  foundingMember: boolean;
   readOnly: boolean;
   savePartial: (
     stepId: StepId,
@@ -321,6 +348,9 @@ function StepRenderer({
     patch: Record<string, unknown>,
   ) => Promise<boolean>;
   customerConfirmedNameserversAt?: string;
+  moduleChangeEligibility: ChangeEligibility;
+  pendingModuleChange: ModuleChangeLogEntry | null;
+  phase3Services: ReadonlyArray<{ name: string }>;
 }) {
   const slice = (data[step.id] ?? {}) as Record<string, unknown>;
   const done = doneFlags[step.id];
@@ -357,8 +387,23 @@ function StepRenderer({
           readOnly={readOnly}
           benEmail={benEmail}
           modules={modules}
+          foundingMember={foundingMember}
+          token={token}
+          moduleChangeEligibility={moduleChangeEligibility}
+          pendingModuleChange={pendingModuleChange}
           savePartial={(patch) => savePartial("tools", patch)}
           markDone={(patch) => markDone("tools", patch)}
+        />
+      );
+    case "content":
+      return (
+        <Step4Content
+          data={slice}
+          done={done}
+          readOnly={readOnly}
+          services={phase3Services}
+          savePartial={(patch) => savePartial("content", patch)}
+          markDone={(patch) => markDone("content", patch)}
         />
       );
     case "assets":
@@ -369,6 +414,7 @@ function StepRenderer({
           readOnly={readOnly}
           r2PublicUrlBase={r2PublicUrlBase}
           token={token}
+          services={phase3Services}
           savePartial={(patch) => savePartial("assets", patch)}
           markDone={(patch) => markDone("assets", patch)}
         />

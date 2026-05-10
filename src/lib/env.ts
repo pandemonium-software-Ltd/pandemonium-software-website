@@ -69,6 +69,20 @@ const serverEnvSchema = z.object({
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_SETUP_PRICE_ID: z.string().optional(),
   STRIPE_SUBSCRIPTION_PRICE_ID: z.string().optional(),
+
+  // Stage 2C C5.4 — customer-site build pipeline.
+  //
+  // Shared secret between marketing site, GitHub Actions, and ops
+  // worker. Used to authenticate calls to /api/internal/* endpoints.
+  // 32+ random bytes; rotate by updating in all three places at once.
+  INTERNAL_BUILD_SECRET: z.string().min(32).optional(),
+  // GitHub credentials for ops worker → workflow_dispatch trigger.
+  // GITHUB_TOKEN needs `repo` scope (or just `workflow` for fine-
+  // grained tokens). Owner + repo identify which repo's workflow
+  // to dispatch.
+  GITHUB_TOKEN: z.string().optional(),
+  GITHUB_OWNER: z.string().optional(),
+  GITHUB_REPO: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

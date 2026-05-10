@@ -23,6 +23,7 @@ import {
   type OnboardingData,
 } from "@/lib/onboarding";
 import OnboardingHub from "@/components/OnboardingHub";
+import { canChangeModules } from "@/lib/billing/module-policy";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -87,6 +88,57 @@ export default async function OnboardingPage({
   // still work without it.
   const r2PublicUrlBase = env.R2_PUBLIC_URL_BASE ?? "";
 
+  // Module change eligibility (1-round-only, pre-commit only). Pure
+  // policy lookup — see src/lib/billing/module-policy.ts. The latest
+  // pending entry (if any) drives the in-flight UI in Step 3.
+  const moduleChangeEligibility = canChangeModules(prospect);
+  const pendingModuleChange =
+    [...prospect.moduleChangeLog]
+      .reverse()
+      .find((e) => e.status === "pending-stripe") ?? null;
+
+  // Canonical service list for the Hub. Order of preference:
+  //   1. Content step's services (post-edit canonical — customer
+  //      may have renamed / added / deleted services here)
+  //   2. Phase 3 intake services (the original list, captured pre-
+  //      payment for scoping + pricing)
+  // Threaded to BOTH Step 4 Content (as the seed for the editable
+  // list) AND Step 5 Brand Assets (as the read-only list of photo
+  // upload slots). Renaming a service in Step 4 propagates here on
+  // the next page render.
+  const phase3Services = (() => {
+    // Try content step first.
+    const ob = prospect.onboardingData as
+      | { content?: { services?: unknown } }
+      | undefined;
+    const fromContent = Array.isArray(ob?.content?.services)
+      ? ob.content.services
+      : [];
+    const contentNames = fromContent
+      .map((s: unknown) => {
+        if (!s || typeof s !== "object") return null;
+        const n = (s as { serviceName?: unknown }).serviceName;
+        return typeof n === "string" && n.trim().length > 0
+          ? { name: n.trim() }
+          : null;
+      })
+      .filter((s): s is { name: string } => s !== null);
+    if (contentNames.length > 0) return contentNames;
+
+    // Fall back to Phase 3 intake.
+    const p3 = prospect.phase3Data as { services?: unknown } | undefined;
+    const raw = Array.isArray(p3?.services) ? p3.services : [];
+    return raw
+      .map((s: unknown) => {
+        if (!s || typeof s !== "object") return null;
+        const name = (s as { name?: unknown }).name;
+        return typeof name === "string" && name.trim().length > 0
+          ? { name: name.trim() }
+          : null;
+      })
+      .filter((s): s is { name: string } => s !== null);
+  })();
+
   return (
     <OnboardingHub
       token={token}
@@ -102,6 +154,9 @@ export default async function OnboardingPage({
       benEmail={benEmail}
       r2PublicUrlBase={r2PublicUrlBase}
       customerConfirmedNameserversAt={prospect.customerConfirmedNameserversAt}
+      moduleChangeEligibility={moduleChangeEligibility}
+      pendingModuleChange={pendingModuleChange}
+      phase3Services={phase3Services}
     />
   );
 }

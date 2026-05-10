@@ -1,0 +1,116 @@
+{
+  "business": {
+    "name": "BobBuilders",
+    "type": "Builder",
+    "location": "Oxfordshire",
+    "phone": "07824 369087",
+    "email": "lucas@bobbuilders.co.uk",
+    "address": "BobBuilders Yard, Witney, Oxfordshire OX28",
+    "hours": "Mon-Fri 7:30am - 5:30pm. Saturday by appointment."
+  },
+  "services": [
+    {
+      "name": "Loft conversions",
+      "description": "Full design + build with planning included. Typical timeline 6-10 weeks.",
+      "longDescription": "Full design + build, planning included. We handle everything from initial drawings to final snagging — including engaging structural engineers, building control submission, and party-wall agreements where needed. Most jobs run 6-10 weeks from first day on site.",
+      "features": [
+        "Planning + building control included",
+        "Structural engineering arranged",
+        "Party-wall agreements handled",
+        "10-year structural warranty",
+        "Single point of contact throughout"
+      ],
+      "pricingNotes": "From £28,000 for a basic dormer; full hip-to-gable from £42,000 including planning fees.",
+      "priceFrom": 28000
+    },
+    {
+      "name": "Single-storey extensions",
+      "description": "Kitchen extensions, side returns, garden rooms. Including all groundwork and finishes.",
+      "longDescription": "Kitchen extensions, side returns, garden rooms — anything that adds ground-floor space without raising the roofline. We handle the full job: groundwork, brickwork, glazing, electrics, plastering, decorating. Typical timeline 8-12 weeks.",
+      "features": [
+        "Bi-fold or sliding doors fitted",
+        "Underfloor heating optional",
+        "Bespoke fitted kitchens",
+        "Roof lights + lantern roofs",
+        "Insulated to current building regs"
+      ],
+      "pricingNotes": "From £35,000 for a 4×4m extension shell; full kitchen + finishes typically £55-75k.",
+      "priceFrom": 35000
+    },
+    {
+      "name": "Whole-house renovations",
+      "description": "From damp-proofing to new kitchens, bathrooms and electrics. Lived-in or empty.",
+      "priceFrom": 50000
+    },
+    {
+      "name": "Garden walls & landscaping",
+      "description": "Brick walls, patios, porch builds. Smaller jobs done well.",
+      "priceFrom": 1500
+    }
+  ],
+  "modules": {
+    "booking": { "calcomUrl": "https://cal.eu/lucas-test/quote" },
+    "enquiry": { "recipientEmail": "lucas@bobbuilders.co.uk" }
+  },
+  "brandAssets": {
+    "logoUrl": "https://placehold.co/200x80/0f766e/ffffff?text=BobBuilders",
+    "heroPhotoUrl": "https://placehold.co/1600x1200/1e293b/ffffff?text=Hero+image",
+    "aboutPhotoUrl": "https://placehold.co/800x1000/334155/ffffff?text=About+photo",
+    "servicePhotos": [
+      {
+        "serviceName": "Loft conversions",
+        "url": "https://placehold.co/1200x900/0f766e/ffffff?text=Loft+conversion"
+      },
+      {
+        "serviceName": "Single-storey extensions",
+        "url": "https://placehold.co/1200x900/0f766e/ffffff?text=Extension"
+      },
+      {
+        "serviceName": "Whole-house renovations",
+        "url": "https://placehold.co/1200x900/0f766e/ffffff?text=Renovation"
+      }
+    ],
+    "backgroundUrls": [],
+    "galleryPhotoUrls": []
+  },
+  "colors": {
+    "primary": "#0f766e",
+    "secondary": "#f59e0b"
+  },
+  "copy": {
+    "tagline": "Quality building work in Oxfordshire — extensions, renovations, loft conversions.",
+    "aboutBlurb": "BobBuilders is a small Oxfordshire-based building firm run by Lucas. We've been turning houses into homes since 2018 — extensions, full renovations, loft conversions and everything in between. Every job gets the same care: turn up on time, talk you through every choice, leave the place tidy.\n\nWe work mostly in Oxford, Witney, Bicester and the surrounding villages. Most of our work comes from word-of-mouth, so doing right by you is the same as winning the next job.",
+    "aboutBullets": [
+      "Fully insured + DBS-checked team",
+      "Member of the Federation of Master Builders",
+      "10-year structural warranty on every build",
+      "All trades in-house — no scattered subbies",
+      "Free quotes, fixed prices, no surprises"
+    ],
+    "servicesIntro": "Pick the project that fits — or get in touch if it's something else. We're happy to come out for a free quote and tell you straight if we're the right fit.",
+    "faq": [
+      {
+        "question": "How long does a typical loft conversion take?",
+        "answer": "Most are done in 6-10 weeks from first day on site. The biggest variable is planning approval — if your project is permitted development, we can usually start within 4 weeks of quote. Full planning permission adds 8-12 weeks before we start."
+      },
+      {
+        "question": "Do you handle planning permission yourselves?",
+        "answer": "Yes — we handle the entire process for any project that needs it. Architect drawings, planning application, structural engineering, building control sign-off. You don't have to chase any of it."
+      },
+      {
+        "question": "Can I live in the house while you work?",
+        "answer": "Usually yes for extensions and loft conversions — we tape off the work area and minimise dust. For full renovations, most clients move out for the worst 2-3 weeks. We'll discuss what works for your specific job at the quote stage."
+      },
+      {
+        "question": "What's included in the price?",
+        "answer": "Materials, labour, scaffolding, skip hire, plant, building control fees, and a clean handover. Planning fees are extra (typically £200-£400). Anything optional or unexpected we quote separately so there are no surprises on the final invoice."
+      },
+      {
+        "question": "Do you offer guarantees?",
+        "answer": "Every structural element comes with a 10-year warranty. Workmanship on finishes (paint, tiling, fittings) is guaranteed for 12 months. We use the FMB Insurance-Backed Guarantee scheme so cover continues even if we're no longer trading."
+      }
+    ]
+  },
+  "vibe": "modern",
+  "domain": "test09052026moduforge.store"
+}

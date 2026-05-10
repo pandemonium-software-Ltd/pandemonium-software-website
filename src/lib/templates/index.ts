@@ -25,6 +25,11 @@ import { phase4OnboardingHubReady } from "./templates/phase4-onboarding-hub-read
 import { signoffConfirmation } from "./templates/signoff-confirmation";
 import { changeRequestResolved } from "./templates/change-request-resolved";
 import { changeRequestRejected } from "./templates/change-request-rejected";
+import { moduleChangePending } from "./templates/module-change-pending";
+import { moduleChangeConfirmed } from "./templates/module-change-confirmed";
+import { paymentMethodUpdateNeeded } from "./templates/payment-method-update-needed";
+import { previewRequestReceived } from "./templates/preview-request-received";
+import { previewReady } from "./templates/preview-ready";
 
 export type {
   Template,
@@ -46,6 +51,11 @@ const TEMPLATES = new Map<string, Template>([
   [signoffConfirmation.id, signoffConfirmation],
   [changeRequestResolved.id, changeRequestResolved],
   [changeRequestRejected.id, changeRequestRejected],
+  [moduleChangePending.id, moduleChangePending],
+  [moduleChangeConfirmed.id, moduleChangeConfirmed],
+  [paymentMethodUpdateNeeded.id, paymentMethodUpdateNeeded],
+  [previewRequestReceived.id, previewRequestReceived],
+  [previewReady.id, previewReady],
 ]);
 
 export function getTemplate(id: string): Template {

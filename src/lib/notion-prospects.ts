@@ -36,6 +36,7 @@
 // Onboarding Step 3 Done  checkbox  (Connect tools — Cal.com / GBP)
 // Onboarding Step 4 Done  checkbox  (Brand assets)
 // Onboarding Step 5 Done  checkbox  (Review & launch)
+// Onboarding Step 6 Done  checkbox  (Site content — about / FAQ / services-rich)
 // Onboarding Data         rich_text (JSON blob, per-step state)
 // Onboarding Started At   date
 // Onboarding Completed At date
@@ -98,6 +99,12 @@ export type ProspectRecord = {
   onboardingStep3Done: boolean;
   onboardingStep4Done: boolean;
   onboardingStep5Done: boolean;
+  /** New "Site content" Hub step (between Modules and Brand assets
+   *  in display order, Notion checkbox 6). Captures rich about-us +
+   *  services + FAQ copy. Optional column — false if Notion field
+   *  doesn't exist yet (defensive for prospects from before the
+   *  column was added). */
+  onboardingContentDone: boolean;
   onboardingData?: unknown; // parsed OnboardingData JSON, see lib/onboarding.ts
   onboardingStartedAt?: string;
   onboardingCompletedAt?: string;
@@ -127,9 +134,71 @@ export type ProspectRecord = {
   workerName?: string;
   /** ISO-8601, set when step2-domain has bound apex+www to the per-customer Worker AND verified the placeholder responds with HTTP 200. The "site is reachable" latch. */
   siteLiveAt?: string;
+  /** ISO-8601, set when ops worker triggers a customer-site build
+   *  via GitHub Actions repository_dispatch. Anti-spam latch — if
+   *  set within the last 15 min, step5-review skips re-triggering.
+   *  Cleared (best-effort) by /api/internal/build-callback after
+   *  build completes (success OR failure), so the next preview
+   *  request can trigger a fresh build immediately. NEW C5.4. */
+  previewBuildTriggeredAt?: string;
+  /** ISO-8601, set by /api/internal/build-callback when a customer-
+   *  site build fails. Cleared on next successful build. Useful
+   *  for surfacing "last build failed" in /admin. NEW C5.4. */
+  previewBuildFailedAt?: string;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
+  // --- Module change (1-round-only, pre-commit only — see lib/billing) ---
+  /** ISO-8601 timestamp the round was consumed (i.e. customer hit
+   *  Confirm on the re-selector). Absence = round still available.
+   *  Hard cap: 1 module change per customer ever. */
+  moduleChangeRoundUsedAt?: string;
+  /** Append-only audit trail. Every Confirm + every operator
+   *  resolution (apply / reject) lands here. Used by the admin
+   *  panel and (later) the Stripe reconciliation cron. */
+  moduleChangeLog: ModuleChangeLogEntry[];
+};
+
+// --- Module change log entry ---
+//
+// Sits inside the prospect's Module Change Log rich_text JSON blob.
+// Each Confirm submission appends a row with status="pending-stripe".
+// Operator transitions it to "applied" (Stripe op done) or "rejected"
+// (no Stripe op needed) via /admin/[token]. When Stripe Phase 2
+// lands, the cron + webhook handler will own those transitions.
+export type ModuleChangeLogEntry = {
+  id: string; // UUID — also used as Stripe idempotency key suffix
+  submittedAt: string; // ISO-8601
+  /** Snapshot of selection BEFORE the change. */
+  fromModules: string[];
+  /** Snapshot of selection AFTER the change. */
+  toModules: string[];
+  /** Setup fee delta in pounds (positive = customer owes us;
+   *  negative = we owe customer; zero = no money moves). */
+  setupDelta: number;
+  /** Monthly fee delta in pounds (positive = sub goes up;
+   *  negative = sub goes down; zero = no change). */
+  monthlyDelta: number;
+  /** New totals (for record + audit; saves recalculating later). */
+  newSetupTotal: number;
+  newMonthlyTotal: number;
+  /**
+   * State machine:
+   *   pending-stripe → operator hasn't actioned yet (Stripe op + Notion sync)
+   *   applied        → operator confirmed Stripe op done; selection live
+   *   rejected       → operator declined the change; selection unchanged
+   *   billing-failed → Stripe op failed; modules removed only, customer
+   *                    needs to update payment method
+   */
+  status:
+    | "pending-stripe"
+    | "applied"
+    | "rejected"
+    | "billing-failed";
+  /** Operator's note on the resolution (visible to operator only). */
+  resolutionNote?: string;
+  /** ISO-8601 of resolution. */
+  resolvedAt?: string;
 };
 
 /**
@@ -608,6 +677,7 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     onboardingStep3Done: readCheckbox(p["Onboarding Step 3 Done"]),
     onboardingStep4Done: readCheckbox(p["Onboarding Step 4 Done"]),
     onboardingStep5Done: readCheckbox(p["Onboarding Step 5 Done"]),
+    onboardingContentDone: readCheckbox(p["Onboarding Step 6 Done"]),
     onboardingData,
     onboardingStartedAt: readDate(p["Onboarding Started At"]),
     onboardingCompletedAt: readDate(p["Onboarding Completed At"]),
@@ -625,8 +695,52 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     ),
     workerName: readRichText(p["Worker Name"]) || undefined,
     siteLiveAt: readDate(p["Site Live At"]),
+    previewBuildTriggeredAt: readDate(p["Preview Build Triggered At"]),
+    previewBuildFailedAt: readDate(p["Preview Build Failed At"]),
     changeRequests,
+    moduleChangeRoundUsedAt: readDate(p["Module Change Round Used At"]),
+    moduleChangeLog: parseModuleChangeLog(
+      readRichText(p["Module Change Log"]),
+    ),
   };
+}
+
+/**
+ * Module-scope rich_text reader (the one inside `pageToProspect` is
+ * a nested helper not visible to other functions). Used by the
+ * module-change writers below to round-trip the audit log.
+ */
+function readRichTextProp(prop: unknown): string {
+  if (!prop || typeof prop !== "object") return "";
+  const arr = (prop as { rich_text?: unknown[] }).rich_text;
+  if (!Array.isArray(arr)) return "";
+  return arr
+    .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+    .join("");
+}
+
+/**
+ * Parse the Module Change Log rich_text JSON blob. Defensive — any
+ * malformed entry is dropped silently (operator sees the raw value
+ * in Notion if they want to dig). Returns [] for empty / missing /
+ * unparseable values so callers never need to null-check.
+ */
+function parseModuleChangeLog(raw: string | undefined): ModuleChangeLogEntry[] {
+  if (!raw || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (e): e is ModuleChangeLogEntry =>
+        typeof e === "object" &&
+        e !== null &&
+        typeof (e as ModuleChangeLogEntry).id === "string" &&
+        Array.isArray((e as ModuleChangeLogEntry).fromModules) &&
+        Array.isArray((e as ModuleChangeLogEntry).toModules),
+    );
+  } catch {
+    return [];
+  }
 }
 
 // --- Cowork Ops Notion writers (Stage 2C C2+) ---
@@ -788,6 +902,53 @@ export async function markSiteLive(pageId: string): Promise<void> {
 }
 
 /**
+ * Stamp Preview Build Triggered At — anti-spam latch set by
+ * step5-review when a GitHub Actions build is dispatched. Cleared
+ * (set to null) by /api/internal/build-callback once the build
+ * completes (success or failure).
+ *
+ * If you want to FORCE a re-build before the latch clears, the
+ * operator can manually clear "Preview Build Triggered At" in
+ * Notion → next cron tick re-triggers.
+ */
+export async function markPreviewBuildTriggered(
+  pageId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Preview Build Triggered At": {
+          date: { start: new Date().toISOString() },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * Clear Preview Build Triggered At — called by build-callback so
+ * future preview requests can re-trigger immediately. Also stamps
+ * Preview Build Failed At if `failure=true`, or clears it on success.
+ */
+export async function clearPreviewBuildTriggered(
+  pageId: string,
+  args: { failure: boolean } = { failure: false },
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Preview Build Triggered At": { date: null },
+        "Preview Build Failed At": args.failure
+          ? { date: { start: new Date().toISOString() } }
+          : { date: null },
+      },
+    },
+  });
+}
+
+/**
  * Flip a prospect's status to "Paid" — temporary shortcut used by
  * /api/intake while Stripe Checkout (Stage 2A Part 2) isn't built.
  * When Stripe lands, this is called from the /api/stripe/webhook
@@ -806,6 +967,130 @@ export async function markProspectAsPaid(pageId: string): Promise<void> {
       },
     },
   });
+}
+
+// --- Module change (1-round-only, pre-commit only) ---
+
+/**
+ * Submit a module change. Atomically:
+ *   - appends an entry (status="pending-stripe") to the audit log
+ *   - stamps Module Change Round Used At (locks the round)
+ *   - DOES NOT yet update Module Selections — that flips when the
+ *     operator confirms the Stripe op (or a future webhook handler
+ *     does it automatically)
+ *
+ * Read-modify-write on the rich_text log. Concurrent submits from
+ * the same prospect are vanishingly unlikely (one customer, server-
+ * side `moduleChangeRoundUsedAt` lock-out).
+ *
+ * Returns the appended entry so the API route can echo it back to
+ * the UI for the "your change is being processed" state.
+ */
+export async function submitModuleChange(
+  pageId: string,
+  entry: ModuleChangeLogEntry,
+): Promise<ModuleChangeLogEntry> {
+  const page = (await notionFetch(`/pages/${pageId}`)) as NotionPage;
+  const existing = parseModuleChangeLog(
+    readRichTextProp(page.properties["Module Change Log"]),
+  );
+  const next = [...existing, entry];
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Module Change Log": rt(JSON.stringify(next)),
+        "Module Change Round Used At": {
+          date: { start: entry.submittedAt },
+        },
+      },
+    },
+  });
+  return entry;
+}
+
+/**
+ * Resolve a pending module change. Operator-driven from /admin
+ * (Stripe Phase 1) or webhook-driven (Stripe Phase 2 — see
+ * docs/STRIPE-PHASE-2.md).
+ *
+ * If status="applied": flips Module Selections to the new set,
+ * recalculates Setup Fee + Monthly Fee, and stamps the log entry
+ * resolved.
+ *
+ * If status="rejected" or "billing-failed": leaves Module
+ * Selections untouched, just stamps the log entry.
+ *
+ * If status="billing-failed": ALSO removes the modules the customer
+ * tried to add (so they don't see paid features they haven't paid
+ * for) — caller passes `revertedSelection` to make this explicit.
+ */
+export async function resolveModuleChange(
+  pageId: string,
+  changeId: string,
+  resolution: {
+    status: "applied" | "rejected" | "billing-failed";
+    resolutionNote?: string;
+    /** Required if status="applied": the new module list to write. */
+    appliedSelection?: string[];
+    /** Required if status="applied": new fee totals to write. */
+    appliedFees?: { setup: number; monthly: number };
+    /** Required if status="billing-failed": the cleaned-up module
+     *  list (= original minus added modules that didn't get paid). */
+    revertedSelection?: string[];
+  },
+): Promise<ModuleChangeLogEntry> {
+  const page = (await notionFetch(`/pages/${pageId}`)) as NotionPage;
+  const existing = parseModuleChangeLog(
+    readRichTextProp(page.properties["Module Change Log"]),
+  );
+  const idx = existing.findIndex((e) => e.id === changeId);
+  if (idx === -1) {
+    throw new Error(`Module change ${changeId} not found`);
+  }
+  const updated: ModuleChangeLogEntry = {
+    ...existing[idx],
+    status: resolution.status,
+    resolutionNote: resolution.resolutionNote,
+    resolvedAt: new Date().toISOString(),
+  };
+  const nextLog = [...existing];
+  nextLog[idx] = updated;
+
+  const properties: Record<string, unknown> = {
+    "Module Change Log": rt(JSON.stringify(nextLog)),
+  };
+
+  if (resolution.status === "applied") {
+    if (!resolution.appliedSelection || !resolution.appliedFees) {
+      throw new Error(
+        "applied resolutions require appliedSelection + appliedFees",
+      );
+    }
+    properties["Module Selections"] = multiSelectProp(
+      resolution.appliedSelection,
+    );
+    properties["Setup Fee Calculated"] = { number: resolution.appliedFees.setup };
+    properties["Monthly Fee Calculated"] = {
+      number: resolution.appliedFees.monthly,
+    };
+  } else if (resolution.status === "billing-failed") {
+    if (!resolution.revertedSelection) {
+      throw new Error(
+        "billing-failed resolutions require revertedSelection",
+      );
+    }
+    properties["Module Selections"] = multiSelectProp(
+      resolution.revertedSelection,
+    );
+  }
+
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: { properties },
+  });
+
+  return updated;
 }
 
 // --- Change requests inbox ---
@@ -961,7 +1246,7 @@ export async function updateChangeRequest(
 //  - Stamp Onboarding Started At / Onboarding Completed At
 //  - Set Go Live Date (separate property so it sorts/filters in Notion)
 
-export type OnboardingStepNumber = 1 | 2 | 3 | 4 | 5;
+export type OnboardingStepNumber = 1 | 2 | 3 | 4 | 5 | 6;
 
 export type OnboardingUpdate = {
   data?: unknown; // full new OnboardingData blob

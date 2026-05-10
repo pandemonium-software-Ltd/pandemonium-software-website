@@ -1,0 +1,28 @@
+// Wrangler config for the per-customer site build (Stage 2C C5.4).
+//
+// `name` and `account_id` are PLACEHOLDERS — the GitHub Actions
+// workflow overrides them at deploy time using CLI flags:
+//   wrangler deploy --name <customer-worker> --config wrangler.jsonc
+// (the `--account-id` flag is taken from the CLOUDFLARE_ACCOUNT_ID
+// env var the Action sets per-customer).
+//
+// The actual deploy target is the customer's per-customer Worker
+// in their own Cloudflare account — the same Worker that
+// step2-domain uploaded a placeholder script to in C2.3. We're
+// REPLACING the placeholder with the OpenNext-built Next.js site.
+//
+// Auth: CLOUDFLARE_API_TOKEN env var (BEN_CLOUDFLARE_API_TOKEN
+// from the Worker's secrets, set on the Action runner). This is the
+// same user-scoped token the ops worker uses, so it has access to
+// every customer account where Ben is a team member.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "PLACEHOLDER",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  }
+}

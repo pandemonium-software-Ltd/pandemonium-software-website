@@ -24,28 +24,41 @@ import type { ProspectRecord, ProspectStatus } from "./notion-prospects";
 export const STEP_IDS = [
   "cloudflare", // 1 — universal
   "domain", // 2 — universal
-  "tools", // 3 — only if Booking or GBP module
+  "tools", // 3 — only if Booking / Newsletter / Enquiry / GBP module
+  "content", // (NEW, between modules + assets in display order) — universal
   "assets", // 4 — universal
   "review", // 5 — universal
 ] as const;
 
 export type StepId = (typeof STEP_IDS)[number];
 
-// Notion stores per-step done flags as fixed columns (Onboarding
-// Step 1 Done … Step 5 Done). The mapping never changes even when a
-// step is hidden, so the Notion schema stays stable across orders.
-export const STEP_NUMBER: Record<StepId, 1 | 2 | 3 | 4 | 5> = {
+// Notion stores per-step done flags as fixed columns. The original
+// five (Onboarding Step 1 Done … Step 5 Done) keep their semantic
+// meaning — adding the new content step means a new column rather
+// than renumbering, so existing prospect records don't need
+// migration. Display order is independent (deriveStepList controls
+// the customer-facing 1-of-N labels).
+//
+// Mapping:
+//   1 → cloudflare   (Onboarding Step 1 Done)
+//   2 → domain       (Onboarding Step 2 Done)
+//   3 → tools        (Onboarding Step 3 Done)
+//   4 → assets       (Onboarding Step 4 Done)
+//   5 → review       (Onboarding Step 5 Done)
+//   6 → content      (Onboarding Step 6 Done — NEW)
+export const STEP_NUMBER: Record<StepId, 1 | 2 | 3 | 4 | 5 | 6> = {
   cloudflare: 1,
   domain: 2,
   tools: 3,
   assets: 4,
   review: 5,
+  content: 6,
 };
 
 export type StepDef = {
   id: StepId;
-  /** Notion checkbox column number (1-5, never reassigned). */
-  notionStep: 1 | 2 | 3 | 4 | 5;
+  /** Notion checkbox column number (1-6, never reassigned). */
+  notionStep: 1 | 2 | 3 | 4 | 5 | 6;
   /** Display number (1..N where N = applicable step count). */
   displayIndex: number;
   /** Total applicable steps for this prospect (e.g. "step 2 of 4"). */
@@ -162,6 +175,14 @@ export function deriveStepList(prospect: ProspectRecord): StepDef[] {
       applicable: step3Applicable,
     },
     {
+      id: "content",
+      notionStep: 6,
+      title: "Site content",
+      shortBlurb:
+        "Write the about us, services and FAQ — the words that go on your site.",
+      applicable: true,
+    },
+    {
       id: "assets",
       notionStep: 4,
       title: "Brand assets",
@@ -199,6 +220,7 @@ export function pickInitialStep(
     cloudflare: prospect.onboardingStep1Done,
     domain: prospect.onboardingStep2Done,
     tools: prospect.onboardingStep3Done,
+    content: prospect.onboardingContentDone,
     assets: prospect.onboardingStep4Done,
     review: prospect.onboardingStep5Done,
   };
@@ -271,7 +293,8 @@ const step2DomainSchema = z.object({
 //     listing URL.
 const step3ToolsSchema = z.object({
   // Cal.com — URL-only capture (embed). Schema is loose; the gate
-  // enforces the cal.com host check.
+  // enforces the cal.com / cal.eu host check (both accepted: UK
+  // customers route to the EU instance for GDPR).
   calcomBookingUrl: z.string().trim().url().max(500).optional(),
   // GBP — URL + manager-invite confirmation.
   gbpUrl: z.string().trim().url().max(500).optional(),
@@ -302,11 +325,85 @@ const assetSchema = z.object({
 
 export type Asset = z.infer<typeof assetSchema>;
 
+/**
+ * A photo specifically tagged to one of the customer's services.
+ * `serviceName` matches against `phase3Data.services[N].name` so the
+ * mapping survives reordering. Falls back to position if no name
+ * matches (for older uploads done before service-naming was strict).
+ */
+const serviceAssetSchema = assetSchema.extend({
+  serviceName: z.string().trim().max(200),
+});
+export type ServiceAsset = z.infer<typeof serviceAssetSchema>;
+
 const step4AssetsSchema = z.object({
   /** Single brand logo. PNG / JPG / SVG / WebP. */
   logo: assetSchema.optional(),
-  /** Up to 20 photos. */
+  /** Single hero photo — full-width on the home page. NEW C5.3. */
+  hero: assetSchema.optional(),
+  /** Single about-us / team / owner photo — appears on About page. NEW C5.3. */
+  about: assetSchema.optional(),
+  /** Per-service photos, mapped by serviceName. NEW C5.3. */
+  services: z.array(serviceAssetSchema).max(10).optional(),
+  /** Subtle background images for section dividers. NEW C5.3, max 5. */
+  backgrounds: z.array(assetSchema).max(5).optional(),
+  /** Gallery photos — anything that doesn't fit a specific role. NEW C5.3. */
+  gallery: z.array(assetSchema).max(20).optional(),
+  /**
+   * LEGACY pre-C5.3 untagged photos. The adapter falls back to
+   * `photos[0]` for hero and treats the rest as gallery if no
+   * semantic fields are set. New uploads should use the
+   * semantically-named fields above; this stays around so existing
+   * customers' data keeps working without a migration.
+   */
   photos: z.array(assetSchema).max(20).optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+// Step "content" (NEW, between Modules + Brand assets in display
+// order, but Notion checkbox 6). Captures the WORDS that go on the
+// customer's site — about us, services-rich content, FAQ, optional
+// tagline override. Phase 3 intake captures the bare minimum needed
+// to scope the project pre-payment; this step captures the deeper
+// content post-payment, when the customer is committed and willing
+// to invest the time. Also the raw material for Haiku copy assist
+// (Stage 2C C5.5).
+const step4ContentSchema = z.object({
+  /** Optional override of the Phase 3 intake tagline; ≤200 chars. */
+  tagline: z.string().trim().max(200).optional(),
+  /** Multi-paragraph "about us" copy; ≤5000 chars. */
+  aboutBlurb: z.string().trim().max(5000).optional(),
+  /** "What makes us different" bullets; up to 8, ≤300 chars each. */
+  aboutBullets: z
+    .array(z.string().trim().max(300))
+    .max(8)
+    .optional(),
+  /** Per-service rich content, mapped by serviceName against
+   *  phase3Data.services[N].name. */
+  services: z
+    .array(
+      z.object({
+        serviceName: z.string().trim().max(200),
+        longDescription: z.string().trim().max(2000).optional(),
+        features: z
+          .array(z.string().trim().max(200))
+          .max(8)
+          .optional(),
+        pricingNotes: z.string().trim().max(500).optional(),
+      }),
+    )
+    .max(10)
+    .optional(),
+  /** FAQ Q&A pairs; up to 10. */
+  faq: z
+    .array(
+      z.object({
+        question: z.string().trim().min(1).max(300),
+        answer: z.string().trim().min(1).max(2000),
+      }),
+    )
+    .max(10)
+    .optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -371,6 +468,7 @@ export const onboardingDataSchema = z.object({
   cloudflare: step1CloudflareSchema.optional(),
   domain: step2DomainSchema.optional(),
   tools: step3ToolsSchema.optional(),
+  content: step4ContentSchema.optional(),
   assets: step4AssetsSchema.optional(),
   review: step5ReviewSchema.optional(),
 });
@@ -382,6 +480,7 @@ export const STEP_SCHEMAS: Record<StepId, z.ZodTypeAny> = {
   cloudflare: step1CloudflareSchema,
   domain: step2DomainSchema,
   tools: step3ToolsSchema,
+  content: step4ContentSchema,
   assets: step4AssetsSchema,
   review: step5ReviewSchema,
 };
@@ -453,20 +552,38 @@ export function canMarkStepDone(
           return {
             ok: false,
             reason:
-              "Please complete the Online booking module — paste your Cal.com URL.",
+              "Please complete the Online booking module — paste your Cal.com event URL.",
           };
         }
         try {
           const parsed = new URL(url);
-          const ok =
+          // Accept cal.com (global) and cal.eu (EU instance — UK
+          // customers route here for GDPR). Both serve identical
+          // embed widgets. Mirrors Step3Modules.tsx calcomStatus.
+          const hostnameOk =
             parsed.hostname === "cal.com" ||
+            parsed.hostname === "cal.eu" ||
             parsed.hostname === "www.cal.com" ||
-            parsed.hostname.endsWith(".cal.com");
-          if (!ok) {
+            parsed.hostname === "www.cal.eu" ||
+            parsed.hostname.endsWith(".cal.com") ||
+            parsed.hostname.endsWith(".cal.eu");
+          if (!hostnameOk) {
             return {
               ok: false,
               reason:
-                "That doesn't look like a cal.com URL — it should start with https://cal.com/.",
+                "That doesn't look like a Cal.com URL — it should start with https://cal.eu/ (or https://cal.com/).",
+            };
+          }
+          // Profile URLs (cal.eu/their-name) lack the event slug
+          // and would render the wrong screen on the embedded
+          // booking widget. Require /username/event-slug minimum.
+          // Mirrors the client-side check in Step3Modules.tsx.
+          const segments = parsed.pathname.split("/").filter(Boolean);
+          if (segments.length < 2) {
+            return {
+              ok: false,
+              reason:
+                "That looks like your Cal.com profile URL — paste the link to a specific event instead (it'll have a slug after your username, e.g. cal.eu/your-name/30min).",
             };
           }
         } catch {
@@ -511,6 +628,12 @@ export function canMarkStepDone(
       }
       return { ok: true };
     }
+    case "content":
+      // No minimum field count: customers without polished copy can
+      // flag that in the notes field and Haiku-assisted drafts (or
+      // stock copy) get used during the build. Mark-done = "this is
+      // what I want on my site". They can edit any time after.
+      return { ok: true };
     case "assets":
       // No minimum asset count: customers without a logo or photos
       // can flag that in the notes field and I'll provide stock
@@ -574,6 +697,7 @@ export function getDoneFlags(prospect: ProspectRecord): Record<StepId, boolean> 
     cloudflare: prospect.onboardingStep1Done,
     domain: prospect.onboardingStep2Done,
     tools: prospect.onboardingStep3Done,
+    content: prospect.onboardingContentDone,
     assets: prospect.onboardingStep4Done,
     review: prospect.onboardingStep5Done,
   };

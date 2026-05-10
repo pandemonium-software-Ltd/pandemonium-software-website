@@ -1,0 +1,17 @@
+{
+  "description": "Module change confirmed — adding Newsletter; £39 charged",
+  "template": "module-change-confirmed",
+  "values": {
+    "customerName": "Alex",
+    "addedSummary": "Newsletter",
+    "removedSummary": "(none)",
+    "paymentLine": "Your card was charged £39 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.",
+    "newSetupTotal": 246,
+    "newMonthlyTotal": 31,
+    "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
+  },
+  "expected": {
+    "subject": "Module change confirmed ✓",
+    "body": "Hi Alex,\n\nYour module change is live.\n\nWhat changed:\n  • Added: Newsletter\n  • Removed: (none)\n\nPayment:\n  • Your card was charged £39 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.\n\nYour new totals:\n  • Setup fee: £246\n  • Monthly: £31/month\n\nAny new module cards are now visible on your hub — head over and\nfinish their setup. Any modules you removed are hidden, but your\ndata is preserved if you ever re-add them.\n\nNote: this was your one allowed pre-launch module change. Anything\nelse needs to wait until after launch (post-launch monthly\nallowance) or be quoted separately.\n\nThanks,\nBen (and the ModuForge ops assistant)"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules
+.next
+.open-next
+out
+.env*.local
+
+# Per-customer build artifact — populated by GitHub Actions from
+# the prospect's intake JSON. Local dev uses fixture.json instead.
+src/data/site-data.json

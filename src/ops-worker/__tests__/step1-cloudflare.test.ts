@@ -55,6 +55,8 @@ const baseProspect: ProspectRecord = {
   onboardingData: { cloudflare: { cloudflareEmail: "alex@bakery.co.uk" } },
   changeRequests: [],
   notionUrl: "",
+  moduleChangeLog: [],
+  onboardingContentDone: false,
 };
 
 const env = {

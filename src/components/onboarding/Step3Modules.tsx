@@ -16,8 +16,15 @@
 // Step 3 itself is hidden from the wizard if the customer bought
 // none of the four. See deriveStepList in lib/onboarding.ts.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import {
+  calculateModuleDelta,
+  MODULE_OPTIONS,
+  type ChangeEligibility,
+  type ModuleOption,
+} from "@/lib/billing/module-policy";
+import type { ModuleChangeLogEntry } from "@/lib/notion-prospects";
 
 type Props = {
   data: Record<string, unknown>;
@@ -27,6 +34,18 @@ type Props = {
   benEmail: string;
   /** Prospect's purchased module names. */
   modules: string[];
+  /** Prospect's founding-member flag — drives the fee delta calc
+   *  in the re-selector (founding rate is flat). */
+  foundingMember: boolean;
+  /** Prospect token — used by the re-selector to POST changes. */
+  token: string;
+  /** Result of canChangeModules() from the policy module. Drives
+   *  the re-selector's enabled / disabled / locked rendering. */
+  moduleChangeEligibility: ChangeEligibility;
+  /** Latest pending entry from the change log, if any. When set,
+   *  the re-selector shows the in-flight state instead of the
+   *  picker. */
+  pendingModuleChange: ModuleChangeLogEntry | null;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
@@ -34,7 +53,11 @@ type Props = {
 const RESEND_SIGNUP_URL = "https://resend.com/signup";
 const RESEND_TEAM_HELP_URL =
   "https://resend.com/docs/dashboard/teams/introduction";
-const CALCOM_SIGNUP_URL = "https://cal.com/signup";
+// UK customers get routed to cal.eu (EU instance, GDPR data
+// residency); rest of world stays on cal.com. Linking to cal.eu/signup
+// directly skips the redirect for our UK-focused customer base.
+// Help docs are served from cal.com regardless of instance.
+const CALCOM_SIGNUP_URL = "https://cal.eu/signup";
 const CALCOM_EVENTS_HELP_URL =
   "https://cal.com/help/setting-up-event-types";
 const GBP_HOME_URL = "https://business.google.com";
@@ -49,6 +72,10 @@ export default function Step3Modules({
   readOnly,
   benEmail,
   modules,
+  foundingMember,
+  token,
+  moduleChangeEligibility,
+  pendingModuleChange,
   savePartial,
   markDone,
 }: Props) {
@@ -96,11 +123,23 @@ export default function Step3Modules({
     if (!url) return "not-started";
     try {
       const parsed = new URL(url);
-      const ok =
+      // Accept both cal.com (global) and cal.eu (EU instance — UK
+      // customers get routed here for GDPR data residency). Same
+      // product, two domains; both serve identical embed widgets.
+      const hostnameOk =
         parsed.hostname === "cal.com" ||
+        parsed.hostname === "cal.eu" ||
         parsed.hostname === "www.cal.com" ||
-        parsed.hostname.endsWith(".cal.com");
-      return ok ? "complete" : "in-progress";
+        parsed.hostname === "www.cal.eu" ||
+        parsed.hostname.endsWith(".cal.com") ||
+        parsed.hostname.endsWith(".cal.eu");
+      // Require /username/event-slug, not just /username. The
+      // profile-only URL (cal.eu/their-name) opens a list of event
+      // types, not a booking widget — embedding it on the site
+      // would land the visitor on the wrong screen.
+      const segments = parsed.pathname.split("/").filter(Boolean);
+      const pathOk = segments.length >= 2;
+      return hostnameOk && pathOk ? "complete" : "in-progress";
     } catch {
       return "in-progress";
     }
@@ -130,9 +169,22 @@ export default function Step3Modules({
 
   function validateForDone(): string | null {
     if (hasCalcom && calcomStatus !== "complete") {
-      return calcomStatus === "in-progress"
-        ? "That doesn't look like a cal.com URL — it should start with https://cal.com/."
-        : "Please complete the Online booking module — paste your Cal.com URL.";
+      const url = calcomUrl.trim();
+      if (!url) {
+        return "Please complete the Online booking module — paste your Cal.com event URL.";
+      }
+      // Distinguish the two failure modes so the customer knows
+      // exactly what's wrong: bad host vs. profile-only path.
+      try {
+        const parsed = new URL(url);
+        const segments = parsed.pathname.split("/").filter(Boolean);
+        if (segments.length < 2) {
+          return "That looks like your Cal.com profile URL — paste the link to a specific event instead (it'll have a slug after your username, e.g. cal.eu/your-name/30min).";
+        }
+      } catch {
+        /* fall through to generic */
+      }
+      return "That doesn't look like a Cal.com URL — it should start with https://cal.eu/ (or https://cal.com/).";
     }
     if (hasGbp && gbpStatus !== "complete") {
       if (!gbpUrl.trim())
@@ -217,6 +269,20 @@ export default function Step3Modules({
           card&apos;s header to expand or collapse.
         </p>
       </header>
+
+      {/* Module re-selector — replaces the old "email me to change
+          modules" callout (commit a99df725). Customer can now
+          self-service one module change pre-commit; charge / refund
+          is currently a manual operator step (see /admin/[token])
+          but the architecture is wired for the Stage 2A Part 2
+          auto-Stripe path (see docs/STRIPE-PHASE-2.md). */}
+      <ModuleReSelector
+        currentModules={modules}
+        foundingMember={foundingMember}
+        token={token}
+        eligibility={moduleChangeEligibility}
+        pendingChange={pendingModuleChange}
+      />
 
       <section className="mt-7 space-y-4">
         {hasCalcom && (
@@ -450,10 +516,12 @@ function ModuleCalcom({
   return (
     <>
       <p className="text-[0.95rem] leading-relaxed text-navy-700">
-        Set up a free Cal.com booking page and paste the link here.
-        I&apos;ll embed it on your site — no team invite needed,
-        Cal.com runs entirely in your account.
+        Set up a free Cal.com booking page and paste the link to the
+        specific <strong>event</strong> you want bookable from your
+        website. I&apos;ll embed it so visitors can book in one click.
+        No team invite needed — Cal.com runs entirely in your account.
       </p>
+
       <ol className="mt-4 space-y-3 text-[0.95rem] leading-relaxed text-navy-700">
         <li className="flex gap-3">
           <Bullet n={1} />
@@ -465,54 +533,112 @@ function ModuleCalcom({
               rel="noopener noreferrer"
               className="link"
             >
-              cal.com/signup
+              cal.eu/signup
             </a>{" "}
-            and create a free account. Pick a username that fits your
-            business — it becomes part of your booking URL.
+            and create a free account. (UK customers get the EU
+            instance at <code>cal.eu</code> for GDPR compliance — same
+            product as <code>cal.com</code>, both work for our embed.)
+            Pick a username that fits your business — it becomes part
+            of every booking URL (e.g.{" "}
+            <code>cal.eu/<strong>your-business</strong>/30min</code>).
           </span>
         </li>
         <li className="flex gap-3">
           <Bullet n={2} />
           <span>
-            Connect your calendar (Google / Apple / Outlook), set up
-            an event type with the right duration, buffer and
-            availability. (
-            <a
-              href={CALCOM_EVENTS_HELP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="link"
-            >
-              Cal.com&apos;s help
-            </a>{" "}
-            if you get stuck.)
+            <strong>Verify your email.</strong> Cal.com sends a
+            confirmation link the moment you sign up — open it before
+            going further. <em>Check your spam / junk folder</em> if
+            it doesn&apos;t show up in a minute.
           </span>
         </li>
         <li className="flex gap-3">
           <Bullet n={3} />
           <span>
-            Copy your booking URL (looks like{" "}
-            <code>https://cal.com/your-name/30min</code>) and paste it
-            below.
+            <strong>Connect your calendar.</strong> Pick Google,
+            Outlook, or Apple — Cal.com pulls your busy times so it
+            never double-books you.
           </span>
         </li>
+        <li className="flex gap-3">
+          <Bullet n={4} />
+          <span>
+            <strong>Create your booking event.</strong> In the left
+            sidebar click <strong>Event Types</strong> →{" "}
+            <strong>+ New</strong>. Give it a clear customer-facing
+            name (e.g. &ldquo;30-minute consultation&rdquo;,
+            &ldquo;Free quote call&rdquo;, &ldquo;Garden visit&rdquo;).
+            Set the duration and any buffer you want between bookings.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <Bullet n={5} />
+          <span>
+            <strong>Copy the link to that event</strong> — NOT your
+            profile URL. On the Event Types page, hover the row for
+            the event you just created and click the{" "}
+            <strong>copy / link icon</strong>. Or open the event and
+            copy the URL from the top-right share button. It will
+            look like:
+            <code className="mt-2 block break-all rounded-lg bg-cream-50 px-3 py-2 font-mono text-[0.85rem]">
+              https://cal.eu/your-name/<strong>30min-consultation</strong>
+            </code>
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <Bullet n={6} />
+          <span>Paste the event link into the box below.</span>
+        </li>
       </ol>
+
+      <div className="mt-6 rounded-2xl bg-cream-50 p-5">
+        <h4 className="font-serif text-base font-semibold text-navy-900">
+          Got more than one Event Type?
+        </h4>
+        <p className="mt-2 text-sm leading-relaxed text-navy-700">
+          Pick the <strong>main one</strong> you want customers to
+          book from your website — usually a free discovery call or
+          your most popular service. We embed one event so the
+          website&apos;s call-to-action is unambiguous; visitors can
+          still see your other event types from inside the Cal.com
+          page once they&apos;re booking. Want a menu of multiple
+          bookable events on the site? Email me after launch and
+          I&apos;ll quote it as a small add-on.
+        </p>
+      </div>
+
+      <p className="mt-4 text-xs text-navy-500">
+        Stuck on any step?{" "}
+        <a
+          href={CALCOM_EVENTS_HELP_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="link"
+        >
+          Cal.com&apos;s help page
+        </a>{" "}
+        or hit reply to my last email and I&apos;ll walk you through.
+        A video walkthrough is coming soon.
+      </p>
+
       <label className="mt-5 block">
         <span className="block text-sm font-semibold text-navy-900">
-          Your Cal.com booking URL
+          Your Cal.com event link
         </span>
         <input
           type="url"
           value={url}
           disabled={disabled}
           onChange={(e) => onUrlChange(e.target.value)}
-          placeholder="https://cal.com/your-name/30min"
+          placeholder="https://cal.eu/your-name/30min-consultation"
           autoComplete="url"
           className="mt-2 w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 font-mono text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
         />
         <span className="mt-1.5 block text-xs text-navy-500">
-          Must be on cal.com — paste the public link from your
-          dashboard.
+          Must look like <code>cal.eu/your-name/event-slug</code>{" "}
+          (or <code>cal.com/...</code> — both work). Your profile URL
+          alone (just <code>cal.eu/your-name</code>) won&apos;t work
+          because it doesn&apos;t open a specific booking flow.
         </span>
       </label>
     </>
@@ -834,5 +960,277 @@ function InviteCallout({
         Role to pick: <strong>{role}</strong>
       </p>
     </div>
+  );
+}
+
+// ---------- Module re-selector ----------
+//
+// The customer can change their module mix exactly ONCE before
+// launch (see src/lib/billing/module-policy.ts for the rules).
+// Three render paths:
+//   1. pendingChange present  → in-flight UI (amber callout)
+//   2. eligibility.allowed=false → locked (cream callout, reason text)
+//   3. default → "Re-select modules" link → opens picker
+// Picker has live fee delta + Confirm button → POSTs to
+// /api/onboarding/module-change → page reloads on success.
+function ModuleReSelector({
+  currentModules,
+  foundingMember,
+  token,
+  eligibility,
+  pendingChange,
+}: {
+  currentModules: string[];
+  foundingMember: boolean;
+  token: string;
+  eligibility: ChangeEligibility;
+  pendingChange: ModuleChangeLogEntry | null;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [selection, setSelection] = useState<Set<string>>(
+    new Set(currentModules),
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+
+  // Live delta — recalculated whenever the customer ticks/unticks.
+  // Shows "no change" until they actually move something.
+  const delta = useMemo(
+    () =>
+      calculateModuleDelta({
+        fromModules: currentModules,
+        toModules: [...selection],
+        foundingMember,
+      }),
+    [currentModules, selection, foundingMember],
+  );
+
+  function toggle(option: ModuleOption) {
+    const next = new Set(selection);
+    if (next.has(option)) next.delete(option);
+    else next.add(option);
+    setSelection(next);
+  }
+
+  async function handleConfirm() {
+    if (delta.isNoOp) {
+      setError(
+        "Nothing's changed yet — tick or untick something before confirming.",
+      );
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/onboarding/module-change", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, newModules: [...selection] }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(json.error ?? "Couldn't process. Try again.");
+        return;
+      }
+      setSubmitted(true);
+      // Reload so server-side hydration picks up the new pending
+      // entry + locked-round state — clean transition into the
+      // in-flight UI without prop juggling.
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Couldn't process. Try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // --- Pending change in flight ---
+  if (pendingChange) {
+    const added = pendingChange.toModules.filter(
+      (m) => !pendingChange.fromModules.includes(m),
+    );
+    const removed = pendingChange.fromModules.filter(
+      (m) => !pendingChange.toModules.includes(m),
+    );
+    return (
+      <aside className="mt-5 rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
+        <h3 className="font-serif text-base font-semibold text-navy-900">
+          Module change in progress
+        </h3>
+        <p className="mt-2 text-sm leading-relaxed text-navy-700">
+          You requested a module change on{" "}
+          {new Date(pendingChange.submittedAt).toLocaleDateString(
+            "en-GB",
+            { day: "numeric", month: "short", year: "numeric" },
+          )}
+          . I&apos;m processing the payment side now — usually within one
+          working day. You&apos;ll get an email once it&apos;s confirmed
+          and your modules will update on this page automatically.
+        </p>
+        <ul className="mt-3 space-y-1 text-sm text-navy-700">
+          {added.length > 0 && (
+            <li>
+              <strong>Adding:</strong> {added.join(", ")}
+            </li>
+          )}
+          {removed.length > 0 && (
+            <li>
+              <strong>Removing:</strong> {removed.join(", ")}
+            </li>
+          )}
+          <li>
+            <strong>New monthly:</strong> £{pendingChange.newMonthlyTotal}/mo
+          </li>
+        </ul>
+      </aside>
+    );
+  }
+
+  // --- Not allowed (round used / preview submitted / wrong status) ---
+  if (!eligibility.allowed) {
+    return (
+      <aside className="mt-5 rounded-2xl border border-cream-200 bg-cream-50 p-4">
+        <p className="text-sm leading-relaxed text-navy-700">
+          <strong>Module changes are locked.</strong>{" "}
+          {eligibility.message}
+        </p>
+      </aside>
+    );
+  }
+
+  // --- Picker open ---
+  if (picking) {
+    return (
+      <aside className="mt-5 rounded-2xl border-2 border-navy-300 bg-white p-5">
+        <h3 className="font-serif text-base font-semibold text-navy-900">
+          Re-select your modules
+        </h3>
+        <p className="mt-1.5 text-xs leading-relaxed text-navy-600">
+          You can do this <strong>once</strong>. Tick / untick to change
+          your mix; we&apos;ll calculate the difference below. Confirming
+          uses your one allowed change — make sure it&apos;s right
+          before you click.
+        </p>
+
+        <fieldset className="mt-4 grid gap-2" disabled={submitting || submitted}>
+          {MODULE_OPTIONS.map((option) => {
+            const checked = selection.has(option);
+            return (
+              <label
+                key={option}
+                className="flex cursor-pointer items-start gap-3 rounded-xl border border-navy-200 bg-cream-50 px-4 py-3 transition-colors hover:border-navy-400"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(option)}
+                  className="mt-1"
+                />
+                <span className="text-sm text-navy-900">{option}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+
+        {/* Live delta */}
+        <div className="mt-4 space-y-1 rounded-xl bg-cream-50 p-4 text-sm text-navy-700">
+          {delta.isNoOp ? (
+            <p>
+              <em>
+                No change yet — tick or untick something to see the
+                difference.
+              </em>
+            </p>
+          ) : (
+            <>
+              {delta.added.length > 0 && (
+                <p>
+                  <strong>Adding:</strong> {delta.added.join(", ")}
+                </p>
+              )}
+              {delta.removed.length > 0 && (
+                <p>
+                  <strong>Removing:</strong> {delta.removed.join(", ")}
+                </p>
+              )}
+              <p className="mt-2 border-t border-navy-100 pt-2">
+                <strong>Setup:</strong>{" "}
+                {delta.setupDelta > 0
+                  ? `+£${delta.setupDelta} (one-off charge)`
+                  : delta.setupDelta < 0
+                    ? `−£${Math.abs(delta.setupDelta)} (refund)`
+                    : "no change"}
+              </p>
+              <p>
+                <strong>Monthly:</strong>{" "}
+                {delta.monthlyDelta > 0
+                  ? `+£${delta.monthlyDelta}/mo`
+                  : delta.monthlyDelta < 0
+                    ? `−£${Math.abs(delta.monthlyDelta)}/mo`
+                    : "no change"}
+              </p>
+              <p className="mt-2 border-t border-navy-100 pt-2">
+                <strong>New totals:</strong> £{delta.toFees.setup}{" "}
+                setup, £{delta.toFees.monthly}/mo
+              </p>
+            </>
+          )}
+        </div>
+
+        {error && (
+          <p className="mt-3 text-sm text-ember-700" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setPicking(false);
+              setSelection(new Set(currentModules));
+              setError(null);
+            }}
+            disabled={submitting || submitted}
+            className="btn-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={delta.isNoOp || submitting || submitted}
+            className="btn-primary"
+          >
+            {submitted
+              ? "Submitted ✓"
+              : submitting
+                ? "Submitting…"
+                : "Confirm change"}
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  // --- Default: collapsed pitch + open-picker link ---
+  return (
+    <aside className="mt-5 rounded-2xl border border-cream-200 bg-cream-50 p-4">
+      <p className="text-sm leading-relaxed text-navy-700">
+        <strong>Want to add or remove a module?</strong> You can change
+        your module selection <strong>once</strong> before launch
+        (after that, modules are locked).{" "}
+        <button
+          type="button"
+          onClick={() => setPicking(true)}
+          className="link underline"
+        >
+          Re-select modules →
+        </button>
+      </p>
+    </aside>
   );
 }

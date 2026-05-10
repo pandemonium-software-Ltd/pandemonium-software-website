@@ -1,20 +1,26 @@
 // /api/onboarding/upload — Hub Step 4 brand-asset uploads.
 //
-// POST: multipart/form-data { token, kind: "logo" | "photo", file }
+// POST: multipart/form-data { token, kind, file, serviceName? }
 //   - validates token + onboarding-unlocked status
 //   - validates file (content type + size)
 //   - generates an R2 key like assets/<token>/<kind>/<uuid>-<safe-name>
 //   - puts via the ASSETS_BUCKET R2 binding
-//   - for kind="logo": replaces previous logo (best-effort old-key delete)
-//   - for kind="photo": appends to the photos array (max 20)
-//   - merges Asset record into the prospect's Onboarding Data step4 slice
+//   - merges Asset record into the prospect's Onboarding Data step4
+//     slice, behaviour depends on `kind`:
+//       Single-replace (replaces existing, best-effort old R2 delete):
+//         - "logo"   → assets.logo
+//         - "hero"   → assets.hero          (NEW C5.3)
+//         - "about"  → assets.about         (NEW C5.3)
+//       Array-append (cap if exceeded; fail with old key rolled back):
+//         - "service"    → assets.services[]   (max 10, requires serviceName field)
+//         - "background" → assets.backgrounds[] (max 5)
+//         - "gallery"    → assets.gallery[]    (max 20)
+//         - "photo"      → assets.photos[]     (max 20, LEGACY pre-C5.3)
 //
 // DELETE: application/json { token, key }
-//   - validates token + status
-//   - validates the key belongs to this prospect (key starts with
-//     assets/<token>/) so customers can't delete each other's assets
-//   - removes from R2 + from the prospect's step4 slice (clears logo
-//     if it was the logo, filters photos array otherwise)
+//   - validates token + status + ownership (key prefix match)
+//   - removes from R2 + from the prospect's step4 slice; finds the
+//     containing field/array automatically
 //
 // R2 binding access: getCloudflareContext().env.ASSETS_BUCKET. Falls
 // back to a 503 with a clear error if the binding is missing — that
@@ -33,6 +39,7 @@ import {
   mergeStepData,
   onboardingDataSchema,
   type Asset,
+  type ServiceAsset,
   type OnboardingData,
 } from "@/lib/onboarding";
 
@@ -50,6 +57,47 @@ const ALLOWED_TYPES = new Set([
   "image/webp",
   "image/svg+xml",
 ]);
+
+// Per-kind upload limits. Keep in sync with the schema in
+// src/lib/onboarding.ts step4AssetsSchema.
+const KIND_CAPS = {
+  service: 10,
+  background: 5,
+  gallery: 20,
+  photo: 20, // legacy
+} as const;
+
+type AssetKind =
+  | "logo"
+  | "hero"
+  | "about"
+  | "service"
+  | "background"
+  | "gallery"
+  | "photo";
+
+const VALID_KINDS: ReadonlySet<AssetKind> = new Set([
+  "logo",
+  "hero",
+  "about",
+  "service",
+  "background",
+  "gallery",
+  "photo",
+]);
+
+// Subset of step 4 slice fields we mutate. Schema ground-truth lives
+// in src/lib/onboarding.ts.
+type Slice = {
+  logo?: Asset;
+  hero?: Asset;
+  about?: Asset;
+  services?: ServiceAsset[];
+  backgrounds?: Asset[];
+  gallery?: Asset[];
+  photos?: Asset[];
+  notes?: string;
+};
 
 // Cloudflare Workers R2 binding — minimum surface we use.
 type R2BucketLike = {
@@ -95,8 +143,9 @@ export async function POST(request: Request) {
   }
 
   const token = String(form.get("token") ?? "");
-  const kind = String(form.get("kind") ?? "");
+  const kindRaw = String(form.get("kind") ?? "");
   const file = form.get("file");
+  const serviceName = String(form.get("serviceName") ?? "").trim();
 
   if (!TOKEN_RE.test(token)) {
     return NextResponse.json(
@@ -104,11 +153,25 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (kind !== "logo" && kind !== "photo") {
+  if (!VALID_KINDS.has(kindRaw as AssetKind)) {
     return NextResponse.json(
-      { error: "kind must be 'logo' or 'photo'." },
+      {
+        error: `kind must be one of: ${Array.from(VALID_KINDS).join(", ")}.`,
+      },
       { status: 400 },
     );
+  }
+  const kind = kindRaw as AssetKind;
+  if (kind === "service") {
+    if (!serviceName || serviceName.length > 200) {
+      return NextResponse.json(
+        {
+          error:
+            "Service uploads require a serviceName form field (1-200 chars) matching one of the customer's intake services.",
+        },
+        { status: 400 },
+      );
+    }
   }
   if (!(file instanceof File)) {
     return NextResponse.json(
@@ -117,10 +180,7 @@ export async function POST(request: Request) {
     );
   }
   if (file.size === 0) {
-    return NextResponse.json(
-      { error: "Empty file." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Empty file." }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
@@ -200,39 +260,21 @@ export async function POST(request: Request) {
     uploadedAt: new Date().toISOString(),
   };
 
-  // Read current onboarding data + merge the new asset in. For
-  // kind="logo" we replace any existing logo (and best-effort delete
-  // the old R2 object). For kind="photo" we append to the photos
-  // array (capping at 20 to match the schema).
+  // Read current onboarding data + merge the new asset in. Per-kind
+  // routing logic lives in `mergeAsset` to keep this handler readable.
   const parsed = onboardingDataSchema.safeParse(prospect.onboardingData ?? {});
   const baseData: OnboardingData = parsed.success ? parsed.data : {};
-  const currentSlice = (baseData.assets ?? {}) as {
-    logo?: Asset;
-    photos?: Asset[];
-    notes?: string;
-  };
-  const previousLogo = currentSlice.logo;
-  let nextSlice: typeof currentSlice;
+  const currentSlice: Slice = (baseData.assets ?? {}) as Slice;
 
-  if (kind === "logo") {
-    nextSlice = { ...currentSlice, logo: newAsset };
-  } else {
-    const existing = Array.isArray(currentSlice.photos)
-      ? currentSlice.photos
-      : [];
-    if (existing.length >= 20) {
-      // Roll back the R2 put — we won't accept it.
-      await bucket.delete(key).catch(() => {});
-      return NextResponse.json(
-        {
-          error:
-            "You've reached the 20-photo limit. Delete one before adding another.",
-        },
-        { status: 400 },
-      );
-    }
-    nextSlice = { ...currentSlice, photos: [...existing, newAsset] };
+  const mergeResult = mergeAsset(currentSlice, kind, newAsset, {
+    serviceName: kind === "service" ? serviceName : undefined,
+  });
+  if ("error" in mergeResult) {
+    // Roll back the R2 put — we won't accept it.
+    await bucket.delete(key).catch(() => {});
+    return NextResponse.json({ error: mergeResult.error }, { status: 400 });
   }
+  const { nextSlice, previousAsset } = mergeResult;
 
   const mergedData = mergeStepData(baseData, "assets", nextSlice);
   try {
@@ -248,19 +290,95 @@ export async function POST(request: Request) {
     );
   }
 
-  // Best-effort: delete the old logo's R2 object after the new one is
-  // safely persisted in Notion. Failure here is logged but doesn't
-  // affect the customer's flow.
-  if (kind === "logo" && previousLogo?.key && previousLogo.key !== key) {
-    bucket.delete(previousLogo.key).catch((err: unknown) => {
+  // Best-effort: delete the old asset's R2 object after the new one
+  // is safely persisted in Notion (single-replace kinds only).
+  // Failure here is logged but doesn't affect the customer's flow.
+  if (previousAsset?.key && previousAsset.key !== key) {
+    bucket.delete(previousAsset.key).catch((err: unknown) => {
       console.warn(
-        "[api/onboarding/upload] couldn't delete old logo:",
+        `[api/onboarding/upload] couldn't delete old ${kind}:`,
         err instanceof Error ? err.message : String(err),
       );
     });
   }
 
   return NextResponse.json({ success: true, asset: newAsset, kind });
+}
+
+/**
+ * Per-kind merge logic. Returns the next slice + (for single-replace
+ * kinds) the previous asset that should be cleaned up from R2.
+ * Returns `{ error }` for cap violations so the caller can roll back
+ * the R2 upload.
+ */
+function mergeAsset(
+  slice: Slice,
+  kind: AssetKind,
+  asset: Asset,
+  opts: { serviceName?: string },
+):
+  | { nextSlice: Slice; previousAsset?: Asset }
+  | { error: string } {
+  switch (kind) {
+    case "logo":
+      return {
+        nextSlice: { ...slice, logo: asset },
+        previousAsset: slice.logo,
+      };
+    case "hero":
+      return {
+        nextSlice: { ...slice, hero: asset },
+        previousAsset: slice.hero,
+      };
+    case "about":
+      return {
+        nextSlice: { ...slice, about: asset },
+        previousAsset: slice.about,
+      };
+    case "service": {
+      const existing = slice.services ?? [];
+      if (existing.length >= KIND_CAPS.service) {
+        return {
+          error: `You're at the ${KIND_CAPS.service}-photo limit for service photos. Delete one before adding another.`,
+        };
+      }
+      const sa: ServiceAsset = {
+        ...asset,
+        serviceName: opts.serviceName!,
+      };
+      return { nextSlice: { ...slice, services: [...existing, sa] } };
+    }
+    case "background": {
+      const existing = slice.backgrounds ?? [];
+      if (existing.length >= KIND_CAPS.background) {
+        return {
+          error: `You're at the ${KIND_CAPS.background}-image limit for background images. Delete one before adding another.`,
+        };
+      }
+      return {
+        nextSlice: { ...slice, backgrounds: [...existing, asset] },
+      };
+    }
+    case "gallery": {
+      const existing = slice.gallery ?? [];
+      if (existing.length >= KIND_CAPS.gallery) {
+        return {
+          error: `You're at the ${KIND_CAPS.gallery}-photo gallery limit. Delete one before adding another.`,
+        };
+      }
+      return { nextSlice: { ...slice, gallery: [...existing, asset] } };
+    }
+    case "photo": {
+      // Legacy bucket, kept working so any old client doesn't break.
+      const existing = slice.photos ?? [];
+      if (existing.length >= KIND_CAPS.photo) {
+        return {
+          error: `You've reached the ${KIND_CAPS.photo}-photo limit. Delete one before adding another.`,
+        };
+      }
+      return { nextSlice: { ...slice, photos: [...existing, asset] } };
+    }
+  }
 }
 
 // ---------- DELETE: remove one asset ----------
@@ -342,25 +460,13 @@ export async function DELETE(request: Request) {
     );
   }
 
-  // Update Notion: clear logo if it matches, else filter photos.
+  // Update Notion: search across all single + array fields, remove
+  // the matching key wherever it lives. Schema-aligned with the new
+  // C5.3 asset roles.
   const parsed = onboardingDataSchema.safeParse(prospect.onboardingData ?? {});
   const baseData: OnboardingData = parsed.success ? parsed.data : {};
-  const currentSlice = (baseData.assets ?? {}) as {
-    logo?: Asset;
-    photos?: Asset[];
-    notes?: string;
-  };
-  let nextSlice: typeof currentSlice = currentSlice;
-  if (currentSlice.logo?.key === key) {
-    const { logo: _drop, ...rest } = currentSlice;
-    void _drop;
-    nextSlice = rest;
-  } else if (Array.isArray(currentSlice.photos)) {
-    nextSlice = {
-      ...currentSlice,
-      photos: currentSlice.photos.filter((p) => p.key !== key),
-    };
-  }
+  const slice: Slice = (baseData.assets ?? {}) as Slice;
+  const nextSlice = removeAssetByKey(slice, key);
 
   const mergedData = mergeStepData(baseData, "assets", nextSlice);
   try {
@@ -378,6 +484,46 @@ export async function DELETE(request: Request) {
   }
 
   return NextResponse.json({ success: true });
+}
+
+/**
+ * Remove the asset with the given key from wherever it lives in the
+ * step 4 slice. Returns a new slice; doesn't mutate. Idempotent — if
+ * the key isn't found, returns the slice unchanged.
+ */
+function removeAssetByKey(slice: Slice, key: string): Slice {
+  let next: Slice = slice;
+  if (slice.logo?.key === key) {
+    const { logo: _drop, ...rest } = next;
+    void _drop;
+    next = rest;
+  }
+  if (slice.hero?.key === key) {
+    const { hero: _drop, ...rest } = next;
+    void _drop;
+    next = rest;
+  }
+  if (slice.about?.key === key) {
+    const { about: _drop, ...rest } = next;
+    void _drop;
+    next = rest;
+  }
+  if (Array.isArray(next.services)) {
+    next = { ...next, services: next.services.filter((s) => s.key !== key) };
+  }
+  if (Array.isArray(next.backgrounds)) {
+    next = {
+      ...next,
+      backgrounds: next.backgrounds.filter((b) => b.key !== key),
+    };
+  }
+  if (Array.isArray(next.gallery)) {
+    next = { ...next, gallery: next.gallery.filter((g) => g.key !== key) };
+  }
+  if (Array.isArray(next.photos)) {
+    next = { ...next, photos: next.photos.filter((p) => p.key !== key) };
+  }
+  return next;
 }
 
 // ---------- Helpers ----------

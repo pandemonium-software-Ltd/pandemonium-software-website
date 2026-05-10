@@ -42,6 +42,10 @@ import {
 import { site } from "@/lib/site";
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import {
+  buildPreviewRequestNotification,
+  sendInternalNotification,
+} from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -163,6 +167,22 @@ export async function POST(request: Request) {
   // The slice that's now in the merged blob — used for can-mark-done.
   const newSlice = (mergedData[stepId] ?? {}) as Record<string, unknown>;
 
+  // Detect first-time preview-request transition (Phase 1 → Phase 2
+  // in Step 5). Fires once when previewSubmittedAt flips from absent
+  // to set; re-saves of an already-stamped review slice don't re-
+  // notify. Used below (after Notion update) to send both an
+  // internal email to Ben + a customer confirmation.
+  const previousReview = (baseData.review ?? {}) as {
+    previewSubmittedAt?: string;
+  };
+  const newReview = (mergedData.review ?? {}) as {
+    previewSubmittedAt?: string;
+  };
+  const previewJustRequested =
+    !previousReview.previewSubmittedAt &&
+    typeof newReview.previewSubmittedAt === "string" &&
+    newReview.previewSubmittedAt.length > 0;
+
   // Build the Notion update.
   const update: OnboardingUpdate = { data: mergedData };
 
@@ -248,12 +268,68 @@ export async function POST(request: Request) {
     }
   }
 
+  // Preview-request transition: customer hit "Request site preview"
+  // for the first time. Fire the internal Ben notification + the
+  // customer confirmation. Both fail-soft — the Notion write is
+  // already in the bag.
+  let previewEmailWarnings: { internal?: string; customer?: string } = {};
+  if (previewJustRequested) {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
+    const tokenShort = token.slice(0, 8);
+    const adminDetailUrl = `${baseUrl}/admin/${token}`;
+    const accountUrl = `${baseUrl}/account/${token}`;
+    const reviewSlice = (mergedData.review ?? {}) as { goLiveDate?: string };
+    const goLivePretty = formatGoLiveDate(reviewSlice.goLiveDate ?? "");
+
+    // Internal email to Ben — structured Gmail-filterable subject.
+    const internal = buildPreviewRequestNotification({
+      prospectName: prospect.name,
+      business: prospect.business ?? "",
+      tokenShort,
+      goLiveDate: goLivePretty,
+      moduleSelections: prospect.moduleSelections,
+      notionUrl: prospect.notionUrl,
+      adminDetailUrl,
+    });
+    const internalErr = await sendInternalNotification(internal);
+    if (internalErr) {
+      previewEmailWarnings.internal = internalErr;
+      console.warn(
+        `[api/onboarding] preview-request internal email failed: ${internalErr}`,
+      );
+    }
+
+    // Customer confirmation — branded HTML wrapper via sendCustomerEmail.
+    try {
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "preview-request-received",
+        {
+          customerName: firstName(prospect.name),
+          accountUrl,
+        },
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      previewEmailWarnings.customer = msg;
+      console.warn(
+        `[api/onboarding] preview-request customer email failed: ${msg}`,
+      );
+    }
+  }
+
   return NextResponse.json({
     success: true,
     stepId,
     markedDone: !!markDone,
     hubComplete: update.statusFlip === "Onboarding Complete",
+    previewRequested: previewJustRequested,
     customerEmailWarning,
+    previewEmailWarnings:
+      Object.keys(previewEmailWarnings).length > 0
+        ? previewEmailWarnings
+        : undefined,
   });
 }
 

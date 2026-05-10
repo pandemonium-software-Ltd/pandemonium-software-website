@@ -1,0 +1,14 @@
+{
+  "description": "Payment method update needed — card expired during module add",
+  "template": "payment-method-update-needed",
+  "values": {
+    "customerName": "Alex",
+    "failedActionDescription": "charge £39 for the Newsletter module you wanted to add",
+    "removedModulesSummary": "Newsletter",
+    "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
+  },
+  "expected": {
+    "subject": "Payment method needs updating",
+    "body": "Hi Alex,\n\nQuick heads-up: I tried to charge £39 for the Newsletter module you wanted to add but the\npayment didn't go through. Most likely your card has expired or\nbeen reissued — happens often.\n\nWhat I've done:\n  • Removed the modules you were adding (Newsletter)\n    so you're not seeing features you haven't paid for.\n  • Held off on charging you again until we sort out the card.\n\nWhat I need from you:\n  Reply to this email and I'll send you a secure Stripe link to\n  update your card. Takes about 30 seconds. Once that's done I'll\n  re-run the change and email you again to confirm.\n\nNothing else on your account is affected — your existing\nsubscription continues as normal. This is purely about the\nadd-on we couldn't process.\n\nThanks,\nBen (and the ModuForge ops assistant)"
+  }
+}

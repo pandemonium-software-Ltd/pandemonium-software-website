@@ -22,6 +22,10 @@ const baseProspect: ProspectRecord = {
   onboardingStep3Done: false,
   onboardingStep4Done: false,
   onboardingStep5Done: false,
+  onboardingContentDone: false,
+  changeRequests: [],
+  notionUrl: "",
+  moduleChangeLog: [],
 };
 
 const env = {

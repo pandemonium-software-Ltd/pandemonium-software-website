@@ -1,0 +1,138 @@
+name: Customer site build
+
+# Triggered by the ops worker (Stage 2C C5.4) via repository_dispatch
+# when a customer hits "Request site preview" on the Hub. Pulls the
+# prospect's intake data from Notion, runs `next build` on the
+# customer-site-template, and deploys the bundle to the customer's
+# per-customer Cloudflare Worker (replaces the placeholder uploaded
+# in C2.3).
+#
+# Reports back to /api/internal/build-callback with success +
+# previewUrl, OR failure + errorMessage. Either outcome clears the
+# Preview Build Triggered At latch in Notion so the next preview
+# request can re-trigger.
+
+on:
+  repository_dispatch:
+    types: [customer-site-build]
+
+  # Manual run for ops debugging — pass token via the workflow_dispatch
+  # input. Useful if you want to re-trigger a build without going
+  # through the cron path.
+  workflow_dispatch:
+    inputs:
+      token:
+        description: "Prospect token (UUID)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Marketing-site URL the Action calls for /api/internal/* endpoints.
+      # Set this as a GitHub repo secret. Default is production.
+      MARKETING_SITE_BASE: ${{ secrets.MARKETING_SITE_BASE || 'https://modu-forge.co.uk' }}
+      # Shared secret matching INTERNAL_BUILD_SECRET on the marketing site.
+      INTERNAL_SECRET: ${{ secrets.INTERNAL_BUILD_SECRET }}
+      # Customer Cloudflare API token — same user-scoped token the
+      # ops worker uses. Wrangler reads this as CLOUDFLARE_API_TOKEN.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.BEN_CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Resolve token (dispatch payload OR manual input)
+        id: token
+        run: |
+          TOKEN="${{ github.event.client_payload.token || inputs.token }}"
+          if [ -z "$TOKEN" ]; then
+            echo "::error::No prospect token in either dispatch payload or manual input"
+            exit 1
+          fi
+          echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "Building site for token: $TOKEN"
+
+      - name: Fetch site data + deploy metadata from marketing site
+        id: fetch
+        run: |
+          set -e
+          RESPONSE=$(curl -sS -w "\n%{http_code}" \
+            -H "x-internal-secret: ${INTERNAL_SECRET}" \
+            "${MARKETING_SITE_BASE}/api/internal/site-data?token=${{ steps.token.outputs.value }}")
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          STATUS=$(echo "$RESPONSE" | tail -n 1)
+          if [ "$STATUS" -ne 200 ]; then
+            echo "::error::site-data fetch failed (HTTP $STATUS)"
+            echo "$BODY"
+            echo "$BODY" | jq -r '.error // "unknown error"' > /tmp/build-error.txt
+            exit 1
+          fi
+          # Stash the deploy metadata (account id + worker name) +
+          # write site-data for the build.
+          ACCOUNT_ID=$(echo "$BODY" | jq -r '.deploy.cloudflareAccountId // empty')
+          WORKER_NAME=$(echo "$BODY" | jq -r '.deploy.workerName // empty')
+          DOMAIN=$(echo "$BODY" | jq -r '.siteData.domain // empty')
+          if [ -z "$ACCOUNT_ID" ] || [ -z "$WORKER_NAME" ]; then
+            echo "::error::Missing deploy metadata (accountId=$ACCOUNT_ID, workerName=$WORKER_NAME)"
+            exit 1
+          fi
+          echo "$BODY" | jq '.siteData' > customer-site-template/src/data/site-data.json
+          echo "account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
+          echo "worker_name=$WORKER_NAME" >> "$GITHUB_OUTPUT"
+          echo "preview_url=https://${DOMAIN}/" >> "$GITHUB_OUTPUT"
+          echo "Resolved deploy target: account=$ACCOUNT_ID worker=$WORKER_NAME"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: customer-site-template/package-lock.json
+
+      - name: Install + build customer-site-template
+        working-directory: customer-site-template
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to customer's per-customer Worker
+        working-directory: customer-site-template
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.fetch.outputs.account_id }}
+        run: |
+          npx wrangler deploy --name "${{ steps.fetch.outputs.worker_name }}"
+
+      - name: Notify marketing site of success
+        if: success()
+        run: |
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-internal-secret: ${INTERNAL_SECRET}" \
+            -d "$(jq -nc \
+                --arg token "${{ steps.token.outputs.value }}" \
+                --arg url "${{ steps.fetch.outputs.preview_url }}" \
+                '{token: $token, status: "success", previewUrl: $url}')" \
+            "${MARKETING_SITE_BASE}/api/internal/build-callback"
+
+      - name: Notify marketing site of failure
+        if: failure()
+        run: |
+          ERROR_MSG="$(cat /tmp/build-error.txt 2>/dev/null || echo 'Build job failed — check Action logs')"
+          # Truncate to fit the 2000-char schema cap, just in case
+          # `cat` returns a giant log dump.
+          ERROR_MSG="${ERROR_MSG:0:1900}"
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-internal-secret: ${INTERNAL_SECRET}" \
+            -d "$(jq -nc \
+                --arg token "${{ steps.token.outputs.value }}" \
+                --arg msg "$ERROR_MSG" \
+                '{token: $token, status: "failure", errorMessage: $msg}')" \
+            "${MARKETING_SITE_BASE}/api/internal/build-callback" || true

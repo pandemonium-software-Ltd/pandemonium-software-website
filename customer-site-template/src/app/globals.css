@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-serif:
+      "Geist", "Playfair Display", Georgia, serif;
+    --font-sans:
+      "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono:
+      "Geist Mono", ui-monospace, "SF Mono", monospace;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-cream-50 font-sans text-base leading-relaxed text-navy-900 antialiased;
+  }
+
+  /* Default focus ring — accessible, on-brand. */
+  :focus-visible {
+    @apply outline-none ring-4 ring-brand-primary-300 ring-offset-2 ring-offset-cream-50;
+  }
+}
+
+@layer components {
+  .container-content {
+    @apply mx-auto w-full max-w-content px-6 md:px-10;
+  }
+
+  /* Buttons mirror the marketing site's `btn-primary` /
+     `btn-secondary` shape, but the primary uses the customer's
+     brand-primary colour instead of the marketing site's ember. */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-7 py-3.5 text-base font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-4;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-primary-500 text-brand-primary-text shadow-lift focus-visible:ring-brand-primary-300;
+  }
+  .btn-primary:hover {
+    @apply -translate-y-px bg-brand-primary-600;
+  }
+
+  .btn-secondary {
+    @apply btn border-2 border-navy-900 bg-transparent text-navy-900 hover:bg-navy-900 hover:text-white focus-visible:ring-navy-300;
+  }
+
+  .heading-1 {
+    @apply font-serif text-4xl font-semibold leading-tight tracking-tight text-navy-900 md:text-5xl lg:text-6xl;
+  }
+  .heading-2 {
+    @apply font-serif text-3xl font-semibold leading-tight tracking-tight text-navy-900 md:text-4xl lg:text-5xl;
+  }
+  .heading-3 {
+    @apply font-serif text-2xl font-semibold leading-snug tracking-tight text-navy-900 md:text-3xl;
+  }
+
+  .eyebrow {
+    @apply mb-4 inline-block text-sm font-semibold uppercase tracking-[0.14em] text-brand-primary-700;
+  }
+
+  .prose-body {
+    @apply text-lg leading-relaxed text-navy-800 md:text-xl;
+  }
+}

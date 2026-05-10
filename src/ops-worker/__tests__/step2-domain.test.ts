@@ -16,8 +16,10 @@ vi.mock("../../lib/cloudflare", () => ({
   createZone: vi.fn(),
   getZone: vi.fn(),
   uploadWorkerScript: vi.fn(),
-  listWorkerCustomDomains: vi.fn(),
-  createWorkerCustomDomain: vi.fn(),
+  listDnsRecords: vi.fn(),
+  createDnsRecord: vi.fn(),
+  listWorkerRoutes: vi.fn(),
+  createWorkerRoute: vi.fn(),
   CloudflareApiError: class extends Error {
     status: number;
     constructor(status: number, message: string) {
@@ -47,8 +49,10 @@ import {
   createZone,
   getZone,
   uploadWorkerScript,
-  listWorkerCustomDomains,
-  createWorkerCustomDomain,
+  listDnsRecords,
+  createDnsRecord,
+  listWorkerRoutes,
+  createWorkerRoute,
 } from "../../lib/cloudflare";
 import {
   recordCloudflareZone,
@@ -81,6 +85,8 @@ const baseProspect: ProspectRecord = {
   },
   changeRequests: [],
   notionUrl: "",
+  moduleChangeLog: [],
+  onboardingContentDone: false,
 };
 
 const env = {
@@ -106,21 +112,34 @@ beforeEach(() => {
   // don't care about phase D/E/F) don't accidentally trigger errors
   // when those phases run with default-undefined returns.
   vi.mocked(uploadWorkerScript).mockResolvedValue({ id: "script_default" });
-  vi.mocked(listWorkerCustomDomains).mockResolvedValue([]);
-  vi.mocked(createWorkerCustomDomain).mockResolvedValue({
-    id: "dom_default",
-    hostname: "default.example.com",
-    service: "mf-default",
-    zone_id: "zone_default",
-    zone_name: "default.example.com",
-    environment: "production",
-    status: "pending", // pending = phase F won't trigger
+  // DNS + Worker Routes defaults (post-10405 workaround):
+  //   - listDnsRecords / listWorkerRoutes return [] so phase E creates
+  //     the record + route on first tick. Tests that need
+  //     already-exists behaviour override per-test.
+  //   - createDnsRecord / createWorkerRoute return minimal shapes
+  //     (we only check call args, not return values).
+  vi.mocked(listDnsRecords).mockResolvedValue([]);
+  vi.mocked(createDnsRecord).mockResolvedValue({
+    id: "dns_default",
+    type: "A",
+    name: "default.example.com",
+    content: "192.0.2.1",
+    proxied: true,
+  });
+  vi.mocked(listWorkerRoutes).mockResolvedValue([]);
+  vi.mocked(createWorkerRoute).mockResolvedValue({
+    id: "route_default",
+    pattern: "default.example.com/*",
+    script: "mf-default",
   });
   // Default fetch mock so phase F never accidentally hits the real
   // network (which would 5s timeout on test.co.uk). Tests that care
   // about specific HTTP status codes override with their own spy.
+  // Use 525 by default — phase F runs unconditionally now (no
+  // per-binding pending status), so most tests without explicit
+  // phase F setup should NOT mark site live by accident.
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(null, { status: 200 }),
+    new Response(null, { status: 525 }),
   );
 });
 
@@ -440,16 +459,8 @@ describe("step2Domain.run — phase D: upload placeholder Worker", () => {
   test("uploads Worker after zone is active + records name", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
     vi.mocked(uploadWorkerScript).mockResolvedValue({ id: "script_test" });
-    vi.mocked(listWorkerCustomDomains).mockResolvedValue([]);
-    vi.mocked(createWorkerCustomDomain).mockResolvedValue({
-      id: "dom_apex",
-      hostname: "test.co.uk",
-      service: "mf-tokte",
-      zone_id: "zone_pending",
-      zone_name: "test.co.uk",
-      environment: "production",
-      status: "pending",
-    });
+    // Phase E defaults from beforeEach (empty list → create) work fine
+    // here; this test only asserts on phase D.
 
     const result = await step2Domain.run(
       {
@@ -498,16 +509,8 @@ describe("step2Domain.run — phase D: upload placeholder Worker", () => {
 
   test("does NOT re-upload Worker if name already recorded (idempotency)", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockResolvedValue([]);
-    vi.mocked(createWorkerCustomDomain).mockResolvedValue({
-      id: "dom_apex",
-      hostname: "test.co.uk",
-      service: "mf-tokte",
-      zone_id: "zone_pending",
-      zone_name: "test.co.uk",
-      environment: "production",
-      status: "active",
-    });
+    // Phase E defaults from beforeEach are fine; this test only
+    // asserts that phase D is skipped when workerName is already set.
 
     const result = await step2Domain.run(
       {
@@ -549,7 +552,7 @@ describe("step2Domain.run — phase D: upload placeholder Worker", () => {
   });
 });
 
-describe("step2Domain.run — phase E: bind apex + www", () => {
+describe("step2Domain.run — phase E: DNS + Worker Routes (apex + www)", () => {
   const readyProspect = {
     ...baseProspect,
     token: "tok_test_uuid",
@@ -560,62 +563,146 @@ describe("step2Domain.run — phase E: bind apex + www", () => {
     workerName: "mf-tokte",
   };
 
-  test("binds apex + www when neither exists yet", async () => {
+  test("creates A record + Worker route for apex and www when neither exists", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockResolvedValue([]);
-    vi.mocked(createWorkerCustomDomain).mockResolvedValue({
-      id: "dom_test",
-      hostname: "test.co.uk",
-      service: "mf-tokte",
-      zone_id: "zone_pending",
-      zone_name: "test.co.uk",
-      environment: "production",
-      status: "pending",
-    });
+    // Defaults from beforeEach return empty lists → create both.
 
     const result = await step2Domain.run(readyProspect, env);
 
-    expect(listWorkerCustomDomains).toHaveBeenCalledWith(
-      "acc_test",
-      "test.co.uk",
+    expect(listDnsRecords).toHaveBeenCalledWith("zone_pending", {
+      name: "test.co.uk",
+      type: "A",
+    });
+    expect(listDnsRecords).toHaveBeenCalledWith("zone_pending", {
+      name: "www.test.co.uk",
+      type: "A",
+    });
+    expect(createDnsRecord).toHaveBeenCalledWith(
+      "zone_pending",
+      expect.objectContaining({
+        type: "A",
+        name: "test.co.uk",
+        content: "192.0.2.1",
+        proxied: true,
+      }),
     );
-    expect(listWorkerCustomDomains).toHaveBeenCalledWith(
-      "acc_test",
-      "www.test.co.uk",
+    expect(createDnsRecord).toHaveBeenCalledWith(
+      "zone_pending",
+      expect.objectContaining({
+        type: "A",
+        name: "www.test.co.uk",
+        content: "192.0.2.1",
+        proxied: true,
+      }),
     );
-    expect(createWorkerCustomDomain).toHaveBeenCalledWith(
-      "acc_test",
-      expect.objectContaining({ hostname: "test.co.uk", service: "mf-tokte" }),
+    expect(listWorkerRoutes).toHaveBeenCalledWith(
+      "zone_pending",
+      "test.co.uk/*",
     );
-    expect(createWorkerCustomDomain).toHaveBeenCalledWith(
-      "acc_test",
-      expect.objectContaining({ hostname: "www.test.co.uk", service: "mf-tokte" }),
+    expect(listWorkerRoutes).toHaveBeenCalledWith(
+      "zone_pending",
+      "www.test.co.uk/*",
     );
+    expect(createWorkerRoute).toHaveBeenCalledWith("zone_pending", {
+      pattern: "test.co.uk/*",
+      script: "mf-tokte",
+    });
+    expect(createWorkerRoute).toHaveBeenCalledWith("zone_pending", {
+      pattern: "www.test.co.uk/*",
+      script: "mf-tokte",
+    });
     expect(result.status).toBe("ok");
     if (result.status === "ok") {
-      expect(result.notes).toContain("bound test.co.uk");
-      expect(result.notes).toContain("bound www.test.co.uk");
+      expect(result.notes).toContain("created A record test.co.uk");
+      expect(result.notes).toContain("created A record www.test.co.uk");
+      expect(result.notes).toContain("bound test.co.uk/* → mf-tokte");
+      expect(result.notes).toContain("bound www.test.co.uk/* → mf-tokte");
     }
   });
 
-  test("does NOT re-bind hostnames that already exist", async () => {
+  test("does NOT recreate DNS or route when both already exist (idempotency)", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockImplementation(async (_acc, host) => [
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
       {
-        id: `dom_${host}`,
-        hostname: host!,
-        service: "mf-tokte",
-        zone_id: "zone_pending",
-        zone_name: "test.co.uk",
-        environment: "production",
-        status: "active",
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "192.0.2.1",
+        proxied: true,
+      },
+    ]);
+    vi.mocked(listWorkerRoutes).mockImplementation(async (_zone, pattern) => [
+      {
+        id: `route_${pattern}`,
+        pattern: pattern!,
+        script: "mf-tokte",
       },
     ]);
 
     const result = await step2Domain.run(readyProspect, env);
 
-    expect(createWorkerCustomDomain).not.toHaveBeenCalled();
+    expect(createDnsRecord).not.toHaveBeenCalled();
+    expect(createWorkerRoute).not.toHaveBeenCalled();
     expect(result.status).toBe("ok");
+  });
+
+  test("creates only the missing leg when DNS exists but route does not", async () => {
+    vi.mocked(getZone).mockResolvedValue(zoneActive);
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
+      {
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "192.0.2.1",
+        proxied: true,
+      },
+    ]);
+    // listWorkerRoutes default → [] (route missing, will be created)
+
+    const result = await step2Domain.run(readyProspect, env);
+
+    expect(createDnsRecord).not.toHaveBeenCalled();
+    expect(createWorkerRoute).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe("ok");
+  });
+
+  test("treats unproxied A records as missing (we need proxied for Worker routing)", async () => {
+    vi.mocked(getZone).mockResolvedValue(zoneActive);
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
+      {
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "203.0.113.1",
+        proxied: false, // grey-cloud → won't intercept Worker traffic
+      },
+    ]);
+
+    const result = await step2Domain.run(readyProspect, env);
+
+    // We create a new proxied record alongside the existing unproxied
+    // one rather than trying to flip it (avoids hijacking customer
+    // records they may have set up themselves).
+    expect(createDnsRecord).toHaveBeenCalledTimes(2);
+    expect(result.status).toBe("ok");
+  });
+
+  test("throws when listDnsRecords API fails", async () => {
+    vi.mocked(getZone).mockResolvedValue(zoneActive);
+    vi.mocked(listDnsRecords).mockRejectedValue(new Error("403 perms"));
+    await expect(step2Domain.run(readyProspect, env)).rejects.toThrow(
+      /listDnsRecords.*403 perms/,
+    );
+  });
+
+  test("throws when createWorkerRoute API fails", async () => {
+    vi.mocked(getZone).mockResolvedValue(zoneActive);
+    vi.mocked(createWorkerRoute).mockRejectedValue(
+      new Error("10000 Authentication error"),
+    );
+    await expect(step2Domain.run(readyProspect, env)).rejects.toThrow(
+      /createWorkerRoute.*Authentication error/,
+    );
   });
 });
 
@@ -630,18 +717,26 @@ describe("step2Domain.run — phase F: HTTP 200 verify", () => {
     workerName: "mf-tokte",
   };
 
+  // Phase F now runs unconditionally once DNS + route are ensured
+  // (no per-binding "pending" state in the Routes API). HTTP itself
+  // is the readiness signal — Universal SSL needs ~5-15 min on a
+  // fresh zone, and the 5xx-→-retry branch handles the TLS warmup
+  // window.
+
   test("marks site live on 200 OK from apex", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockImplementation(async (_acc, host) => [
+    // DNS + route already exist (idempotent) so we exercise pure phase F.
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
       {
-        id: `dom_${host}`,
-        hostname: host!,
-        service: "mf-tokte",
-        zone_id: "zone_pending",
-        zone_name: "test.co.uk",
-        environment: "production",
-        status: "active",
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "192.0.2.1",
+        proxied: true,
       },
+    ]);
+    vi.mocked(listWorkerRoutes).mockImplementation(async (_zone, pattern) => [
+      { id: `route_${pattern}`, pattern: pattern!, script: "mf-tokte" },
     ]);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -660,18 +755,19 @@ describe("step2Domain.run — phase F: HTTP 200 verify", () => {
     fetchSpy.mockRestore();
   });
 
-  test("does NOT mark site live on 5xx (TLS not ready); will retry", async () => {
+  test("does NOT mark site live on 5xx (TLS warmup); logs for retry", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockImplementation(async (_acc, host) => [
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
       {
-        id: `dom_${host}`,
-        hostname: host!,
-        service: "mf-tokte",
-        zone_id: "zone_pending",
-        zone_name: "test.co.uk",
-        environment: "production",
-        status: "active",
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "192.0.2.1",
+        proxied: true,
       },
+    ]);
+    vi.mocked(listWorkerRoutes).mockImplementation(async (_zone, pattern) => [
+      { id: `route_${pattern}`, pattern: pattern!, script: "mf-tokte" },
     ]);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
@@ -687,41 +783,45 @@ describe("step2Domain.run — phase F: HTTP 200 verify", () => {
     fetchSpy.mockRestore();
   });
 
-  test("does NOT verify if any binding still pending TLS", async () => {
-    vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockImplementation(async (_acc, host) => [
-      {
-        id: `dom_${host}`,
-        hostname: host!,
-        service: "mf-tokte",
-        zone_id: "zone_pending",
-        zone_name: "test.co.uk",
-        environment: "production",
-        status: "pending", // not yet active
-      },
-    ]);
+  test("does NOT verify if Worker not yet uploaded (zone still pending)", async () => {
+    // Zone pending → phase D skipped (would have nothing to bind to)
+    // → workerName stays unset → phase E + F skipped.
+    vi.mocked(getZone).mockResolvedValue(zonePending);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
-    const result = await step2Domain.run(verifyProspect, env);
+    const result = await step2Domain.run(
+      {
+        ...verifyProspect,
+        cloudflareZoneStatus: "pending",
+        domainVerifiedAt: undefined,
+        workerName: undefined,
+        nameserversEmailSentAt: "2026-05-09T10:00:00Z",
+      },
+      env,
+    );
 
+    expect(result.status).toBe("ok");
+    expect(uploadWorkerScript).not.toHaveBeenCalled();
+    expect(listDnsRecords).not.toHaveBeenCalled();
+    expect(listWorkerRoutes).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(markSiteLive).not.toHaveBeenCalled();
-    expect(result.status).toBe("ok");
     fetchSpy.mockRestore();
   });
 
   test("does NOT verify if siteLiveAt latch already set (idempotency)", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockImplementation(async (_acc, host) => [
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
       {
-        id: `dom_${host}`,
-        hostname: host!,
-        service: "mf-tokte",
-        zone_id: "zone_pending",
-        zone_name: "test.co.uk",
-        environment: "production",
-        status: "active",
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "192.0.2.1",
+        proxied: true,
       },
+    ]);
+    vi.mocked(listWorkerRoutes).mockImplementation(async (_zone, pattern) => [
+      { id: `route_${pattern}`, pattern: pattern!, script: "mf-tokte" },
     ]);
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
@@ -738,16 +838,17 @@ describe("step2Domain.run — phase F: HTTP 200 verify", () => {
 
   test("does NOT throw on fetch network error; logs in notes for next-tick retry", async () => {
     vi.mocked(getZone).mockResolvedValue(zoneActive);
-    vi.mocked(listWorkerCustomDomains).mockImplementation(async (_acc, host) => [
+    vi.mocked(listDnsRecords).mockImplementation(async (_zone, opts) => [
       {
-        id: `dom_${host}`,
-        hostname: host!,
-        service: "mf-tokte",
-        zone_id: "zone_pending",
-        zone_name: "test.co.uk",
-        environment: "production",
-        status: "active",
+        id: `dns_${opts!.name}`,
+        type: "A",
+        name: opts!.name!,
+        content: "192.0.2.1",
+        proxied: true,
       },
+    ]);
+    vi.mocked(listWorkerRoutes).mockImplementation(async (_zone, pattern) => [
+      { id: `route_${pattern}`, pattern: pattern!, script: "mf-tokte" },
     ]);
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")

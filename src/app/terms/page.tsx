@@ -80,38 +80,93 @@ export default function TermsPage() {
             you shouldn&apos;t be rushed.
           </p>
 
-          <h2>4. Setup fees</h2>
+          <h2>4. Setup fees and refund window</h2>
           <p>
             The £129 setup fee (or £99 for Founding Members) is payable up
-            front, at the same time as your first monthly payment, and is{" "}
-            <strong>non-refundable after 48 hours</strong>. That gives you
-            a cooling-off period to change your mind with no questions
-            asked.
+            front, at the same time as your first monthly payment.
           </p>
           <p>
-            After 48 hours, I will have started working on your project
-            and the fee covers that work. If you&apos;ve changed your mind
-            after that, let me know — I&apos;m a reasonable human and
-            I&apos;ll try to find a fair outcome.
+            <strong>14-day refund window.</strong> You can cancel and
+            request a full refund of the setup fee within{" "}
+            <strong>14 days of payment</strong>, provided you haven&apos;t
+            yet clicked &ldquo;Request site preview&rdquo; or
+            &ldquo;Commit and launch&rdquo; in your Onboarding Hub.
+            Either of those buttons signals that work has been delivered
+            (the preview is built, or the site is committed to go live)
+            and the setup fee becomes non-refundable from that point —
+            consistent with UK Consumer Contracts Regulations 2013 for
+            services that have been performed at the customer&apos;s
+            express request.
+          </p>
+          <p>
+            After the 14-day window, or once you&apos;ve clicked either
+            of those buttons, the setup fee is non-refundable — it
+            covers work already done. I&apos;m a reasonable human
+            though, so if you have a concern outside this policy,
+            email me and we&apos;ll talk.
           </p>
 
-          <h2>5. Monthly subscription</h2>
+          <h3>Changing modules during onboarding</h3>
           <p>
-            The monthly fee starts on day one, alongside the setup fee. It
-            covers hosting, software and security updates, backups, support
-            channels, and minor content changes described below. It bills
-            monthly until you cancel.
+            You can change your module mix (adding or removing things
+            like Online Booking, Newsletter, Enquiry Form, Google
+            Business Profile setup) <strong>once</strong> during
+            onboarding, before you click &ldquo;Request site preview&rdquo;.
+            The hub has a &ldquo;Re-select modules&rdquo; button that
+            calculates any setup-fee difference (charged or refunded)
+            and the change to your monthly subscription. After that
+            one change, or after you request your preview, your module
+            selection is locked. Anything else needs to wait for
+            post-launch monthly change requests, or be quoted
+            separately.
+          </p>
+          <p>
+            If you remove a module you&apos;ve already set up (e.g. you
+            entered a Cal.com link then later removed Online Booking),
+            we keep your data safely in case you ever re-add it. The
+            module just disappears from your hub.
           </p>
 
-          <h2>6. Cancellation (30 days&apos; notice)</h2>
+          <h2>5. Monthly subscription and refunds</h2>
           <p>
-            You can cancel any time with{" "}
-            <strong>30 days&apos; written notice</strong> (email is fine —
-            just send it to{" "}
-            <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>).
-            The final 30 days of service complete normally; my last
-            invoice covers that period.
+            The monthly fee starts on day one, alongside the setup fee.
+            It covers hosting, software and security updates, backups,
+            support channels, and minor content changes described below.
+            It bills monthly until you cancel.
           </p>
+          <p>
+            <strong>14-day per-payment refund window.</strong> Each
+            monthly payment carries its own 14-day refund window. If
+            you cancel within 14 days of a monthly payment landing,
+            that payment is refunded in full and your subscription
+            ends immediately. After the 14-day window, no refund is
+            issued for that month — but you can still cancel and we
+            simply don&apos;t take the next month&apos;s payment
+            (cancel-now-stop-next-cycle, no notice required).
+          </p>
+
+          <h2>6. Cancellation</h2>
+          <p>
+            You can cancel any time. Email{" "}
+            <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>{" "}
+            and I&apos;ll process it within one working day.
+          </p>
+          <p>
+            <strong>What happens to your money:</strong>
+          </p>
+          <ul>
+            <li>
+              Within 14 days of your most recent monthly payment →
+              full refund of that payment, subscription ends
+              immediately.
+            </li>
+            <li>
+              After 14 days → no refund for the current month, but
+              your next month&apos;s payment isn&apos;t taken.
+              Service continues until the end of your current paid
+              period, then stops.
+            </li>
+          </ul>
 
           <h3>What happens to your site</h3>
           <p>

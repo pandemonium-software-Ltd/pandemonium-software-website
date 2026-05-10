@@ -16,6 +16,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getProspectByToken } from "@/lib/notion-prospects";
 import ChangeRequestEditor from "@/components/admin/ChangeRequestEditor";
+import ModuleChangeEditor from "@/components/admin/ModuleChangeEditor";
+import PreviewUrlEditor from "@/components/admin/PreviewUrlEditor";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -303,6 +305,55 @@ export default async function AdminDetailPage({
           />
         </Section>
       </div>
+
+      {/* ---------- Preview URL editor ---------- */}
+      <div className="mt-8">
+        <h2 className="font-serif text-2xl font-semibold text-navy-900">
+          Site preview
+        </h2>
+        <div className="mt-3">
+          <PreviewUrlEditor
+            token={token}
+            previewSubmittedAt={
+              ((prospect.onboardingData ?? {}) as {
+                review?: { previewSubmittedAt?: string };
+              }).review?.previewSubmittedAt
+            }
+            currentPreviewUrl={
+              ((prospect.onboardingData ?? {}) as {
+                review?: { previewUrl?: string };
+              }).review?.previewUrl ?? ""
+            }
+          />
+        </div>
+      </div>
+
+      {/* ---------- Module change log ---------- */}
+      {prospect.moduleChangeLog.length > 0 && (
+        <div className="mt-8">
+          <h2 className="font-serif text-2xl font-semibold text-navy-900">
+            Module changes{" "}
+            <span className="text-sm font-normal text-navy-500">
+              ({prospect.moduleChangeLog.length})
+            </span>
+          </h2>
+          <p className="mt-2 text-xs text-navy-600">
+            Customer self-service module re-selections (1-round-only,
+            pre-commit only). Pending entries need a manual Stripe op
+            then &ldquo;Apply&rdquo; — see docs/STRIPE-PHASE-2.md for
+            the auto-Stripe migration path.
+          </p>
+          <ul className="mt-4 space-y-4">
+            {[...prospect.moduleChangeLog]
+              .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+              .map((entry) => (
+                <li key={entry.id}>
+                  <ModuleChangeEditor token={token} entry={entry} />
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       {/* ---------- Change requests ---------- */}
       <div className="mt-8">

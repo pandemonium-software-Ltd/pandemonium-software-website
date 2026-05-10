@@ -1,0 +1,12 @@
+{
+  "description": "Preview request received — typical first-time customer",
+  "template": "preview-request-received",
+  "values": {
+    "customerName": "Alex",
+    "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
+  },
+  "expected": {
+    "subject": "Got it — building your site preview",
+    "body": "Hi Alex,\n\nGot your preview request. I'm starting work on your site now.\n\nWhat happens next:\n  1. I build your site preview from the brand assets, modules and\n     review notes you've provided. Typically 3-5 working days.\n  2. You'll get another email with a link to view the preview.\n  3. From there you can request up to 3 rounds of pre-launch edits\n     and then commit to launch on your chosen go-live date.\n\nWhile you wait:\n  - Your hub is read-only-ish for the review step but you can still\n    edit Steps 1-4 if anything needs updating.\n  - If you remember anything else important, hit reply to this\n    email and I'll fold it into the preview before sending.\n\nThanks,\nBen (and the ModuForge ops assistant)"
+  }
+}
