@@ -1,14 +1,13 @@
 {
-  "description": "Change-request acknowledgement when classifier predicts a timeline",
+  "description": "Change-request immediate receipt confirmation (Phase A)",
   "template": "change-request-received",
   "values": {
     "customerName": "Sam",
-    "requestSummary": "update phone number on the contact page to 020 1234 5678",
-    "remainingDescription": "2 change requests",
-    "expectedTimeline": "tomorrow afternoon"
+    "message": "Please update phone number on the contact page to 020 1234 5678",
+    "accountUrl": "https://modu-forge.co.uk/account/abc123"
   },
   "expected": {
-    "subject": "Your change request is in the queue",
-    "body": "Hi Sam,\n\nGot it: update phone number on the contact page to 020 1234 5678.\n\nI'll work on this and have it live by tomorrow afternoon.\n\nYou have 2 change requests left for this month. You can\nretract this request from your dashboard any time before I start\nworking on it.\n\n— Cowork (your ModuForge ops assistant)"
+    "subject": "Got it — change request received",
+    "body": "Hi Sam,\n\nYour change request landed safely:\n\n  Please update phone number on the contact page to 020 1234 5678\n\nWhat happens next:\n  • If it's a straight-forward edit (text, hours, services etc.)\n    the system applies it automatically and your site updates\n    within minutes.\n  • If it needs my eye (anything design-y, structural, or\n    out-of-scope) I'll review and reply on your dashboard.\n\nYou'll get another email when the change is done or if I need\nanything from you. The request is listed on your account\ndashboard so you can check status any time.\n\n— Ben"
   }
 }

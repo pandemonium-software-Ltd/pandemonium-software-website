@@ -32,6 +32,9 @@ import {
   sendInternalNotification,
   type NotificationPayload,
 } from "@/lib/email";
+import { sendCustomerEmail } from "@/ops-worker/notify";
+import { getServerEnv } from "@/lib/env";
+import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
 
@@ -157,15 +160,22 @@ export async function POST(request: Request) {
     );
   }
 
-  // Internal notification — fail-soft, never blocks the user response.
+  // Internal notification to Ben — fail-soft, never blocks the
+  // user response. Deep-links to the admin detail page with a
+  // hash fragment so the request scrolls into view, plus the
+  // direct Notion URL as a fallback.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://pandemonium-software-website.benpandher.workers.dev";
+  const adminDeepLink = `${baseUrl}/admin/${token}#cr-${newRequest.id}`;
   const notif: NotificationPayload = {
     subject: `[CHANGE REQUEST] ${prospect.name}${prospect.business ? ` (${prospect.business})` : ""}`,
     body:
       `New change request from ${prospect.name}${prospect.business ? ` at ${prospect.business}` : ""}.\n\n` +
       `--- Their request ---\n${message}\n--- End ---\n\n` +
+      `Reply with one click:\n${adminDeepLink}\n\n` +
       `Status: ${prospect.status}\n` +
-      `Notion: ${prospect.notionUrl}\n` +
-      `Admin detail: ${process.env.NEXT_PUBLIC_SITE_URL ?? "https://pandemonium-software-website.benpandher.workers.dev"}/admin/${token}\n\n` +
+      `Notion: ${prospect.notionUrl}\n\n` +
       `— Cowork`,
   };
   const emailErr = await sendInternalNotification(notif);
@@ -175,13 +185,49 @@ export async function POST(request: Request) {
     );
   }
 
+  // Customer receipt email (NEW Phase A). Confirms the submission
+  // landed safely, sets expectations on what happens next (auto-
+  // apply OR Ben-reviewed). Branded HTML wrapper for visual parity
+  // with all other customer-facing emails. Fail-soft — if the email
+  // bounces, the customer still sees the optimistic UI confirmation
+  // on /account/[token] and can refresh to see the request in their
+  // history.
+  let receiptErr: string | null = null;
+  try {
+    const accountUrl = `${baseUrl.replace(/\/$/, "") || site.url}/account/${token}`;
+    await sendCustomerEmail(
+      getServerEnv(),
+      prospect.email,
+      "change-request-received",
+      {
+        customerName: firstName(prospect.name),
+        message,
+        accountUrl,
+      },
+    );
+  } catch (e) {
+    receiptErr = e instanceof Error ? e.message : String(e);
+    console.warn(
+      `[api/account/change-request] customer receipt email failed: ${receiptErr}`,
+    );
+  }
+
   const remainingAfter =
     MONTHLY_CHANGE_REQUEST_LIMIT - (usedThisMonth + 1);
   return NextResponse.json({
     success: true,
     request: newRequest,
     remaining: remainingAfter,
+    customerReceiptSent: !receiptErr,
+    receiptWarning: receiptErr,
   });
+}
+
+/** "Alex Smith" → "Alex". Fallback to "there" on empty. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
 }
 
 // ---------- Multi-item detector ----------

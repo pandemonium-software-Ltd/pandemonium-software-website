@@ -372,7 +372,13 @@ export default async function AdminDetailPage({
             {prospect.changeRequests.map((r) => (
               <li
                 key={r.id}
-                className="rounded-xl border border-navy-100 bg-white p-5 shadow-card"
+                // Anchor target so the email's "reply with one click"
+                // deep link (#cr-<id>) scrolls the right request into
+                // view. scroll-mt-24 leaves space for the sticky-ish
+                // page header so the row isn't jammed against the top
+                // edge.
+                id={`cr-${r.id}`}
+                className="scroll-mt-24 rounded-xl border border-navy-100 bg-white p-5 shadow-card target:ring-4 target:ring-amber-200"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-xs text-navy-500">

@@ -67,9 +67,22 @@ export default function AdminProspectList({
   const enriched = useMemo(
     () =>
       prospects.map((p) => {
-        const openRequestCount = p.changeRequests.filter(
+        const openRequests = p.changeRequests.filter(
           (r) => r.status === "pending" || r.status === "in-progress",
-        ).length;
+        );
+        const openRequestCount = openRequests.length;
+        // Age (days) of the OLDEST open request — that's the most
+        // urgent to action. Floor so 23h ago shows as "0 days" /
+        // "today"; 25h shows as "1 day". null when no open requests.
+        const oldestOpenDays =
+          openRequests.length > 0
+            ? Math.floor(
+                openRequests
+                  .map((r) => Date.now() - new Date(r.submittedAt).getTime())
+                  .reduce((max, ms) => Math.max(max, ms), 0) /
+                  (1000 * 60 * 60 * 24),
+              )
+            : null;
         const awaitingReply = AWAITING_REPLY_STATUSES.has(p.status);
         const isLive = LIVE_STATUSES.has(p.status);
         const isCancelled = p.status === "Cancelled";
@@ -79,6 +92,7 @@ export default function AdminProspectList({
         return {
           prospect: p,
           openRequestCount,
+          oldestOpenDays,
           awaitingReply,
           isLive,
           isCancelled,
@@ -229,6 +243,7 @@ export default function AdminProspectList({
                     <Td>
                       <ActionFlags
                         openRequestCount={e.openRequestCount}
+                        oldestOpenDays={e.oldestOpenDays}
                         awaitingReply={e.awaitingReply}
                       />
                     </Td>
@@ -409,25 +424,65 @@ function FilterChipButton({
 
 function ActionFlags({
   openRequestCount,
+  oldestOpenDays,
   awaitingReply,
 }: {
   openRequestCount: number;
+  /** Age in days of the OLDEST open request (floor); null if none. */
+  oldestOpenDays: number | null;
   awaitingReply: boolean;
 }) {
   if (openRequestCount === 0 && !awaitingReply) {
     return <span className="text-xs text-navy-300">—</span>;
   }
+  // Tier the request pill by age — older = more urgent visual.
+  // 0d = red base; ≥3d = darker red + outline ring; ≥7d = pulsing
+  // ring (not implemented; rely on the colour shift only to keep
+  // CSS lean). Days appear in a smaller adjacent badge so the
+  // colour codes the urgency at a glance and the number is exact.
+  const ageStale = (oldestOpenDays ?? 0) >= 3;
   return (
     <div className="flex flex-col gap-1.5">
       {openRequestCount > 0 && (
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-red-800">
+        <div className="inline-flex flex-wrap items-center gap-1.5">
           <span
-            aria-hidden="true"
-            className="h-2 w-2 rounded-full bg-red-500"
-          />
-          {openRequestCount} open{" "}
-          {openRequestCount === 1 ? "request" : "requests"}
-        </span>
+            className={[
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+              ageStale
+                ? "bg-red-200 text-red-900 ring-2 ring-red-400"
+                : "bg-red-100 text-red-800",
+            ].join(" ")}
+          >
+            <span
+              aria-hidden="true"
+              className={[
+                "h-2 w-2 rounded-full",
+                ageStale ? "bg-red-600" : "bg-red-500",
+              ].join(" ")}
+            />
+            {openRequestCount} open{" "}
+            {openRequestCount === 1 ? "request" : "requests"}
+          </span>
+          {oldestOpenDays !== null && (
+            <span
+              className={[
+                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                ageStale
+                  ? "bg-red-50 text-red-900"
+                  : "bg-navy-100 text-navy-700",
+              ].join(" ")}
+              title={
+                oldestOpenDays === 0
+                  ? "Submitted today"
+                  : `Oldest open request submitted ${oldestOpenDays} day${oldestOpenDays === 1 ? "" : "s"} ago`
+              }
+            >
+              {oldestOpenDays === 0
+                ? "today"
+                : `${oldestOpenDays}d open`}
+            </span>
+          )}
+        </div>
       )}
       {awaitingReply && (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-orange-800">

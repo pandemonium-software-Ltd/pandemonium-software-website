@@ -1,13 +1,13 @@
 {
-  "description": "Change-request acknowledgement when classifier can't confidently predict a timeline (omits the optional clause)",
+  "description": "Change-request immediate receipt with a longer multi-line message",
   "template": "change-request-received",
   "values": {
     "customerName": "Jordan",
-    "requestSummary": "redesign the homepage hero section",
-    "remainingDescription": "1 change request"
+    "message": "Could you change the hero image to the new one I uploaded last week? The current one is from before the rebrand.",
+    "accountUrl": "https://modu-forge.co.uk/account/xyz789"
   },
   "expected": {
-    "subject": "Your change request is in the queue",
-    "body": "Hi Jordan,\n\nGot it: redesign the homepage hero section.\n\nI'll work on this.\n\nYou have 1 change request left for this month. You can\nretract this request from your dashboard any time before I start\nworking on it.\n\n— Cowork (your ModuForge ops assistant)"
+    "subject": "Got it — change request received",
+    "body": "Hi Jordan,\n\nYour change request landed safely:\n\n  Could you change the hero image to the new one I uploaded last week? The current one is from before the rebrand.\n\nWhat happens next:\n  • If it's a straight-forward edit (text, hours, services etc.)\n    the system applies it automatically and your site updates\n    within minutes.\n  • If it needs my eye (anything design-y, structural, or\n    out-of-scope) I'll review and reply on your dashboard.\n\nYou'll get another email when the change is done or if I need\nanything from you. The request is listed on your account\ndashboard so you can check status any time.\n\n— Ben"
   }
 }
