@@ -25,6 +25,8 @@ import { phase4OnboardingHubReady } from "./templates/phase4-onboarding-hub-read
 import { signoffConfirmation } from "./templates/signoff-confirmation";
 import { changeRequestResolved } from "./templates/change-request-resolved";
 import { changeRequestRejected } from "./templates/change-request-rejected";
+import { changeRequestPreviewReady } from "./templates/change-request-preview-ready";
+import { changeRequestAppliedLive } from "./templates/change-request-applied-live";
 import { moduleChangePending } from "./templates/module-change-pending";
 import { moduleChangeConfirmed } from "./templates/module-change-confirmed";
 import { paymentMethodUpdateNeeded } from "./templates/payment-method-update-needed";
@@ -51,6 +53,8 @@ const TEMPLATES = new Map<string, Template>([
   [signoffConfirmation.id, signoffConfirmation],
   [changeRequestResolved.id, changeRequestResolved],
   [changeRequestRejected.id, changeRequestRejected],
+  [changeRequestPreviewReady.id, changeRequestPreviewReady],
+  [changeRequestAppliedLive.id, changeRequestAppliedLive],
   [moduleChangePending.id, moduleChangePending],
   [moduleChangeConfirmed.id, moduleChangeConfirmed],
   [paymentMethodUpdateNeeded.id, paymentMethodUpdateNeeded],

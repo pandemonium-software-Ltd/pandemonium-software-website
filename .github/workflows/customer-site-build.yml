@@ -25,6 +25,18 @@ on:
         description: "Prospect token (UUID)"
         required: true
         type: string
+      mode:
+        description: "live = wrangler deploy (replaces production); preview = wrangler versions upload (issues a preview URL, customer approves to promote)"
+        required: false
+        type: choice
+        default: "live"
+        options:
+          - live
+          - preview
+      changeRequestId:
+        description: "Optional — when mode=preview, the change-request id this build is for. Threaded back to the callback so the marketing site stamps the preview URL on the right request."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -48,7 +60,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Resolve token (dispatch payload OR manual input)
+      - name: Resolve token + mode + changeRequestId
         id: token
         run: |
           TOKEN="${{ github.event.client_payload.token || inputs.token }}"
@@ -56,8 +68,20 @@ jobs:
             echo "::error::No prospect token in either dispatch payload or manual input"
             exit 1
           fi
+          # Mode: dispatch payload first, then manual input, default "live".
+          MODE="${{ github.event.client_payload.mode || inputs.mode || 'live' }}"
+          if [ "$MODE" != "live" ] && [ "$MODE" != "preview" ]; then
+            echo "::error::mode must be 'live' or 'preview' (got '$MODE')"
+            exit 1
+          fi
+          # Change request id only relevant for preview builds — the
+          # callback uses it to stamp the preview URL on the right
+          # request entry. Empty for live builds.
+          CR_ID="${{ github.event.client_payload.changeRequestId || inputs.changeRequestId }}"
           echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
-          echo "Building site for token: $TOKEN"
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "change_request_id=$CR_ID" >> "$GITHUB_OUTPUT"
+          echo "Building site for token: $TOKEN (mode=$MODE${CR_ID:+, cr=$CR_ID})"
 
       - name: Fetch site data + deploy metadata from marketing site
         id: fetch
@@ -102,23 +126,68 @@ jobs:
           npm ci
           npm run build
 
-      - name: Deploy to customer's per-customer Worker
+      - name: Deploy LIVE (wrangler deploy)
+        if: steps.token.outputs.mode == 'live'
         working-directory: customer-site-template
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ steps.fetch.outputs.account_id }}
         run: |
           npx wrangler deploy --name "${{ steps.fetch.outputs.worker_name }}"
 
+      - name: Upload PREVIEW version (wrangler versions upload)
+        id: preview_upload
+        if: steps.token.outputs.mode == 'preview'
+        working-directory: customer-site-template
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.fetch.outputs.account_id }}
+        run: |
+          set -e
+          # Upload-without-deploy. Cloudflare returns a version id +
+          # a unique preview URL per upload. We capture both and
+          # forward to the callback so the customer can be emailed
+          # the URL + the marketing-site can later promote the
+          # version via the customer-site-promote workflow.
+          OUT=$(npx wrangler versions upload --name "${{ steps.fetch.outputs.worker_name }}" 2>&1 | tee /dev/stderr)
+          # Wrangler prints a line like: "Worker Version ID: <uuid>"
+          # and a separate line containing the preview URL like
+          # "<id>.<account-subdomain>.workers.dev". Extract both.
+          VERSION_ID=$(printf "%s" "$OUT" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+          # Cloudflare's version preview URL pattern (covers both
+          # workers.dev subdomain shapes that ship today).
+          PREVIEW_VERSION_URL=$(printf "%s" "$OUT" | grep -Eo 'https://[a-z0-9-]+(\.[a-z0-9-]+)*\.workers\.dev' | head -1)
+          if [ -z "$VERSION_ID" ] || [ -z "$PREVIEW_VERSION_URL" ]; then
+            echo "::error::Couldn't extract version id / preview URL from wrangler output"
+            echo "$OUT"
+            exit 1
+          fi
+          echo "version_id=$VERSION_ID" >> "$GITHUB_OUTPUT"
+          echo "preview_version_url=$PREVIEW_VERSION_URL" >> "$GITHUB_OUTPUT"
+          echo "Preview version uploaded: $VERSION_ID @ $PREVIEW_VERSION_URL"
+
       - name: Notify marketing site of success
         if: success()
         run: |
+          # Live builds report the live URL; preview builds report
+          # the version-specific preview URL + version id so the
+          # customer can be emailed it + the marketing site can
+          # later trigger a promote.
+          if [ "${{ steps.token.outputs.mode }}" = "preview" ]; then
+            PAYLOAD=$(jq -nc \
+              --arg token "${{ steps.token.outputs.value }}" \
+              --arg url "${{ steps.preview_upload.outputs.preview_version_url }}" \
+              --arg vid "${{ steps.preview_upload.outputs.version_id }}" \
+              --arg crid "${{ steps.token.outputs.change_request_id }}" \
+              '{token: $token, status: "success", mode: "preview", previewUrl: $url, previewVersionId: $vid, changeRequestId: $crid}')
+          else
+            PAYLOAD=$(jq -nc \
+              --arg token "${{ steps.token.outputs.value }}" \
+              --arg url "${{ steps.fetch.outputs.preview_url }}" \
+              '{token: $token, status: "success", mode: "live", previewUrl: $url}')
+          fi
           curl -sS -X POST \
             -H "Content-Type: application/json" \
             -H "x-internal-secret: ${INTERNAL_SECRET}" \
-            -d "$(jq -nc \
-                --arg token "${{ steps.token.outputs.value }}" \
-                --arg url "${{ steps.fetch.outputs.preview_url }}" \
-                '{token: $token, status: "success", previewUrl: $url}')" \
+            -d "$PAYLOAD" \
             "${MARKETING_SITE_BASE}/api/internal/build-callback"
 
       - name: Notify marketing site of failure
@@ -134,5 +203,7 @@ jobs:
             -d "$(jq -nc \
                 --arg token "${{ steps.token.outputs.value }}" \
                 --arg msg "$ERROR_MSG" \
-                '{token: $token, status: "failure", errorMessage: $msg}')" \
+                --arg mode "${{ steps.token.outputs.mode }}" \
+                --arg crid "${{ steps.token.outputs.change_request_id }}" \
+                '{token: $token, status: "failure", mode: $mode, changeRequestId: $crid, errorMessage: $msg}')" \
             "${MARKETING_SITE_BASE}/api/internal/build-callback" || true

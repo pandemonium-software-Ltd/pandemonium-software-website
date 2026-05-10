@@ -296,6 +296,64 @@ export type ChangeRequest = {
    * counted here; this stamp is the FOLLOW-UP nag only. NEW C5.7.
    */
   coworkEscalatedAt?: string;
+
+  // --- Phase B v2 (preview-before-publish) ---
+  // When step6 auto-applies a patch + triggers a preview build,
+  // these fields capture the build artefacts so the customer can
+  // approve/reject before promoting to live.
+
+  /** Cloudflare Worker version id from `wrangler versions upload`.
+   *  Threaded into the customer-site-promote workflow when the
+   *  customer approves. */
+  previewVersionId?: string;
+  /** Per-version preview URL Cloudflare issued for `previewVersionId`.
+   *  e.g. https://abc123-customer-name.account-subdomain.workers.dev */
+  previewVersionUrl?: string;
+  /** ISO-8601 — when the preview build completed. */
+  previewBuiltAt?: string;
+  /** Per-request approval token. The customer's approve / reject
+   *  links include this as a query param; the marketing site
+   *  validates it matches before dispatching the promote. Stops a
+   *  guessed URL from approving someone else's change. Random 32
+   *  hex chars (~128 bits). */
+  customerApprovalToken?: string;
+  /** ISO-8601 — when the customer clicked Approve. After this
+   *  the promote workflow runs; once that succeeds the request
+   *  flips to status=resolved and customerApprovedAt remains as
+   *  the audit stamp. */
+  customerApprovedAt?: string;
+  /** ISO-8601 — when the customer clicked Reject. Sets status to
+   *  pending so Ben can revisit, OR rejected if Cowork's apply
+   *  was clearly off-base. Currently always pending. */
+  customerRejectedAt?: string;
+  /**
+   * Cowork's classification + auto-apply audit. Written by step6
+   * BEFORE the patch is applied so we always have a rollback
+   * record + the operator can spot misclassifications. Plain text
+   * so it round-trips through Notion's rich_text shape cleanly.
+   */
+  coworkClassification?: "in_scope" | "out_of_scope" | "ambiguous";
+  /** 0..1, Cowork's confidence in the classification. */
+  coworkConfidence?: number;
+  /** Free-text reasoning Cowork emits — useful for debugging mis-
+   *  classifications + shown to Ben in the escalation email. */
+  coworkReasoning?: string;
+  /** Structured patch Cowork applied (or proposed). Shape mirrors
+   *  the targets whitelist in the docs (see C5.7 design doc). */
+  coworkPatch?: {
+    target: string;
+    /** New value being written; type depends on target. */
+    newValue: unknown;
+    /** What was there before — used by the revert button. */
+    previousValue: unknown;
+    /** For service / faq targets, identifies the entry. */
+    serviceName?: string;
+    faqQuestion?: string;
+  };
+  /** ISO-8601 — when step6 successfully applied coworkPatch to
+   *  Notion. Distinct from customerApprovedAt: applied → preview
+   *  goes live only when customer approves. */
+  coworkPatchAppliedAt?: string;
 };
 
 // --- Property helpers ---
@@ -1326,6 +1384,55 @@ export async function updateChangeRequest(
     updated: next,
     transitionedToTerminal: isTerminal && !wasTerminal,
   };
+}
+
+/**
+ * Generic merge writer for change-request fields. Reads the inbox,
+ * shallow-merges `patch` into the entry with id `changeRequestId`,
+ * writes back. Returns the merged entry, or null if no entry with
+ * that id exists. Used by Phase B v2 (preview-before-publish) for
+ * stamping preview build artefacts, customer approval, etc.
+ *
+ * Don't use this to set `status` — that's still routed through
+ * `updateChangeRequest` which carries the resolvedAt + transition
+ * latch logic the customer-email + rebuild flow depends on.
+ */
+export async function patchChangeRequest(
+  pageId: string,
+  changeRequestId: string,
+  patch: Partial<ChangeRequest>,
+): Promise<ChangeRequest | null> {
+  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
+  const props = page.properties as Record<string, unknown>;
+  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
+    ?.rich_text;
+  let current: ChangeRequest[] = [];
+  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
+    const text = rawTextArr
+      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+      .join("");
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) current = parsed;
+      } catch {
+        /* ignore malformed; treat as empty */
+      }
+    }
+  }
+  const idx = current.findIndex((r) => r.id === changeRequestId);
+  if (idx < 0) return null;
+  const merged: ChangeRequest = { ...current[idx]!, ...patch };
+  current[idx] = merged;
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Change Requests Inbox": rt(JSON.stringify(current)),
+      },
+    },
+  });
+  return merged;
 }
 
 /**

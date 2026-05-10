@@ -1,0 +1,118 @@
+name: Customer site promote version
+
+# Stage 2C C5.7 Phase B v2 — promote a previously-uploaded
+# preview version to live on the customer's per-customer Worker.
+#
+# Triggered by the marketing site (/api/account/preview-approve)
+# via repository_dispatch when a customer clicks "Approve" on the
+# preview-ready email. The customer-site-build workflow runs
+# `wrangler versions upload` (Phase B v2 build mode) — that
+# produces a version id; this workflow takes that id and runs
+# `wrangler versions deploy` to send 100% of traffic to it.
+#
+# Reports back to /api/internal/build-callback with mode=promote
+# so the marketing site can stamp customerApprovedAt on the
+# change request, send the customer a "your change is live" email,
+# and clear the preview-pending state.
+
+on:
+  repository_dispatch:
+    types: [customer-site-promote]
+
+  # Manual run for ops debugging — the version id + worker name
+  # are required; the marketing site won't have stamped them
+  # yet if we're recovering from a failed promote.
+  workflow_dispatch:
+    inputs:
+      token:
+        description: "Prospect token (UUID)"
+        required: true
+        type: string
+      versionId:
+        description: "Cloudflare Worker version id to promote (UUID)"
+        required: true
+        type: string
+      workerName:
+        description: "Per-customer Worker name (e.g. customer-12345)"
+        required: true
+        type: string
+      accountId:
+        description: "Customer's Cloudflare account id"
+        required: true
+        type: string
+      changeRequestId:
+        description: "Optional — change request this promote completes"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      MARKETING_SITE_BASE: ${{ secrets.MARKETING_SITE_BASE || 'https://modu-forge.co.uk' }}
+      INTERNAL_SECRET: ${{ secrets.INTERNAL_BUILD_SECRET }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.BEN_CLOUDFLARE_API_TOKEN }}
+
+    steps:
+      - name: Resolve inputs (dispatch payload OR manual input)
+        id: in
+        run: |
+          TOKEN="${{ github.event.client_payload.token || inputs.token }}"
+          VID="${{ github.event.client_payload.versionId || inputs.versionId }}"
+          WN="${{ github.event.client_payload.workerName || inputs.workerName }}"
+          AID="${{ github.event.client_payload.accountId || inputs.accountId }}"
+          CR_ID="${{ github.event.client_payload.changeRequestId || inputs.changeRequestId }}"
+          if [ -z "$TOKEN" ] || [ -z "$VID" ] || [ -z "$WN" ] || [ -z "$AID" ]; then
+            echo "::error::Missing one of: token, versionId, workerName, accountId"
+            exit 1
+          fi
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+          echo "version_id=$VID" >> "$GITHUB_OUTPUT"
+          echo "worker_name=$WN" >> "$GITHUB_OUTPUT"
+          echo "account_id=$AID" >> "$GITHUB_OUTPUT"
+          echo "change_request_id=$CR_ID" >> "$GITHUB_OUTPUT"
+          echo "Promoting version $VID to live on worker $WN (account $AID)"
+
+      - name: Install wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Promote version to live
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ steps.in.outputs.account_id }}
+        run: |
+          # `versions deploy` with --yes auto-accepts the prompt; sets
+          # the named version to receive 100% of traffic on the worker.
+          npx wrangler versions deploy \
+            --name "${{ steps.in.outputs.worker_name }}" \
+            --yes \
+            "${{ steps.in.outputs.version_id }}@100%"
+
+      - name: Notify marketing site of success
+        if: success()
+        run: |
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-internal-secret: ${INTERNAL_SECRET}" \
+            -d "$(jq -nc \
+                --arg token "${{ steps.in.outputs.token }}" \
+                --arg vid "${{ steps.in.outputs.version_id }}" \
+                --arg crid "${{ steps.in.outputs.change_request_id }}" \
+                '{token: $token, status: "success", mode: "promote", promotedVersionId: $vid, changeRequestId: $crid}')" \
+            "${MARKETING_SITE_BASE}/api/internal/build-callback"
+
+      - name: Notify marketing site of failure
+        if: failure()
+        run: |
+          curl -sS -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-internal-secret: ${INTERNAL_SECRET}" \
+            -d "$(jq -nc \
+                --arg token "${{ steps.in.outputs.token }}" \
+                --arg crid "${{ steps.in.outputs.change_request_id }}" \
+                '{token: $token, status: "failure", mode: "promote", changeRequestId: $crid, errorMessage: "wrangler versions deploy failed — check Action logs"}')" \
+            "${MARKETING_SITE_BASE}/api/internal/build-callback" || true

@@ -1,25 +1,27 @@
 // POST /api/internal/build-callback
 //
-// Internal endpoint called by the GitHub Actions
-// `customer-site-build.yml` workflow at the END of a build, win
-// or lose. Two outcomes:
+// Internal endpoint called at the END of a customer-site Action,
+// win or lose. Three modes (the `mode` field in the payload):
 //
-//   { token, status: "success", previewUrl }
-//     → stamp previewUrl in onboardingData.review (triggers customer
-//       email via the same path as the manual /admin paste)
-//     → clear Preview Build Triggered At + Preview Build Failed At
-//     → email customer "preview ready"
+//   "live"     — `customer-site-build.yml` ran `wrangler deploy`.
+//                On success, stamps previewUrl in onboardingData.review
+//                and emails the customer "preview ready" (this is the
+//                pre-launch Hub Step 5 path — name is historical).
 //
-//   { token, status: "failure", errorMessage }
-//     → stamp Preview Build Failed At + clear Preview Build
-//       Triggered At so future requests can re-trigger
-//     → write a Cowork exception with the error so the operator
-//       sees it
-//     → no customer email (operator handles the "your build failed"
-//       conversation manually for now; future: bounce-back template)
+//   "preview"  — `customer-site-build.yml` ran `wrangler versions
+//                upload`. On success, stamps previewVersionId +
+//                previewVersionUrl on the named change request and
+//                emails the customer with approve/reject CTAs. The
+//                customer's live site stays untouched.
 //
-// Auth: same shared secret as /api/internal/site-data, sent as
-// `x-internal-secret` header.
+//   "promote"  — `customer-site-promote.yml` ran `wrangler versions
+//                deploy <id>` after the customer approved the preview.
+//                On success, marks the change request resolved, stamps
+//                customerApprovedAt, sends "change-applied-live"
+//                email. The customer's live site is now updated.
+//
+// Auth: shared INTERNAL_BUILD_SECRET, sent as `x-internal-secret`
+// header. Same secret used by /api/internal/site-data.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -27,6 +29,8 @@ import {
   getProspectByToken,
   updateProspectOnboarding,
   clearPreviewBuildTriggered,
+  patchChangeRequest,
+  updateChangeRequest,
 } from "@/lib/notion-prospects";
 import {
   mergeStepData,
@@ -42,16 +46,25 @@ export const runtime = "nodejs";
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Three-mode discriminated union. `mode` is optional in legacy
+// payloads (defaults to "live") so older workflow runs don't break
+// when this endpoint upgrades.
 const requestSchema = z.discriminatedUnion("status", [
   z.object({
     token: z.string().regex(TOKEN_RE),
     status: z.literal("success"),
-    previewUrl: z.string().trim().url().max(500),
+    mode: z.enum(["live", "preview", "promote"]).default("live"),
+    previewUrl: z.string().trim().url().max(500).optional(),
+    previewVersionId: z.string().trim().max(100).optional(),
+    promotedVersionId: z.string().trim().max(100).optional(),
+    changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
   }),
   z.object({
     token: z.string().regex(TOKEN_RE),
     status: z.literal("failure"),
+    mode: z.enum(["live", "preview", "promote"]).default("live"),
     errorMessage: z.string().trim().max(2000),
+    changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
   }),
 ]);
 
@@ -102,86 +115,259 @@ export async function POST(request: Request) {
     );
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
+
+  // --- Failure: log + clear latches per mode -------------------------------
   if (parsed.data.status === "failure") {
-    // Stamp the failure latch + clear the trigger latch so the next
-    // preview-request cycle can retry. We deliberately don't email
-    // the customer on automated build failures — operator escalation
-    // path is via the Cowork exception that the ops worker writes
-    // when this endpoint returns the failure (logged below).
-    try {
-      await clearPreviewBuildTriggered(prospect.pageId, { failure: true });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+    if (parsed.data.mode === "live") {
+      try {
+        await clearPreviewBuildTriggered(prospect.pageId, { failure: true });
+      } catch (e) {
+        console.error(
+          `[build-callback] couldn't clear build latches: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
       console.error(
-        `[build-callback] couldn't clear/stamp build latches for ${parsed.data.token}: ${msg}`,
+        `[build-callback] LIVE build FAILED for ${parsed.data.token}: ${parsed.data.errorMessage}`,
+      );
+    } else if (parsed.data.mode === "preview" && parsed.data.changeRequestId) {
+      // Preview build failed — leave the request open so Cowork
+      // re-tries on the next tick OR Ben gets the escalation email
+      // when the 2-hour age threshold is crossed. Stamp a
+      // `previewBuildFailedAt` marker on the request.
+      await patchChangeRequest(
+        prospect.pageId,
+        parsed.data.changeRequestId,
+        {
+          // Reuse coworkReasoning to surface the failure on /admin
+          // until we add a dedicated `previewBuildFailedAt` field.
+          coworkReasoning: `[preview build failed] ${parsed.data.errorMessage}`,
+        },
+      ).catch((e) => {
+        console.error(
+          `[build-callback] preview-failure stamp failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      });
+      console.error(
+        `[build-callback] PREVIEW build FAILED for ${parsed.data.token} cr=${parsed.data.changeRequestId}: ${parsed.data.errorMessage}`,
+      );
+    } else if (parsed.data.mode === "promote" && parsed.data.changeRequestId) {
+      // Promote failed — the customer has already approved, so
+      // they're expecting it live. Don't flip status yet (Ben needs
+      // to investigate); leave the audit trail for the operator.
+      await patchChangeRequest(
+        prospect.pageId,
+        parsed.data.changeRequestId,
+        {
+          coworkReasoning: `[promote failed] ${parsed.data.errorMessage}`,
+        },
+      ).catch(() => {});
+      console.error(
+        `[build-callback] PROMOTE FAILED for ${parsed.data.token} cr=${parsed.data.changeRequestId}: ${parsed.data.errorMessage}`,
       );
     }
-    console.error(
-      `[build-callback] customer-site build FAILED for ${parsed.data.token}: ${parsed.data.errorMessage}`,
-    );
     return NextResponse.json({
       success: true,
       action: "failure-recorded",
+      mode: parsed.data.mode,
       message: parsed.data.errorMessage,
     });
   }
 
-  // status === "success" — write previewUrl into onboardingData.review,
-  // clear build latches, send customer "preview ready" email.
-  const existing = onboardingDataSchema.safeParse(
-    prospect.onboardingData ?? {},
-  );
-  const baseData: OnboardingData = existing.success ? existing.data : {};
-  const reviewSlice = (baseData.review ?? {}) as Record<string, unknown>;
-  const merged = mergeStepData(baseData, "review", {
-    ...reviewSlice,
-    previewUrl: parsed.data.previewUrl,
-  });
+  // --- Success branches ----------------------------------------------------
 
-  try {
-    await updateProspectOnboarding(prospect.pageId, { data: merged });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(
-      `[build-callback] Notion previewUrl write failed for ${parsed.data.token}: ${msg}`,
+  // Mode: LIVE build (Hub Step 5 launch path) — existing behaviour.
+  if (parsed.data.mode === "live") {
+    if (!parsed.data.previewUrl) {
+      return NextResponse.json(
+        { error: "live mode requires previewUrl." },
+        { status: 400 },
+      );
+    }
+    const existing = onboardingDataSchema.safeParse(
+      prospect.onboardingData ?? {},
     );
-    return NextResponse.json(
-      { error: `Notion update failed: ${msg}` },
-      { status: 500 },
-    );
-  }
-
-  // Clear latches (best-effort).
-  try {
-    await clearPreviewBuildTriggered(prospect.pageId, { failure: false });
-  } catch (e) {
-    console.warn(
-      `[build-callback] couldn't clear build latches: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
-
-  // Customer email — fail-soft.
-  let emailWarning: string | null = null;
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
-  try {
-    await sendCustomerEmail(env, prospect.email, "preview-ready", {
-      customerName: firstName(prospect.name),
+    const baseData: OnboardingData = existing.success ? existing.data : {};
+    const reviewSlice = (baseData.review ?? {}) as Record<string, unknown>;
+    const merged = mergeStepData(baseData, "review", {
+      ...reviewSlice,
       previewUrl: parsed.data.previewUrl,
-      hubUrl: `${baseUrl}/onboarding/${parsed.data.token}`,
     });
-  } catch (e) {
-    emailWarning = e instanceof Error ? e.message : String(e);
-    console.warn(
-      `[build-callback] preview-ready email failed for ${parsed.data.token}: ${emailWarning}`,
-    );
+
+    try {
+      await updateProspectOnboarding(prospect.pageId, { data: merged });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[build-callback] Notion previewUrl write failed for ${parsed.data.token}: ${msg}`,
+      );
+      return NextResponse.json(
+        { error: `Notion update failed: ${msg}` },
+        { status: 500 },
+      );
+    }
+    try {
+      await clearPreviewBuildTriggered(prospect.pageId, { failure: false });
+    } catch (e) {
+      console.warn(
+        `[build-callback] couldn't clear build latches: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    let emailWarning: string | null = null;
+    try {
+      await sendCustomerEmail(env, prospect.email, "preview-ready", {
+        customerName: firstName(prospect.name),
+        previewUrl: parsed.data.previewUrl,
+        hubUrl: `${baseUrl}/onboarding/${parsed.data.token}`,
+      });
+    } catch (e) {
+      emailWarning = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[build-callback] preview-ready email failed: ${emailWarning}`,
+      );
+    }
+    return NextResponse.json({
+      success: true,
+      action: "previewUrl-stamped",
+      mode: "live",
+      customerNotified: !emailWarning,
+      emailWarning,
+    });
   }
 
-  return NextResponse.json({
-    success: true,
-    action: "previewUrl-stamped",
-    customerNotified: !emailWarning,
-    emailWarning,
-  });
+  // Mode: PREVIEW build (Phase B v2 — change request preview).
+  if (parsed.data.mode === "preview") {
+    if (
+      !parsed.data.previewUrl ||
+      !parsed.data.previewVersionId ||
+      !parsed.data.changeRequestId
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "preview mode requires previewUrl + previewVersionId + changeRequestId.",
+        },
+        { status: 400 },
+      );
+    }
+    const merged = await patchChangeRequest(
+      prospect.pageId,
+      parsed.data.changeRequestId,
+      {
+        previewVersionId: parsed.data.previewVersionId,
+        previewVersionUrl: parsed.data.previewUrl,
+        previewBuiltAt: new Date().toISOString(),
+      },
+    );
+    if (!merged) {
+      return NextResponse.json(
+        {
+          error: `Change request ${parsed.data.changeRequestId} not found on prospect.`,
+        },
+        { status: 404 },
+      );
+    }
+    // Customer email with approve/reject CTAs. Uses the per-request
+    // approval token Cowork generated when it stamped the patch.
+    let emailWarning: string | null = null;
+    try {
+      const accountUrl = `${baseUrl}/account/${parsed.data.token}`;
+      await sendCustomerEmail(
+        env,
+        prospect.email,
+        "change-request-preview-ready",
+        {
+          customerName: firstName(prospect.name),
+          originalMessage: merged.message,
+          previewUrl: parsed.data.previewUrl,
+          approveUrl: `${baseUrl}/account/${parsed.data.token}/approve-change/${merged.id}?t=${merged.customerApprovalToken ?? ""}`,
+          rejectUrl: `${baseUrl}/account/${parsed.data.token}/reject-change/${merged.id}?t=${merged.customerApprovalToken ?? ""}`,
+          accountUrl,
+        },
+      );
+    } catch (e) {
+      emailWarning = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[build-callback] preview-ready email failed: ${emailWarning}`,
+      );
+    }
+    return NextResponse.json({
+      success: true,
+      action: "preview-stamped",
+      mode: "preview",
+      customerNotified: !emailWarning,
+      emailWarning,
+    });
+  }
+
+  // Mode: PROMOTE — customer-approved version is now live.
+  if (parsed.data.mode === "promote") {
+    if (!parsed.data.changeRequestId) {
+      return NextResponse.json(
+        { error: "promote mode requires changeRequestId." },
+        { status: 400 },
+      );
+    }
+    // Flip the change request to resolved with an auto-generated
+    // reply. Uses updateChangeRequest so the resolvedAt + transition
+    // latch logic stays consistent with the manual operator path.
+    let updated;
+    try {
+      const result = await updateChangeRequest(
+        prospect.pageId,
+        parsed.data.changeRequestId,
+        {
+          status: "resolved",
+          reply:
+            "Done — your change is live. Have a look at your site; if anything's not quite right, hit reply on this thread.",
+        },
+      );
+      updated = result.updated;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[build-callback] resolve-on-promote failed for cr=${parsed.data.changeRequestId}: ${msg}`,
+      );
+      return NextResponse.json(
+        { error: msg },
+        { status: 500 },
+      );
+    }
+    let emailWarning: string | null = null;
+    try {
+      await sendCustomerEmail(
+        env,
+        prospect.email,
+        "change-request-applied-live",
+        {
+          customerName: firstName(prospect.name),
+          originalMessage: updated.message,
+          siteUrl: `https://${
+            ((prospect.onboardingData ?? {}) as { domain?: { domain?: string } })
+              .domain?.domain ?? "your-site.example"
+          }/`,
+          accountUrl: `${baseUrl}/account/${parsed.data.token}`,
+        },
+      );
+    } catch (e) {
+      emailWarning = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[build-callback] applied-live email failed: ${emailWarning}`,
+      );
+    }
+    return NextResponse.json({
+      success: true,
+      action: "promote-resolved",
+      mode: "promote",
+      customerNotified: !emailWarning,
+      emailWarning,
+    });
+  }
+
+  return NextResponse.json(
+    { error: `Unknown mode: ${(parsed.data as { mode?: string }).mode}` },
+    { status: 400 },
+  );
 }
 
 function firstName(fullName: string): string {

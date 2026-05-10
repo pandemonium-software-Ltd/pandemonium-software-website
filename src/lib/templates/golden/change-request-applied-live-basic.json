@@ -1,0 +1,14 @@
+{
+  "description": "Change-request applied-live email after the customer approved a preview and the promote workflow succeeded",
+  "template": "change-request-applied-live",
+  "values": {
+    "customerName": "Lucas",
+    "originalMessage": "Please change my tagline to 'Award-winning gardens in Oxfordshire'",
+    "siteUrl": "https://test09052026moduforge.store/",
+    "accountUrl": "https://modu-forge.co.uk/account/4935d93e"
+  },
+  "expected": {
+    "subject": "Your change is live ✓",
+    "body": "Hi Lucas,\n\nApproved + live. Your site now reflects:\n\n  Please change my tagline to 'Award-winning gardens in Oxfordshire'\n\nTake a look: https://test09052026moduforge.store/\n\nIf anything's not quite right, hit reply on this email or open\nyour dashboard and submit a follow-up. Same change-request\nallowance applies.\n\n— Ben (via Cowork)\n\nP.S. — If you spot any issue in the next hour or so, your\nprevious version is still in Cloudflare's history; let me know\nand I can roll back instantly."
+  }
+}
