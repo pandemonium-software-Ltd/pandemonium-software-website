@@ -66,6 +66,10 @@ export type Testimonial = {
   name: string;
   location?: string;
   quote: string;
+  /** Optional 1-5 star rating. When set, renders a star row above
+   *  the quote AND drives the JSON-LD reviewRating per Review.
+   *  NEW C5.5+. */
+  rating?: number;
 };
 
 /** Trust signals — renders as a strip on the About page.

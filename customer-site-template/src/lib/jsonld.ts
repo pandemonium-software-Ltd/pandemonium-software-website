@@ -17,12 +17,14 @@
 // Validate output via the Rich Results Test:
 //   https://search.google.com/test/rich-results
 //
-// Design note: we DON'T capture star ratings per testimonial yet,
-// so AggregateRating defaults to ratingValue 5. This is fine — a
-// customer who has unhappy reviews won't paste them as testimonials
-// in the first place. When we add the optional star field (see the
-// follow-up task in the gizmo plan), each Review gets its own
-// reviewRating.ratingValue and the AggregateRating averages them.
+// Star ratings: each Testimonial may carry an optional `rating`
+// (1-5 integer). Per-Review reviewRating uses the real value when
+// set; falls back to 5 for legacy testimonials without one (which
+// is fine — a customer who has unhappy reviews wouldn't paste them
+// here). AggregateRating ratingValue averages the real ratings,
+// treating unset entries as 5 too. This keeps the count honest
+// (every testimonial counts as a review) while still surfacing
+// any actual <5 ratings the customer entered.
 
 import type { SiteData, DayOfWeek } from "./types";
 
@@ -87,6 +89,10 @@ export function buildLocalBusinessJsonLd(data: SiteData): Record<string, unknown
   // whatever the customer has — Google decides what to surface.
   const testimonials = copy.testimonials ?? [];
   if (testimonials.length > 0) {
+    // Real rating per review when set; fall back to 5 for legacy
+    // entries (Phase 3 didn't capture ratings, and a customer
+    // wouldn't paste an unhappy quote anyway). Same fallback
+    // feeds the AggregateRating average.
     const reviews = testimonials.map((t) => ({
       "@type": "Review",
       // No datePublished — we don't capture it. Schema doesn't
@@ -98,11 +104,9 @@ export function buildLocalBusinessJsonLd(data: SiteData): Record<string, unknown
         name: t.name,
         ...(t.location ? { address: t.location } : {}),
       },
-      // Default 5/5 — see the design note at the top of this file.
-      // When we add per-testimonial ratings, swap to t.rating ?? 5.
       reviewRating: {
         "@type": "Rating",
-        ratingValue: 5,
+        ratingValue: t.rating ?? 5,
         bestRating: 5,
         worstRating: 1,
       },
@@ -110,10 +114,19 @@ export function buildLocalBusinessJsonLd(data: SiteData): Record<string, unknown
       // the two entities together.
       itemReviewed: { "@id": id },
     }));
+    // Average across all testimonials (unset = 5 contribution).
+    // Round to 1 decimal place for cleanliness — Google accepts
+    // either int or fractional values.
+    const totalRating = testimonials.reduce(
+      (acc, t) => acc + (t.rating ?? 5),
+      0,
+    );
+    const avgRating =
+      Math.round((totalRating / testimonials.length) * 10) / 10;
     out.review = reviews;
     out.aggregateRating = {
       "@type": "AggregateRating",
-      ratingValue: 5,
+      ratingValue: avgRating,
       reviewCount: testimonials.length,
       bestRating: 5,
       worstRating: 1,

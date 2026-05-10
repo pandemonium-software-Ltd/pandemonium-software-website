@@ -119,9 +119,10 @@ export default function AboutPage() {
                   key={i}
                   className="rounded-3xl border border-navy-100 bg-white p-7 shadow-card"
                 >
+                  {t.rating !== undefined && <StarRow rating={t.rating} />}
                   <svg
                     aria-hidden="true"
-                    className="h-7 w-7 text-brand-primary-500"
+                    className={`h-7 w-7 text-brand-primary-500 ${t.rating !== undefined ? "mt-2" : ""}`}
                     viewBox="0 0 24 24"
                     fill="currentColor"
                   >
@@ -160,6 +161,34 @@ export default function AboutPage() {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * Filled (★) + empty (☆) star row for a testimonial rating.
+ * Renders only when a rating is set; visual + accessible
+ * (aria-label gives the rating text for screen readers).
+ *
+ * Centralised here so the same component is shared with the
+ * home-page testimonial slice — keep them visually identical.
+ */
+function StarRow({ rating }: { rating: number }) {
+  return (
+    <div
+      className="flex items-center gap-0.5 text-amber-500"
+      role="img"
+      aria-label={`${rating} out of 5 stars`}
+    >
+      {[1, 2, 3, 4, 5].map((s) => (
+        <span
+          key={s}
+          aria-hidden="true"
+          className={s > rating ? "text-navy-200" : ""}
+        >
+          {s <= rating ? "★" : "☆"}
+        </span>
+      ))}
+    </div>
   );
 }
 

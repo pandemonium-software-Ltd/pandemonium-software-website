@@ -39,7 +39,15 @@ type ServiceContent = {
 };
 
 type FaqEntry = { question: string; answer: string };
-type Testimonial = { name: string; location?: string; quote: string };
+type Testimonial = {
+  name: string;
+  location?: string;
+  quote: string;
+  /** Optional 1-5 star rating. Drives the visual star row on the
+   *  customer site + per-Review ratingValue in JSON-LD. Unset =
+   *  no star row + AggregateRating treats as 5. */
+  rating?: number;
+};
 type TrustData = {
   yearsExperience?: number;
   associations?: string;
@@ -271,14 +279,28 @@ export default function Step4Content({
       .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
       .filter((f) => f.question.length > 0 && f.answer.length > 0);
 
-    // Testimonials — drop entries with empty name or quote.
+    // Testimonials — drop entries with empty name or quote. Rating
+    // is optional (1-5 integer); pass through only when set within
+    // valid range so a stale 0 / NaN doesn't slip into Notion.
     const cleanedTestimonials: Testimonial[] = testimonials
       .map((t): Testimonial | null => {
         const name = t.name.trim();
         const quote = t.quote.trim();
         if (!name || !quote) return null;
         const location = t.location?.trim() || undefined;
-        return { name, quote, ...(location ? { location } : {}) };
+        const rating =
+          typeof t.rating === "number" &&
+          Number.isInteger(t.rating) &&
+          t.rating >= 1 &&
+          t.rating <= 5
+            ? t.rating
+            : undefined;
+        return {
+          name,
+          quote,
+          ...(location ? { location } : {}),
+          ...(rating ? { rating } : {}),
+        };
       })
       .filter((t): t is Testimonial => t !== null);
 
@@ -1306,7 +1328,19 @@ function TestimonialEditor({
                   label={`Remove testimonial${t.name.trim() ? ` from ${t.name.trim()}` : ""}`}
                 />
               </div>
-              <FieldLabel className="mt-3">Quote</FieldLabel>
+              <FieldLabel className="mt-3">Star rating (optional)</FieldLabel>
+              <p className="text-xs text-navy-600">
+                If you know the rating this customer gave you, click
+                a star. Click the same star again to clear. When set,
+                a row of stars renders above the quote on your site
+                AND helps Google show ★★★★★ snippets in search results.
+              </p>
+              <StarPicker
+                value={t.rating}
+                disabled={disabled}
+                onChange={(r) => patch(t._localId, { rating: r })}
+              />
+              <FieldLabel className="mt-4">Quote</FieldLabel>
               <textarea
                 value={t.quote}
                 disabled={disabled}
@@ -1415,6 +1449,72 @@ function TrustEditor({
         />
         <CharCount value={trust.awards ?? ""} max={AWARDS_MAX} />
       </div>
+    </div>
+  );
+}
+
+// ---------- Star picker ----------
+//
+// Five clickable star buttons for the optional 1-5 rating per
+// testimonial. Click a star → set that value. Click the SAME
+// star → clear (back to undefined / no rating). Hover state
+// previews the rating up to the hovered star. Keyboard-friendly:
+// each star is a real <button> with ARIA labels; arrow keys
+// effectively work via Tab + Space.
+
+function StarPicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: number | undefined;
+  disabled: boolean;
+  onChange: (next: number | undefined) => void;
+}) {
+  const [hover, setHover] = useState<number | undefined>(undefined);
+  const display = hover ?? value ?? 0;
+  return (
+    <div
+      className="mt-2 inline-flex items-center gap-1"
+      onMouseLeave={() => setHover(undefined)}
+      role="radiogroup"
+      aria-label="Star rating, 1 to 5"
+    >
+      {[1, 2, 3, 4, 5].map((star) => {
+        const filled = star <= display;
+        return (
+          <button
+            key={star}
+            type="button"
+            role="radio"
+            aria-checked={value === star}
+            aria-label={`${star} star${star === 1 ? "" : "s"}`}
+            disabled={disabled}
+            onMouseEnter={() => setHover(star)}
+            onFocus={() => setHover(star)}
+            onClick={() => {
+              // Toggle: clicking the currently-set value clears it.
+              onChange(value === star ? undefined : star);
+            }}
+            className={[
+              "p-1 text-2xl leading-none transition-colors disabled:opacity-50",
+              filled ? "text-amber-500" : "text-navy-300 hover:text-amber-300",
+            ].join(" ")}
+          >
+            {filled ? "★" : "☆"}
+          </button>
+        );
+      })}
+      {value !== undefined && (
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          disabled={disabled}
+          className="ml-2 text-xs text-navy-500 underline hover:text-navy-900 disabled:opacity-50"
+        >
+          Clear
+        </button>
+      )}
     </div>
   );
 }

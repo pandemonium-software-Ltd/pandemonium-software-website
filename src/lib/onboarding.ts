@@ -413,14 +413,22 @@ const step4ContentSchema = z.object({
     .max(10)
     .optional(),
   /** Customer testimonials; up to 5. Seeded from Phase 3
-   *  socialProof.testimonials on first content-step open. Renders
-   *  on the customer site home + about pages. */
+   *  socialProof.testimonials on first content-step open (Phase 3
+   *  didn't capture ratings — those start blank). Renders on the
+   *  customer site home + about pages and feeds JSON-LD Review +
+   *  AggregateRating for SEO star snippets. */
   testimonials: z
     .array(
       z.object({
         name: z.string().trim().min(1).max(100),
         location: z.string().trim().max(100).optional(),
         quote: z.string().trim().min(1).max(500),
+        /** Optional 1-5 star rating. When set, drives both the
+         *  visual star row above the quote on the customer site
+         *  AND the per-Review ratingValue in JSON-LD. Unset
+         *  testimonials display no star row and contribute a
+         *  default 5 to the AggregateRating average. */
+        rating: z.number().int().min(1).max(5).optional(),
       }),
     )
     .max(5)

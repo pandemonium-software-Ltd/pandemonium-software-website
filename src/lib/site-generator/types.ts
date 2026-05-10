@@ -101,14 +101,19 @@ export type FaqEntry = {
 
 /**
  * Customer testimonial captured in Hub Step 4 Content (seeded from
- * Phase 3 socialProof.testimonials). Renders on the home page +
- * About page. Up to 5.
+ * Phase 3 socialProof.testimonials, except `rating` which is
+ * Hub-only — Phase 3 didn't capture star ratings). Renders on the
+ * home page + About page. Up to 5.
  */
 export type Testimonial = {
   name: string;
   /** Optional location ("Headington, Oxford"). */
   location?: string;
   quote: string;
+  /** Optional 1-5 star rating. Drives both the visual star row
+   *  on the customer site AND per-Review ratingValue in JSON-LD.
+   *  Unset = no star row + AggregateRating treats as 5. */
+  rating?: number;
 };
 
 /**

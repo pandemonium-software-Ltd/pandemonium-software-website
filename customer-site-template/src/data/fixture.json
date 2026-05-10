@@ -123,17 +123,20 @@
       {
         "name": "Sarah Johnson",
         "location": "Headington, Oxford",
-        "quote": "Lucas and his team transformed our loft into the perfect home office. On time, on budget, and tidied up beautifully every day. Best builders we've ever worked with."
+        "quote": "Lucas and his team transformed our loft into the perfect home office. On time, on budget, and tidied up beautifully every day. Best builders we've ever worked with.",
+        "rating": 5
       },
       {
         "name": "Mark Thompson",
         "location": "Witney",
-        "quote": "Total professionals from start to finish. Took the time to talk through every decision and never made us feel like a nuisance for asking questions. Highly recommended."
+        "quote": "Total professionals from start to finish. Took the time to talk through every decision and never made us feel like a nuisance for asking questions. Highly recommended.",
+        "rating": 5
       },
       {
         "name": "Priya Patel",
         "location": "Bicester",
-        "quote": "We had three quotes for our extension and BobBuilders weren't the cheapest, but they were the most thorough. Glad we went with them — the work is genuinely beautiful."
+        "quote": "We had three quotes for our extension and BobBuilders weren't the cheapest, but they were the most thorough. Glad we went with them — the work is genuinely beautiful.",
+        "rating": 4
       }
     ],
     "trust": {

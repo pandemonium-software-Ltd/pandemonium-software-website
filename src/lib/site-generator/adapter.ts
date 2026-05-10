@@ -396,7 +396,23 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
       const name = optionalString(obj.name);
       const quote = optionalString(obj.quote);
       if (!name || !quote) return null;
-      return { name, quote, location: optionalString(obj.location) };
+      // Rating: only accept clean integers in 1-5 range. Anything
+      // else (NaN, floats, out-of-range) silently drops to undefined
+      // so a corrupted Notion blob can't poison the JSON-LD.
+      const ratingRaw = obj.rating;
+      const rating =
+        typeof ratingRaw === "number" &&
+        Number.isInteger(ratingRaw) &&
+        ratingRaw >= 1 &&
+        ratingRaw <= 5
+          ? ratingRaw
+          : undefined;
+      return {
+        name,
+        quote,
+        location: optionalString(obj.location),
+        ...(rating ? { rating } : {}),
+      };
     })
     .filter((t): t is Testimonial => t !== null);
 

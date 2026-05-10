@@ -127,9 +127,26 @@ export default function HomePage() {
                   key={i}
                   className="rounded-3xl border border-navy-100 bg-cream-50 p-7 shadow-card"
                 >
+                  {t.rating !== undefined && (
+                    <div
+                      className="flex items-center gap-0.5 text-amber-500"
+                      role="img"
+                      aria-label={`${t.rating} out of 5 stars`}
+                    >
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <span
+                          key={s}
+                          aria-hidden="true"
+                          className={s > t.rating! ? "text-navy-200" : ""}
+                        >
+                          {s <= t.rating! ? "★" : "☆"}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <svg
                     aria-hidden="true"
-                    className="h-7 w-7 text-brand-primary-500"
+                    className={`h-7 w-7 text-brand-primary-500 ${t.rating !== undefined ? "mt-2" : ""}`}
                     viewBox="0 0 24 24"
                     fill="currentColor"
                   >
