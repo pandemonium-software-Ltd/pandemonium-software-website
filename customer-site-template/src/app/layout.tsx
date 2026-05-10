@@ -49,6 +49,21 @@ export default function RootLayout({
   // it ships as static HTML — no client JS, no hydration cost.
   const localBusinessJsonLd = buildLocalBusinessJsonLd(SITE_DATA);
 
+  // Preview-mode lock-down. When this Worker version was uploaded
+  // as a PREVIEW (PREVIEW_ACCESS_TOKEN env var set on the
+  // version), we inject a small script that suppresses right-
+  // click and the common DevTools shortcuts (F12, Ctrl+U, etc.)
+  // so non-technical viewers can't easily extract the preview
+  // URL or re-share the content. Defence-in-depth alongside the
+  // wrapper page on modu-forge.co.uk doing the same. LIVE
+  // deploys (env unset) skip this entirely and the customer's
+  // actual site behaves normally — no JS injected.
+  //
+  // Determined viewers with DevTools enabled before page load
+  // can bypass; that's a known limitation. Deters casual
+  // sharing without breaking the preview's interactivity.
+  const isPreviewMode = !!process.env.PREVIEW_ACCESS_TOKEN;
+
   return (
     <html
       lang="en"
@@ -78,6 +93,33 @@ export default function RootLayout({
             __html: JSON.stringify(localBusinessJsonLd),
           }}
         />
+        {isPreviewMode && (
+          // eslint-disable-next-line react/no-danger
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                document.addEventListener('contextmenu', function(e) {
+                  e.preventDefault();
+                }, true);
+                document.addEventListener('keydown', function(e) {
+                  if (e.key === 'F12') { e.preventDefault(); return; }
+                  if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) {
+                    e.preventDefault(); return;
+                  }
+                  if ((e.ctrlKey || e.metaKey) && e.shiftKey && /^(I|J|C)$/i.test(e.key)) {
+                    e.preventDefault(); return;
+                  }
+                  if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+                    e.preventDefault(); return;
+                  }
+                  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+                    e.preventDefault(); return;
+                  }
+                }, true);
+              `,
+            }}
+          />
+        )}
       </head>
       <body>
         <a
