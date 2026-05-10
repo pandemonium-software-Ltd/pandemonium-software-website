@@ -23,7 +23,11 @@
 // Node 20+ runtime) so this works in every environment the build
 // pipeline can run in.
 
-const CACHE_VERSION = 1;
+// v2: added refusal detection in client.ts — earlier v1 entries may
+// contain Haiku's "I can't polish this" prose baked in as the
+// "polished" value. Bump invalidates them so they get re-polished
+// (and now correctly fall back to raw input if Haiku still refuses).
+const CACHE_VERSION = 2;
 
 export type CacheValue = {
   polished: string;

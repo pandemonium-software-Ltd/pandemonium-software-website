@@ -90,10 +90,55 @@ export async function callHaiku(args: {
       return null;
     }
     const out = block.text.trim();
-    return out.length > 0 ? out : null;
+    if (out.length === 0) return null;
+    if (looksLikeRefusal(out)) {
+      console.warn(
+        `[haiku] model refused to polish (raw input not usable). ` +
+          `Falling back to raw text. First 80 chars: ${out.slice(0, 80)}`,
+      );
+      return null;
+    }
+    return out;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.warn(`[haiku] call failed: ${msg}`);
     return null;
   }
+}
+
+/**
+ * Heuristic check for "I refuse to polish this" responses. Haiku
+ * (correctly) won't invent business facts, so when the customer's
+ * input is genuinely unusable (test data, gibberish, off-topic),
+ * the model says so in prose instead of polishing — and that prose
+ * was getting baked into the customer's site. Catch it here, return
+ * null, fall back to raw input.
+ *
+ * Conservative: only matches patterns that literally describe the
+ * model's inability or a request for more info. Won't trigger on
+ * legitimate polish output that happens to use words like "can".
+ */
+function looksLikeRefusal(text: string): boolean {
+  const lower = text.toLowerCase();
+  // Strong refusal markers — the model is talking to us, not the
+  // site visitor. These are statements ABOUT the input rather than
+  // polished prose FROM the input.
+  const markers = [
+    "i can't polish",
+    "i cannot polish",
+    "i'm unable to",
+    "i am unable to",
+    "please share",
+    "please provide",
+    "doesn't contain",
+    "does not contain",
+    "appears to be a",
+    "no actual information",
+    "no real content",
+    "system note",
+    "placeholder",
+    "test data",
+    "test save",
+  ];
+  return markers.some((m) => lower.includes(m));
 }
