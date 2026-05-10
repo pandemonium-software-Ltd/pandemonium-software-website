@@ -28,6 +28,20 @@
       "bucket_name": "moduforge-customer-assets"
     }
   ],
+  // GitHub repo for the customer-site-build + customer-site-promote
+  // workflows. The marketing-site Worker dispatches these from:
+  //   - /api/admin/change-request (operator approves a change → rebuild)
+  //   - /api/admin/review-edit (operator approves a Hub Step 5 edit
+  //     → build to deploy)
+  //   - /account/[token]/approve-change/[crId] (customer approves a
+  //     preview → promote)
+  // GITHUB_TOKEN is set via `wrangler secret put GITHUB_TOKEN`.
+  // Same trio also lives in wrangler-ops.jsonc so the ops worker
+  // can dispatch independently.
+  "vars": {
+    "GITHUB_OWNER": "pandemonium-software-Ltd",
+    "GITHUB_REPO": "pandemonium-software-website"
+  },
   "observability": {
     "enabled": true
   }
