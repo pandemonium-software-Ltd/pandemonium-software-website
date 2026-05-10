@@ -48,7 +48,20 @@ export const runtime = "nodejs";
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB per file
+// Per-file cap. Tightened from 10 MB → 5 MB on 2026-05-10:
+// modern phones produce 3-4 MB photos at full quality, and the
+// client-side compression in Step4Assets typically brings uploads
+// under 1.5 MB before they ever reach this route. 5 MB is the
+// ceiling for the rare case where a customer disables compression
+// or uploads via a direct API call.
+const MAX_BYTES = 5 * 1024 * 1024;
+
+// Per-customer total cap across ALL asset slots (logo + hero + about
+// + service photos + backgrounds + gallery + legacy photos). Stops a
+// single overzealous customer from filling the bucket. With client-
+// side compression the realistic average is ~20-30 MB, so 80 MB has
+// plenty of headroom but blocks runaway uploads.
+const MAX_TOTAL_BYTES = 80 * 1024 * 1024;
 
 const ALLOWED_TYPES = new Set([
   "image/png",
@@ -185,7 +198,7 @@ export async function POST(request: Request) {
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
       {
-        error: `File is too large (${formatBytes(file.size)}). Max is 10 MB per file.`,
+        error: `File is too large (${formatBytes(file.size)}). Max is ${formatBytes(MAX_BYTES)} per file.`,
       },
       { status: 413 },
     );
@@ -231,6 +244,31 @@ export async function POST(request: Request) {
     );
   }
 
+  // Parse the prospect's existing onboarding data once — used both
+  // for the total-bytes cap check and for the slice merge below.
+  const parsed = onboardingDataSchema.safeParse(prospect.onboardingData ?? {});
+  const baseData: OnboardingData = parsed.success ? parsed.data : {};
+  const currentSlice: Slice = (baseData.assets ?? {}) as Slice;
+
+  // Total-bytes cap. Sum every asset already in this prospect's
+  // step 4 slice + the incoming file; reject if it would breach
+  // MAX_TOTAL_BYTES. Client-side compression in Step4Assets does
+  // this same check pre-upload and shows a friendlier message;
+  // the server check is the authoritative backstop for direct API
+  // callers / disabled JS / racing parallel uploads.
+  const currentTotal = sumAssetBytes(currentSlice);
+  if (currentTotal + file.size > MAX_TOTAL_BYTES) {
+    return NextResponse.json(
+      {
+        error:
+          `You're at ${formatBytes(currentTotal)} / ${formatBytes(MAX_TOTAL_BYTES)} of your asset storage budget. ` +
+          `Adding this ${formatBytes(file.size)} file would put you over. ` +
+          `Delete some photos before adding more.`,
+      },
+      { status: 413 },
+    );
+  }
+
   // Generate the R2 key: assets/<token>/<kind>/<uuid>-<safe-filename>
   const id = crypto.randomUUID();
   const safe = safeFilename(file.name || `${kind}.bin`);
@@ -260,12 +298,8 @@ export async function POST(request: Request) {
     uploadedAt: new Date().toISOString(),
   };
 
-  // Read current onboarding data + merge the new asset in. Per-kind
-  // routing logic lives in `mergeAsset` to keep this handler readable.
-  const parsed = onboardingDataSchema.safeParse(prospect.onboardingData ?? {});
-  const baseData: OnboardingData = parsed.success ? parsed.data : {};
-  const currentSlice: Slice = (baseData.assets ?? {}) as Slice;
-
+  // Per-kind routing for merging the new asset into the slice lives
+  // in `mergeAsset` to keep this handler readable.
   const mergeResult = mergeAsset(currentSlice, kind, newAsset, {
     serviceName: kind === "service" ? serviceName : undefined,
   });
@@ -532,6 +566,27 @@ function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * Sum the byte size of every asset across every slot in a step 4
+ * slice. Used by the upload route's MAX_TOTAL_BYTES check + the
+ * Step4Assets client-side budget badge.
+ *
+ * Defensive on missing `size` values (Notion-stored assets always
+ * carry a number, but a hand-edited slice could be malformed —
+ * fall through with 0 rather than throwing).
+ */
+function sumAssetBytes(slice: Slice): number {
+  let total = 0;
+  if (slice.logo?.size) total += slice.logo.size;
+  if (slice.hero?.size) total += slice.hero.size;
+  if (slice.about?.size) total += slice.about.size;
+  for (const s of slice.services ?? []) total += s.size ?? 0;
+  for (const b of slice.backgrounds ?? []) total += b.size ?? 0;
+  for (const g of slice.gallery ?? []) total += g.size ?? 0;
+  for (const p of slice.photos ?? []) total += p.size ?? 0;
+  return total;
 }
 
 export async function GET() {

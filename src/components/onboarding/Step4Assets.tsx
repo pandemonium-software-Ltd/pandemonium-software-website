@@ -29,6 +29,7 @@
 
 import { useRef, useState } from "react";
 import type { Asset, ServiceAsset } from "@/lib/onboarding";
+import { maybeCompress } from "./compress";
 
 type Props = {
   data: Record<string, unknown>;
@@ -52,6 +53,19 @@ type Props = {
 const ACCEPTED_TYPES = "image/png,image/jpeg,image/webp,image/svg+xml";
 const MAX_GALLERY = 20;
 const MAX_BACKGROUNDS = 5;
+
+// Per-customer total cap across every asset slot. MUST match
+// MAX_TOTAL_BYTES in /api/onboarding/upload/route.ts. Client check
+// is for friendly UX; server check is the authoritative backstop.
+const MAX_TOTAL_BYTES = 80 * 1024 * 1024;
+/** Show an amber warning band when usage crosses this fraction —
+ *  gives the customer a few uploads of headroom before they actually
+ *  hit the cap. */
+const WARN_FRACTION = 0.9;
+/** Per-file cap (mirrors server). 5 MB is post-compression, so it
+ *  catches files the client compressor couldn't get under threshold
+ *  (e.g. a huge already-optimised PNG of pure photographs). */
+const MAX_BYTES_PER_FILE = 5 * 1024 * 1024;
 
 type UploadKind =
   | "logo"
@@ -112,18 +126,64 @@ export default function Step4Assets({
 
   const disabled = readOnly;
 
+  // ---------- Storage budget ----------
+  //
+  // Sum every asset across every slot for the live "X / 80 MB used"
+  // badge + the pre-upload check below. Recomputed on every render
+  // (cheap — at most ~50 entries with .size lookups). Mirrors
+  // sumAssetBytes in /api/onboarding/upload/route.ts.
+  const currentTotalBytes =
+    (logo?.size ?? 0) +
+    (hero?.size ?? 0) +
+    (aboutPhoto?.size ?? 0) +
+    servicePhotos.reduce((acc, a) => acc + (a.size ?? 0), 0) +
+    backgrounds.reduce((acc, a) => acc + (a.size ?? 0), 0) +
+    gallery.reduce((acc, a) => acc + (a.size ?? 0), 0) +
+    legacyPhotos.reduce((acc, a) => acc + (a.size ?? 0), 0);
+
   // ---------- Upload + delete ----------
 
   async function uploadOne(
     kind: UploadKind,
-    file: File,
-    opts?: { serviceName?: string },
+    rawFile: File,
+    opts?: { serviceName?: string; runningTotal?: number },
   ): Promise<Asset | null> {
     setError(null);
     const slot =
       kind === "service" ? `service:${opts?.serviceName}` : kind;
     setUploadingSlot(slot);
     try {
+      // 1) Client-side compression — runs in a worker, returns the
+      //    original on any failure or if it's already under
+      //    threshold. Keeps R2 storage under control + speeds up
+      //    the upload.
+      const file = await maybeCompress(rawFile);
+
+      // 2) Per-file cap. Server enforces this too, but failing here
+      //    saves a round-trip + gives a friendlier message.
+      if (file.size > MAX_BYTES_PER_FILE) {
+        setError(
+          `${file.name} is ${formatBytes(file.size)} after compression. ` +
+            `Max is ${formatBytes(MAX_BYTES_PER_FILE)} per file. ` +
+            `Try a smaller image or one with less detail.`,
+        );
+        return null;
+      }
+
+      // 3) Per-customer total cap. We accept a `runningTotal`
+      //    override so multi-file uploads (uploadMany) can pass the
+      //    accumulating tally — currentTotalBytes from state lags a
+      //    render behind during a batch.
+      const baseTotal = opts?.runningTotal ?? currentTotalBytes;
+      if (baseTotal + file.size > MAX_TOTAL_BYTES) {
+        setError(
+          `You're at ${formatBytes(baseTotal)} / ${formatBytes(MAX_TOTAL_BYTES)} of your asset storage. ` +
+            `Adding this ${formatBytes(file.size)} file would put you over. ` +
+            `Delete some photos before adding more.`,
+        );
+        return null;
+      }
+
       const fd = new FormData();
       fd.set("token", token);
       fd.set("kind", kind);
@@ -191,9 +251,21 @@ export default function Step4Assets({
         `You're at ${currentCount}/${cap} ${kind === "gallery" ? "gallery photos" : "backgrounds"}. Only ${remaining} more will be accepted.`,
       );
     }
+    // Track total bytes as we go — currentTotalBytes from state
+    // lags a render behind during a batch, so without this each
+    // file's check would race against an outdated total and the
+    // server would catch it on the 2nd or 3rd upload instead.
+    let runningTotal = currentTotalBytes;
     for (const f of toUpload) {
-      // Sequential to keep error messages clear.
-      await uploadOne(kind, f);
+      const uploaded = await uploadOne(kind, f, { runningTotal });
+      // Bump the local tally with the post-compression size on
+      // success so the next file in the batch sees a current view.
+      // We don't know the compressed size until upload returns the
+      // server's confirmed Asset; that carries the final byte count.
+      if (uploaded) runningTotal += uploaded.size;
+      // Stop the batch on first failure — likely a budget breach,
+      // and continuing would just re-fail with the same message.
+      else break;
     }
   }
 
@@ -267,29 +339,89 @@ export default function Step4Assets({
     if (!ok) setError("Couldn't update just now. Try again.");
   }
 
+  // Storage budget UI state — computed from currentTotalBytes.
+  const budgetFraction = currentTotalBytes / MAX_TOTAL_BYTES;
+  const budgetWarn = budgetFraction >= WARN_FRACTION;
+  const budgetFull = currentTotalBytes >= MAX_TOTAL_BYTES;
+
   return (
     <article className="rounded-3xl bg-white p-7 shadow-card md:p-10">
       <header className="border-b border-navy-100 pb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ember-600">
-          Step 4
-        </p>
-        <h2 className="mt-2 font-serif text-2xl font-semibold text-navy-900 md:text-3xl">
-          Brand assets
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ember-600">
+              Step 4
+            </p>
+            <h2 className="mt-2 font-serif text-2xl font-semibold text-navy-900 md:text-3xl">
+              Brand assets
+            </h2>
+          </div>
+          {/* Storage budget badge — colour shifts amber at >90%
+              and red when full. The bar visualises how close they
+              are without forcing them to read the number. */}
+          <div
+            className={[
+              "flex flex-col items-end gap-1 rounded-lg border px-3 py-2 text-xs",
+              budgetFull
+                ? "border-red-300 bg-red-50 text-red-900"
+                : budgetWarn
+                  ? "border-amber-300 bg-amber-50 text-amber-900"
+                  : "border-navy-200 bg-cream-50 text-navy-700",
+            ].join(" ")}
+            aria-label="Asset storage usage"
+          >
+            <span className="font-mono font-semibold">
+              {formatBytes(currentTotalBytes)} / {formatBytes(MAX_TOTAL_BYTES)}
+            </span>
+            <span
+              className="h-1.5 w-32 overflow-hidden rounded-full bg-white/70"
+              aria-hidden="true"
+            >
+              <span
+                className={[
+                  "block h-full rounded-full transition-all",
+                  budgetFull
+                    ? "bg-red-500"
+                    : budgetWarn
+                      ? "bg-amber-500"
+                      : "bg-navy-500",
+                ].join(" ")}
+                style={{
+                  width: `${Math.min(100, Math.round(budgetFraction * 100))}%`,
+                }}
+              />
+            </span>
+          </div>
+        </div>
         <p className="mt-3 text-[1.05rem] leading-relaxed text-navy-700">
           Each section below maps to a specific spot on your site. The
           more you tag the photos by what they&apos;re for, the better
-          the site fits together. PNG, JPEG, WebP or SVG; 10 MB per
-          file. If you&apos;re short on photos, flag it in the notes
-          and I&apos;ll use stock placeholders until you send me good
-          ones.
+          the site fits together. PNG, JPEG, WebP or SVG; 5 MB per
+          file. Large photos are automatically compressed in your
+          browser before upload. If you&apos;re short on photos, flag
+          it in the notes and I&apos;ll use stock placeholders until
+          you send me good ones.
         </p>
+        {budgetWarn && !budgetFull && (
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            You&apos;re approaching your asset storage limit. Consider
+            deleting any photos you&apos;re not using before adding more.
+          </p>
+        )}
+        {budgetFull && (
+          <p className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+            You&apos;ve hit your {formatBytes(MAX_TOTAL_BYTES)} asset
+            storage limit. Delete some photos before you can upload
+            more.
+          </p>
+        )}
       </header>
 
       {/* ---------- A. Logo ---------- */}
       <SingleAssetSection
         title="A. Logo"
         helper="Appears in the site header, footer, and as your favicon. SVG works best — scales perfectly. PNG with a transparent background is the next-best."
+        specs="Square or wide. SVG (any size) or PNG ≥ 512×512."
         asset={logo}
         kind="logo"
         uploading={uploadingSlot === "logo"}
@@ -305,6 +437,7 @@ export default function Step4Assets({
       <SingleAssetSection
         title="B. Hero photo"
         helper="The big one — appears full-width on your home page. Pick the strongest photo of your work or your team. Landscape format works best (4:3 or 16:9)."
+        specs="16:9 ratio, ≥ 1920×1080 px. Off-spec uploads get cropped to fit (centred)."
         asset={hero}
         kind="hero"
         uploading={uploadingSlot === "hero"}
@@ -319,6 +452,7 @@ export default function Step4Assets({
       <SingleAssetSection
         title="C. About / team photo"
         helper="Optional. A photo of you, your team, or a behind-the-scenes shot — appears on the About page. Helps customers feel they know who they're hiring."
+        specs="4:3 ratio, ≥ 1200×900 px."
         asset={aboutPhoto}
         kind="about"
         uploading={uploadingSlot === "about"}
@@ -339,6 +473,9 @@ export default function Step4Assets({
           Optional. Upload a photo for each service you offer — appears
           on the matching service card on your Services page. One photo
           per service is plenty.
+        </p>
+        <p className="mt-1 font-mono text-xs text-navy-500">
+          Best size: 4:3 ratio, ≥ 800×600 px.
         </p>
         {services.length === 0 ? (
           <p className="mt-4 rounded-lg border border-navy-100 bg-cream-50 p-4 text-sm text-navy-700">
@@ -445,6 +582,7 @@ export default function Step4Assets({
       <MultiAssetSection
         title={`E. Background images (${backgrounds.length}/${MAX_BACKGROUNDS})`}
         helper="Optional. Subtle imagery for section dividers — abstract textures, wide landscape shots, or soft brand patterns. Used for visual rhythm between content blocks."
+        specs="16:9 or wider, ≥ 1920×1080 px."
         assets={backgrounds}
         kind="background"
         uploading={uploadingSlot === "background"}
@@ -460,6 +598,7 @@ export default function Step4Assets({
       <MultiAssetSection
         title={`F. Gallery (${gallery.length}/${MAX_GALLERY})`}
         helper="Anything else worth showing — additional photos of your work, your premises, before-and-after shots. Used in social cards when people share your pages, and embedded in your Google Business Profile if you bought that addon."
+        specs="Any ratio, ≥ 1200×800 px."
         assets={gallery}
         kind="gallery"
         uploading={uploadingSlot === "gallery"}
@@ -580,6 +719,7 @@ export default function Step4Assets({
 function SingleAssetSection({
   title,
   helper,
+  specs,
   asset,
   kind,
   uploading,
@@ -593,6 +733,11 @@ function SingleAssetSection({
 }: {
   title: string;
   helper: string;
+  /** Recommended dimensions / aspect ratio. Rendered in mono type as
+   *  a small line below the helper. Templates use object-cover so
+   *  off-spec uploads degrade by cropping (centred), not distorting,
+   *  but matching the recommendation gets the cleanest result. */
+  specs?: string;
   asset: Asset | null;
   kind: UploadKind;
   uploading: boolean;
@@ -618,6 +763,11 @@ function SingleAssetSection({
         )}
       </h3>
       <p className="mt-2 text-sm text-navy-600">{helper}</p>
+      {specs && (
+        <p className="mt-1 font-mono text-xs text-navy-500">
+          Best size: {specs}
+        </p>
+      )}
 
       {showLogoTips && (
         <details className="mt-3 rounded-lg border-2 border-navy-100 bg-cream-50 p-3 text-sm text-navy-700">
@@ -794,6 +944,7 @@ function ServicePhotoRow({
 function MultiAssetSection({
   title,
   helper,
+  specs,
   assets,
   kind,
   uploading,
@@ -806,6 +957,8 @@ function MultiAssetSection({
 }: {
   title: string;
   helper: string;
+  /** Recommended dimensions / aspect ratio (mono line below helper). */
+  specs?: string;
   assets: Asset[];
   kind: "background" | "gallery";
   uploading: boolean;
@@ -836,6 +989,11 @@ function MultiAssetSection({
         {title}
       </h3>
       <p className="mt-2 text-sm text-navy-600">{helper}</p>
+      {specs && (
+        <p className="mt-1 font-mono text-xs text-navy-500">
+          Best size: {specs}
+        </p>
+      )}
 
       <div
         onDragOver={(e) => {
@@ -882,7 +1040,7 @@ function MultiAssetSection({
               : `Drop ${kind === "gallery" ? "photos" : "images"} here, or click to browse`}
         </p>
         <p className="mt-1 text-xs text-navy-500">
-          PNG, JPEG, WebP — 10 MB each
+          PNG, JPEG, WebP — 5 MB each (auto-compressed in your browser)
         </p>
         <input
           ref={inputRef}
@@ -1006,4 +1164,14 @@ function AssetTile({
       )}
     </div>
   );
+}
+
+// Mirror of formatBytes in /api/onboarding/upload/route.ts —
+// duplicated so the client can render budget messages without
+// importing server code (and pulling in the route's deps via
+// transitive resolution).
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
