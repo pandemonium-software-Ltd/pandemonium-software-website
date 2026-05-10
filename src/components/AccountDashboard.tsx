@@ -620,6 +620,61 @@ function ChangeRequestsBlock({
                 >
                   {r.message}
                 </p>
+                {/* Preview-pending banner — Cowork has auto-applied
+                    + built a preview, customer needs to approve to
+                    promote to live. The email is the primary CTA;
+                    this in-dashboard prompt is the safety net for
+                    customers who miss the email. */}
+                {r.status === "in-progress" &&
+                  r.previewVersionUrl &&
+                  !r.customerApprovedAt &&
+                  !r.customerRejectedAt && (
+                    <div className="mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
+                      <p className="text-sm font-semibold text-amber-900">
+                        Preview ready — your approval needed
+                      </p>
+                      <p className="mt-1 text-xs text-amber-800">
+                        I built a preview of your change. Have a look,
+                        then approve to publish OR reject if it&apos;s
+                        not right. Your live site is unchanged until
+                        you approve.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <a
+                          href={r.previewVersionUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:border-amber-400"
+                        >
+                          Open preview ↗
+                        </a>
+                        {r.customerApprovalToken && (
+                          <>
+                            <a
+                              href={`/account/${token}/approve-change/${r.id}?t=${r.customerApprovalToken}`}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+                            >
+                              Approve & publish
+                            </a>
+                            <a
+                              href={`/account/${token}/reject-change/${r.id}?t=${r.customerApprovalToken}`}
+                              className="inline-flex items-center gap-1.5 rounded-full border-2 border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-800 hover:border-red-400"
+                            >
+                              Reject
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                {/* Just-promoted confirmation — surfaces after the
+                    customer clicks Approve and the promote workflow
+                    succeeds (build-callback flips status=resolved). */}
+                {r.customerApprovedAt && r.status === "resolved" && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+                    ✓ Approved + live
+                  </p>
+                )}
                 {r.status === "pending" && (
                   <button
                     type="button"
