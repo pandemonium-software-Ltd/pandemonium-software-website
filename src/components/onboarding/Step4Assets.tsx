@@ -601,8 +601,8 @@ export default function Step4Assets({
 
       {/* ---------- E. Backgrounds ---------- */}
       <MultiAssetSection
-        title={`E. Background images (${backgrounds.length}/${MAX_BACKGROUNDS})`}
-        helper="Optional. Subtle imagery for section dividers — abstract textures, wide landscape shots, or soft brand patterns. Used for visual rhythm between content blocks."
+        title={`E. Banner images (${backgrounds.length}/${MAX_BACKGROUNDS})`}
+        helper="Wide hero-style banners. The first one renders as a full-width section divider on your home page (between services and testimonials) — pure visual rhythm, no text overlay. Pick a strong, atmospheric shot."
         specs="16:9 or wider, ≥ 1920×1080 px."
         assets={backgrounds}
         kind="background"
@@ -618,8 +618,8 @@ export default function Step4Assets({
       {/* ---------- F. Gallery ---------- */}
       <MultiAssetSection
         title={`F. Gallery (${gallery.length}/${MAX_GALLERY})`}
-        helper="Anything else worth showing — additional photos of your work, your premises, before-and-after shots. Used in social cards when people share your pages, and embedded in your Google Business Profile if you bought that addon."
-        specs="Any ratio, ≥ 1200×800 px."
+        helper="Photos of your work, your premises, before-and-after shots. Renders as a horizontal-scrolling strip just under your home-page hero — customers swipe or drag through them. 4-6 photos is the sweet spot. Anything beyond 6 still works (it just keeps scrolling)."
+        specs="4:3 ratio, ≥ 1200×900 px."
         assets={gallery}
         kind="gallery"
         uploading={uploadingSlot === "gallery"}

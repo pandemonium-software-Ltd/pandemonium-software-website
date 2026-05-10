@@ -1,11 +1,14 @@
-// Home page — hero with the customer's tagline + a CTA, then a
-// short "what we do" preview that links to the full Services page.
+// Home page — full-width banner hero, gallery scroll, services
+// preview, optional background section divider, testimonials.
 //
-// C5.5 (Haiku copy assist) will replace the static fallback tagline
-// with AI-polished marketing copy from the customer's intake bullets.
-// C5.7 will branch this layout per vibe — modern as default; the
-// other three vibes get their own page.tsx variants OR style
-// overrides.
+// Asset roles on this page:
+//   - heroPhotoUrl   → full-width banner background, text overlaid
+//   - galleryPhotoUrls → horizontal-scroll strip below the hero
+//   - backgroundUrls[0] → wide section divider between services
+//                         and testimonials (parallax-feel banner)
+//   - testimonials photos: future (currently text-only)
+//
+// C5.7 will branch this layout per vibe — modern is the default.
 
 import Link from "next/link";
 import Image from "next/image";
@@ -20,58 +23,118 @@ export default function HomePage() {
   // to keep home page scannable). Render only when at least one
   // testimonial exists.
   const homeTestimonials = (copy.testimonials ?? []).slice(0, 2);
+  // Gallery strip — horizontal-scroll. Renders only when the
+  // customer uploaded any gallery photos in Step 4 Brand Assets.
+  const galleryPhotos = brandAssets.galleryPhotoUrls;
+  // Background image — first uploaded background renders as a
+  // full-width section divider between services and testimonials.
+  // Subsequent backgrounds (if any) are reserved for the About /
+  // Services pages later. Falls back to nothing if absent.
+  const dividerBackground = brandAssets.backgroundUrls[0];
 
   return (
     <>
-      {/* Hero */}
-      <section className="relative overflow-hidden">
-        {/* Animated brand-colour gradient background */}
+      {/* ---------- Hero: full-width banner ---------- */}
+      {/* The hero photo fills the section as a CSS background,
+          with a dark overlay for text legibility. Header height
+          targets ~70vh on desktop, capped at 720px so the banner
+          doesn't dominate large monitors. Mobile drops to ~60vh
+          so users can see the services preview without scrolling. */}
+      <section
+        className="relative overflow-hidden"
+        aria-label="Hero"
+      >
+        <Image
+          src={brandAssets.heroPhotoUrl}
+          alt=""
+          aria-hidden="true"
+          fill
+          priority
+          sizes="100vw"
+          className="-z-10 object-cover"
+        />
+        {/* Gradient overlay for text contrast — strongest at the
+            bottom where the text sits, lighter at the top. */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 -z-10 bg-cream-50"
-        >
-          <div className="absolute -inset-[10%] animate-[heroDrift_24s_ease-in-out_infinite_alternate] bg-[radial-gradient(ellipse_at_top_left,_var(--brand-primary-200)_0%,_transparent_60%),radial-gradient(ellipse_at_bottom_right,_var(--brand-secondary-200)_0%,_transparent_60%),linear-gradient(135deg,_#faf7f0_0%,_#fdfcf9_100%)] opacity-85" />
-        </div>
+          className="absolute inset-0 -z-10 bg-gradient-to-b from-navy-950/30 via-navy-950/55 to-navy-950/85"
+        />
 
-        <div className="container-content grid items-center gap-12 py-20 md:py-28 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
-          <div>
-            <p className="eyebrow">
-              {business.type}
-              {business.location ? ` · ${business.location}` : ""}
-            </p>
-            <h1 className="heading-1">{tagline}</h1>
-            <p className="prose-body mt-6 max-w-2xl">
-              Trusted local {business.type.toLowerCase()} serving{" "}
-              {business.location || "the UK"}. Get in touch for a free
-              quote.
-            </p>
-            <div className="mt-10 flex flex-wrap gap-4">
-              <Link href="/contact" className="btn-primary">
-                Get a quote
-              </Link>
-              <Link href="/services" className="btn-secondary">
-                See what we do
-              </Link>
-            </div>
-          </div>
-
-          <div className="relative mx-auto w-full max-w-xl">
-            <div className="group aspect-[4/5] overflow-hidden rounded-3xl shadow-lift">
-              <Image
-                src={brandAssets.heroPhotoUrl}
-                alt={`${business.name} work`}
-                width={800}
-                height={1000}
-                priority
-                sizes="(max-width: 1024px) 100vw, 40vw"
-                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.03]"
-              />
-            </div>
+        <div className="container-content flex min-h-[60vh] flex-col justify-end py-16 text-white md:min-h-[70vh] md:max-h-[720px] md:py-24">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cream-100/90">
+            {business.type}
+            {business.location ? ` · ${business.location}` : ""}
+          </p>
+          <h1 className="mt-3 max-w-3xl font-serif text-4xl font-semibold leading-tight md:text-5xl lg:text-6xl">
+            {tagline}
+          </h1>
+          <p className="mt-5 max-w-xl text-lg text-cream-100/95">
+            Trusted local {business.type.toLowerCase()} serving{" "}
+            {business.location || "the UK"}. Get in touch for a free quote.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/contact"
+              className="rounded-full bg-brand-primary-500 px-6 py-3 font-semibold text-brand-primary-text transition-all duration-200 hover:-translate-y-px hover:bg-brand-primary-600"
+            >
+              Get a quote
+            </Link>
+            <Link
+              href="/services"
+              className="rounded-full border-2 border-white/70 bg-white/10 px-6 py-3 font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:bg-white/20"
+            >
+              See what we do
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* Services preview */}
+      {/* ---------- Gallery: horizontal-scroll strip ----------
+          Renders directly under the hero. Touch-swipe on mobile,
+          drag/scroll on desktop. scroll-snap-x mandatory keeps
+          each photo aligned to the viewport edge so part-photos
+          don't show. Only renders when there are 2+ photos —
+          a single-photo strip looks awkward, the gallery vibe
+          relies on plurality. */}
+      {galleryPhotos.length >= 2 && (
+        <section
+          aria-label="Gallery"
+          className="bg-cream-50 py-12 md:py-16"
+        >
+          <div className="container-content">
+            <p className="eyebrow">Recent work</p>
+            <h2 className="heading-3 mt-2">A look at what we do</h2>
+          </div>
+          {/* Snap container — full-bleed (escapes container-content)
+              so photos can scroll past the page edge. Padding-inline
+              matches the page gutter so the first/last photo aligns
+              with the heading above. */}
+          <ul
+            className="mt-8 flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth px-[max(1rem,calc((100vw-72rem)/2+1rem))] pb-3 md:gap-6"
+            // Hide scrollbar on WebKit + Firefox while keeping the
+            // overflow behaviour. A subtle bottom-fade gradient
+            // indicates scrollability without a chrome scrollbar.
+            style={{ scrollbarWidth: "thin" }}
+          >
+            {galleryPhotos.map((url, i) => (
+              <li
+                key={url}
+                className="relative aspect-[4/3] w-[80%] flex-none snap-start overflow-hidden rounded-2xl shadow-card md:w-[40%] lg:w-[28%]"
+              >
+                <Image
+                  src={url}
+                  alt={`${business.name} work, photo ${i + 1}`}
+                  fill
+                  sizes="(max-width: 768px) 80vw, (max-width: 1024px) 40vw, 28vw"
+                  className="object-cover transition-transform duration-700 hover:scale-[1.04]"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ---------- Services preview ---------- */}
       <section className="bg-cream-100 py-20 md:py-28">
         <div className="container-content">
           <div className="mx-auto max-w-2xl text-center">
@@ -110,10 +173,31 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Testimonials slice — top 2 quotes on the home page, with
-          a link to the About page for the rest. Renders nothing if
-          the customer hasn't added any testimonials in Hub Step 4
-          Content > Testimonials. */}
+      {/* ---------- Background image divider ----------
+          Full-width banner using the customer's first uploaded
+          background image. Pure visual rhythm — no text content,
+          intentional in its silence. ~32vh on desktop so it's
+          present without dominating, ~24vh on mobile. Renders
+          only when the customer uploaded a background. */}
+      {dividerBackground && (
+        <section
+          aria-hidden="true"
+          className="relative h-[24vh] w-full overflow-hidden md:h-[32vh]"
+        >
+          <Image
+            src={dividerBackground}
+            alt=""
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          {/* Subtle dark gradient at top + bottom so the image
+              transitions cleanly into the surrounding sections. */}
+          <div className="absolute inset-0 bg-gradient-to-b from-cream-100/50 via-transparent to-transparent" />
+        </section>
+      )}
+
+      {/* ---------- Testimonials slice ---------- */}
       {homeTestimonials.length > 0 && (
         <section className="py-20 md:py-28">
           <div className="container-content">
@@ -176,18 +260,6 @@ export default function HomePage() {
           </div>
         </section>
       )}
-
-      {/* Inline keyframes for the hero drift animation. Tailwind's
-          arbitrary animation syntax above references this. */}
-      <style>{`
-        @keyframes heroDrift {
-          0%   { transform: translate(0, 0) rotate(0deg); }
-          100% { transform: translate(-2%, 2%) rotate(0.5deg); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          [class*="animate-[heroDrift"] { animation: none; }
-        }
-      `}</style>
     </>
   );
 }
