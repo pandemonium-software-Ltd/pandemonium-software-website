@@ -27,5 +27,12 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  }
+  },
+  // Per-customer Worker: routing is set up by step2-domain via the
+  // legacy Workers Routes API + a proxied A record (Stage 2C C2.3 —
+  // see src/ops-worker/steps/step2-domain.ts). Wrangler deploy
+  // should ONLY upload the script + assets; never touch routes,
+  // never publish to *.workers.dev (most customer accounts don't
+  // have a workers.dev subdomain enabled by default).
+  "workers_dev": false
 }
