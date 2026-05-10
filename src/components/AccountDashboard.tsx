@@ -641,9 +641,7 @@ function ChangeRequestsBlock({
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <a
-                          href={r.previewVersionUrl}
-                          target="_blank"
-                          rel="noreferrer"
+                          href={`/account/${token}/preview/${r.id}`}
                           className="inline-flex items-center gap-1.5 rounded-full border-2 border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:border-amber-400"
                         >
                           Open preview ↗

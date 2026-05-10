@@ -60,7 +60,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Resolve token + mode + changeRequestId + reviewEditId
+      - name: Resolve token + mode + changeRequestId + reviewEditId + previewAccessToken
         id: token
         run: |
           TOKEN="${{ github.event.client_payload.token || inputs.token }}"
@@ -80,10 +80,16 @@ jobs:
           # The callback uses each to stamp the right entry in Notion.
           CR_ID="${{ github.event.client_payload.changeRequestId || inputs.changeRequestId }}"
           RE_ID="${{ github.event.client_payload.reviewEditId }}"
+          # Preview-access token (NEW C5.7 preview-gate) — passed
+          # via wrangler `--var PREVIEW_ACCESS_TOKEN=...` on
+          # `versions upload` so the customer-site middleware can
+          # gate access by checking the cookie / query param.
+          PREVIEW_TOKEN="${{ github.event.client_payload.previewAccessToken }}"
           echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "change_request_id=$CR_ID" >> "$GITHUB_OUTPUT"
           echo "review_edit_id=$RE_ID" >> "$GITHUB_OUTPUT"
+          echo "preview_access_token=$PREVIEW_TOKEN" >> "$GITHUB_OUTPUT"
           echo "Building site for token: $TOKEN (mode=$MODE${CR_ID:+, cr=$CR_ID}${RE_ID:+, re=$RE_ID})"
 
       - name: Fetch site data + deploy metadata from marketing site
@@ -150,7 +156,16 @@ jobs:
           # forward to the callback so the customer can be emailed
           # the URL + the marketing-site can later promote the
           # version via the customer-site-promote workflow.
-          OUT=$(npx wrangler versions upload --name "${{ steps.fetch.outputs.worker_name }}" 2>&1 | tee /dev/stderr)
+          # The --var PREVIEW_ACCESS_TOKEN is set on this version
+          # ONLY (live deploys don't pass it) — the customer-site
+          # middleware checks for it and gates access. Without it
+          # set, anyone with the workers.dev URL would get our
+          # "preview locked" page.
+          PREVIEW_VAR_ARGS=""
+          if [ -n "${{ steps.token.outputs.preview_access_token }}" ]; then
+            PREVIEW_VAR_ARGS="--var PREVIEW_ACCESS_TOKEN:${{ steps.token.outputs.preview_access_token }}"
+          fi
+          OUT=$(npx wrangler versions upload --name "${{ steps.fetch.outputs.worker_name }}" $PREVIEW_VAR_ARGS 2>&1 | tee /dev/stderr)
           # Wrangler prints a line like: "Worker Version ID: <uuid>"
           # and a separate line containing the preview URL like
           # "<id>.<account-subdomain>.workers.dev". Extract both.
@@ -180,7 +195,8 @@ jobs:
               --arg url "${{ steps.preview_upload.outputs.preview_version_url }}" \
               --arg vid "${{ steps.preview_upload.outputs.version_id }}" \
               --arg crid "${{ steps.token.outputs.change_request_id }}" \
-              '{token: $token, status: "success", mode: "preview", previewUrl: $url, previewVersionId: $vid, changeRequestId: $crid}')
+              --arg pat "${{ steps.token.outputs.preview_access_token }}" \
+              '{token: $token, status: "success", mode: "preview", previewUrl: $url, previewVersionId: $vid, changeRequestId: $crid, previewAccessToken: $pat}')
           else
             # live mode — include reviewEditId if this is a pre-commit
             # auto-apply build so the callback can email the customer

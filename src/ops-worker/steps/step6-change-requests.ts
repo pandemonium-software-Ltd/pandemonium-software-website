@@ -269,6 +269,14 @@ async function tryAutoApply(args: {
     previousValue: apply.previousValue,
   };
 
+  // Generate per-build preview-access token (set as
+  // PREVIEW_ACCESS_TOKEN var on the customer-site Worker version,
+  // checked by its middleware to gate access). Generated for both
+  // kinds even though pre-commit builds technically replace the
+  // live Worker — keeping the architecture symmetric makes it
+  // easy to add gate-on-pre-commit later if we ever want to.
+  const previewAccessToken = randomHex(32);
+
   if (args.item.kind === "post-commit") {
     // Generate per-request approval token; customer's email link
     // requires it before promoting.
@@ -278,6 +286,7 @@ async function tryAutoApply(args: {
       coworkPatch: patchPayload,
       coworkPatchAppliedAt: new Date().toISOString(),
       customerApprovalToken: approvalToken,
+      previewAccessToken,
     });
   } else {
     // Pre-commit: no approval token; the rebuild updates the
@@ -329,6 +338,10 @@ async function tryAutoApply(args: {
         prospectName: args.prospect.name,
         businessName: args.prospect.business ?? "",
         mode,
+        // Threaded through to wrangler versions upload --var so the
+        // customer-site middleware accepts the iframe embed. Only
+        // meaningful in preview mode but harmless on live.
+        previewAccessToken,
         ...itemIdField,
       },
     });

@@ -64,6 +64,10 @@ const requestSchema = z.discriminatedUnion("status", [
     mode: z.enum(["live", "preview", "promote"]).default("live"),
     previewUrl: z.string().trim().url().max(500).optional(),
     previewVersionId: z.string().trim().max(100).optional(),
+    /** Preview-access token set as PREVIEW_ACCESS_TOKEN var on the
+     *  uploaded version. Persisted on the change request so the
+     *  marketing-site iframe wrapper can pass it via ?pa=. */
+    previewAccessToken: z.string().trim().max(100).optional(),
     promotedVersionId: z.string().trim().max(100).optional(),
     changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
     reviewEditId: z.string().trim().max(50).optional().or(z.literal("")),
@@ -329,6 +333,13 @@ export async function POST(request: Request) {
         previewVersionId: parsed.data.previewVersionId,
         previewVersionUrl: parsed.data.previewUrl,
         previewBuiltAt: new Date().toISOString(),
+        // Persist the preview-access token so the iframe wrapper
+        // page can pass it via ?pa= when embedding. Step6 already
+        // generated + stored it pre-dispatch, but the callback is
+        // the canonical post-build state, and this lets us
+        // distinguish "step6 generated a token but the build
+        // never finished" from "build complete + preview ready".
+        previewAccessToken: parsed.data.previewAccessToken,
       },
     );
     if (!merged) {
@@ -341,9 +352,15 @@ export async function POST(request: Request) {
     }
     // Customer email with approve/reject CTAs. Uses the per-request
     // approval token Cowork generated when it stamped the patch.
+    // The previewUrl in the email now points to the marketing-site
+    // iframe wrapper page (auth-gated, embeds the preview, hides
+    // the workers.dev URL) rather than the bare preview Worker URL.
+    // That way leaked URLs hit the auth gate instead of opening
+    // straight onto the customer's preview content.
     let emailWarning: string | null = null;
     try {
       const accountUrl = `${baseUrl}/account/${parsed.data.token}`;
+      const wrapperUrl = `${baseUrl}/account/${parsed.data.token}/preview/${merged.id}`;
       await sendCustomerEmail(
         env,
         prospect.email,
@@ -351,7 +368,7 @@ export async function POST(request: Request) {
         {
           customerName: firstName(prospect.name),
           originalMessage: merged.message,
-          previewUrl: parsed.data.previewUrl,
+          previewUrl: wrapperUrl,
           approveUrl: `${baseUrl}/account/${parsed.data.token}/approve-change/${merged.id}?t=${merged.customerApprovalToken ?? ""}`,
           rejectUrl: `${baseUrl}/account/${parsed.data.token}/reject-change/${merged.id}?t=${merged.customerApprovalToken ?? ""}`,
           accountUrl,

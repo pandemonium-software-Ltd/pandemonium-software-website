@@ -322,6 +322,13 @@ export type ChangeRequest = {
   /** Per-version preview URL Cloudflare issued for `previewVersionId`.
    *  e.g. https://abc123-customer-name.account-subdomain.workers.dev */
   previewVersionUrl?: string;
+  /** Random per-version PREVIEW_ACCESS_TOKEN passed to the
+   *  customer-site Worker as a `--var` on `wrangler versions upload`.
+   *  The marketing site appends this to the iframe src as
+   *  `?pa=<token>` so the customer-site middleware authorises the
+   *  embed. Without it, anyone with the workers.dev URL would
+   *  see "preview locked". NEW C5.7 preview-gate. */
+  previewAccessToken?: string;
   /** ISO-8601 — when the preview build completed. */
   previewBuiltAt?: string;
   /** Per-request approval token. The customer's approve / reject
