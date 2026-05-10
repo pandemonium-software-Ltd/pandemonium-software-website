@@ -21,12 +21,19 @@ import { step2Domain } from "./steps/step2-domain";
 import { step3Tools } from "./steps/step3-tools";
 import { step4Assets } from "./steps/step4-assets";
 import { step5Review } from "./steps/step5-review";
+import { step6ChangeRequests } from "./steps/step6-change-requests";
 
 /**
  * Registered steps in execution order. Steps are independent —
  * Step 2 doesn't depend on Step 1 having run THIS tick (since
  * each step is idempotent and reads/writes its own state). But
  * we order them by Hub progression so audit logs read naturally.
+ *
+ * Step 6 (change-request reminders) runs after the Hub-progression
+ * steps because it's orthogonal — it cares about post-launch
+ * customer requests rather than onboarding state. Placing it last
+ * also means a noisy escalation cron doesn't push Hub steps
+ * lower in the audit log.
  */
 export const STEPS: readonly Step[] = [
   step1Cloudflare,
@@ -34,6 +41,7 @@ export const STEPS: readonly Step[] = [
   step3Tools,
   step4Assets,
   step5Review,
+  step6ChangeRequests,
 ];
 
 /**

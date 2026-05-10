@@ -288,6 +288,14 @@ export type ChangeRequest = {
    *   monthly allowance — see my email."
    */
   reply?: string;
+  /**
+   * ISO-8601, set when step6-change-requests has emailed Ben a
+   * reminder that this request is still pending. Latch — prevents
+   * the cron from re-emailing every tick. The original on-submit
+   * notification fires from /api/account/change-request and isn't
+   * counted here; this stamp is the FOLLOW-UP nag only. NEW C5.7.
+   */
+  coworkEscalatedAt?: string;
 };
 
 // --- Property helpers ---
@@ -1318,6 +1326,58 @@ export async function updateChangeRequest(
     updated: next,
     transitionedToTerminal: isTerminal && !wasTerminal,
   };
+}
+
+/**
+ * Stamp `coworkEscalatedAt` on a single change request so the
+ * Phase B v1 reminder cron knows it's been actioned and doesn't
+ * re-email. Called by the ops worker step6-change-requests.
+ *
+ * Same read-modify-write pattern as updateChangeRequest. Idempotent:
+ * stamping twice is a no-op (later timestamp wins, but the cron
+ * gates on "is it set?" not "what's the value?").
+ *
+ * Returns false silently if the change request id no longer exists
+ * (race with retract, cleared inbox, etc.). The cron treats this
+ * as success — the request is gone, can't escalate.
+ */
+export async function markChangeRequestEscalated(
+  pageId: string,
+  changeRequestId: string,
+): Promise<boolean> {
+  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
+  const props = page.properties as Record<string, unknown>;
+  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
+    ?.rich_text;
+  let current: ChangeRequest[] = [];
+  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
+    const text = rawTextArr
+      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+      .join("");
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) current = parsed;
+      } catch {
+        /* ignore malformed; treat as empty */
+      }
+    }
+  }
+  const idx = current.findIndex((r) => r.id === changeRequestId);
+  if (idx < 0) return false;
+  current[idx] = {
+    ...current[idx]!,
+    coworkEscalatedAt: new Date().toISOString(),
+  };
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Change Requests Inbox": rt(JSON.stringify(current)),
+      },
+    },
+  });
+  return true;
 }
 
 // --- Update Onboarding (partial saves + per-step done flag + status flips) ---

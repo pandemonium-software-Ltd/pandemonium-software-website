@@ -9,7 +9,13 @@
 import type { ProspectRecord } from "../lib/notion-prospects";
 import type { ServerEnv } from "../lib/env";
 
-export type StepId = "step1" | "step2" | "step3" | "step4" | "step5";
+export type StepId =
+  | "step1"
+  | "step2"
+  | "step3"
+  | "step4"
+  | "step5"
+  | "step6";
 
 export type StepResult =
   /** Step did its work successfully. */
