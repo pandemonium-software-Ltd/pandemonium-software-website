@@ -292,10 +292,51 @@ export type ChangeRequest = {
 
 // --- Property helpers ---
 
+// Notion enforces text.content ≤ 2000 chars per rich_text array
+// element, but accepts up to 100 elements per array. So a long
+// string (typically a JSON blob like Onboarding Data, Phase 2/3
+// Data, Module Change Log, Change Requests Inbox, Haiku Cache)
+// gets sliced into 2000-char chunks here. The reader joins them
+// back transparently via readRichText (`arr.map(...).join("")`),
+// so this is round-trip safe with no caller changes needed.
+//
+// Why split mid-string is OK for JSON: we're storing arbitrary
+// bytes (UTF-8 chars), the reader concatenates without inserting
+// separators, and Notion preserves order. Splitting at codepoint
+// boundaries (slice on .length, which counts UTF-16 code units)
+// is fine because surrogate pairs only matter for a handful of
+// emoji + ancient-script chars we don't expect in customer copy
+// — and even then, a split mid-pair would just produce garbled
+// text on read, never corrupt the JSON parser (which works on
+// the joined string).
+const NOTION_RICH_TEXT_CHUNK = 2000;
+
 function rt(text: string | undefined) {
-  return text
-    ? { rich_text: [{ type: "text" as const, text: { content: text } }] }
-    : { rich_text: [] };
+  if (!text) return { rich_text: [] };
+  if (text.length <= NOTION_RICH_TEXT_CHUNK) {
+    return {
+      rich_text: [{ type: "text" as const, text: { content: text } }],
+    };
+  }
+  const chunks: { type: "text"; text: { content: string } }[] = [];
+  for (let i = 0; i < text.length; i += NOTION_RICH_TEXT_CHUNK) {
+    chunks.push({
+      type: "text",
+      text: { content: text.slice(i, i + NOTION_RICH_TEXT_CHUNK) },
+    });
+  }
+  // Notion caps at 100 rich_text elements per property. 100 × 2000
+  // = 200,000 chars — way more than any realistic onboarding blob,
+  // but throw a clear error if we ever approach it so we can move
+  // to a separate database / external storage.
+  if (chunks.length > 100) {
+    throw new Error(
+      `rt() received text of ${text.length} chars; would split into ` +
+        `${chunks.length} blocks but Notion caps at 100. Caller needs ` +
+        `to externalise this field.`,
+    );
+  }
+  return { rich_text: chunks };
 }
 
 function title(text: string) {
