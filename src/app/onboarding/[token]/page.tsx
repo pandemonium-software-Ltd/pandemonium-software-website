@@ -139,6 +139,18 @@ export default async function OnboardingPage({
       .filter((s): s is { name: string } => s !== null);
   })();
 
+  // Phase 3 seeds for Step 4 Site Content. Each new content-step
+  // section pre-fills from these the FIRST time the customer
+  // touches it, then the content-step value becomes canonical and
+  // overrides Phase 3 from then on. Customers who already have a
+  // content-step value see THAT (their existing edits) on this
+  // visit; only blank fields get seeded.
+  //
+  // Computed here (server) rather than in the client so we can
+  // share the parsing safely without dragging Phase 3's full
+  // schema into the client bundle.
+  const phase3Seeds = derivePhase3Seeds(prospect.phase3Data);
+
   return (
     <OnboardingHub
       token={token}
@@ -157,9 +169,137 @@ export default async function OnboardingPage({
       moduleChangeEligibility={moduleChangeEligibility}
       pendingModuleChange={pendingModuleChange}
       phase3Services={phase3Services}
+      phase3Seeds={phase3Seeds}
     />
   );
 }
+
+/**
+ * Derive the Site Content seeds from Phase 3 intake data.
+ * Defensive on every read — Phase 3 can be malformed or partially
+ * filled; missing fields just produce empty arrays / undefined.
+ *
+ * Used to pre-fill blank Site Content sections so customers don't
+ * re-enter what they already gave at intake. After the first save
+ * to a content-step section, the content-step value becomes the
+ * canonical source.
+ */
+function derivePhase3Seeds(phase3Data: unknown): Phase3Seeds {
+  const p3 = (phase3Data ?? {}) as Record<string, unknown>;
+  const services = (p3.services as Record<string, unknown> | undefined) ?? {};
+  const contact =
+    (p3.contactDetails as Record<string, unknown> | undefined) ?? {};
+  const social =
+    (p3.socialProof as Record<string, unknown> | undefined) ?? {};
+
+  const optStr = (v: unknown): string | undefined =>
+    typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
+  const optNum = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined;
+
+  const servicesArr = Array.isArray(services.services)
+    ? services.services
+        .map((s): Phase3Seeds["services"][number] | null => {
+          if (!s || typeof s !== "object") return null;
+          const obj = s as Record<string, unknown>;
+          const name = optStr(obj.name);
+          if (!name) return null;
+          return {
+            name,
+            description: optStr(obj.description),
+            priceFrom: optNum(obj.startingPrice),
+          };
+        })
+        .filter((s): s is Phase3Seeds["services"][number] => s !== null)
+    : [];
+
+  const testimonialsArr = Array.isArray(social.testimonials)
+    ? social.testimonials
+        .map((t): Phase3Seeds["testimonials"][number] | null => {
+          if (!t || typeof t !== "object") return null;
+          const obj = t as Record<string, unknown>;
+          const name = optStr(obj.name);
+          const quote = optStr(obj.quote);
+          if (!name || !quote) return null;
+          return { name, location: optStr(obj.location), quote };
+        })
+        .filter((t): t is Phase3Seeds["testimonials"][number] => t !== null)
+    : [];
+
+  const openingHoursRaw = contact.openingHours as
+    | Record<string, unknown>
+    | undefined;
+  const openingHours: Phase3Seeds["business"]["openingHours"] = {};
+  if (openingHoursRaw && typeof openingHoursRaw === "object") {
+    for (const [day, val] of Object.entries(openingHoursRaw)) {
+      if (!val || typeof val !== "object") continue;
+      const obj = val as Record<string, unknown>;
+      openingHours[day] = {
+        open: typeof obj.open === "boolean" ? obj.open : false,
+        from: optStr(obj.from),
+        to: optStr(obj.to),
+      };
+    }
+  }
+
+  return {
+    services: servicesArr,
+    differentiator: optStr(services.differentiator),
+    testimonials: testimonialsArr,
+    trust: {
+      yearsExperience: optNum(social.yearsExperience),
+      associations: optStr(social.associations),
+      awards: optStr(social.awards),
+    },
+    business: {
+      contactName: optStr(contact.contactName),
+      phoneDisplay: optStr(contact.phoneDisplay),
+      phoneTel: optStr(contact.phoneTel),
+      publicEmail: optStr(contact.publicEmail),
+      address: optStr(contact.address),
+      serviceArea: optStr(contact.serviceArea),
+      openingHours:
+        Object.keys(openingHours).length > 0 ? openingHours : undefined,
+    },
+  };
+}
+
+/**
+ * Phase 3 seed shape passed to OnboardingHub → Step4Content. All
+ * fields optional — Phase 3 may be partially filled or skipped.
+ */
+export type Phase3Seeds = {
+  services: Array<{
+    name: string;
+    description?: string;
+    priceFrom?: number;
+  }>;
+  /** Phase 3 "what makes you different" free-text — used to seed
+   *  the About blurb if blank in content step. */
+  differentiator?: string;
+  testimonials: Array<{
+    name: string;
+    location?: string;
+    quote: string;
+  }>;
+  trust: {
+    yearsExperience?: number;
+    associations?: string;
+    awards?: string;
+  };
+  business: {
+    contactName?: string;
+    phoneDisplay?: string;
+    phoneTel?: string;
+    publicEmail?: string;
+    address?: string;
+    serviceArea?: string;
+    openingHours?: Record<
+      string,
+      { open: boolean; from?: string; to?: string }
+    >;
+  };
+};
 
 function ErrorWrapper({
   title,

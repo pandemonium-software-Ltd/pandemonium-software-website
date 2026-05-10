@@ -378,12 +378,20 @@ const step4ContentSchema = z.object({
     .array(z.string().trim().max(300))
     .max(8)
     .optional(),
-  /** Per-service rich content, mapped by serviceName against
-   *  phase3Data.services[N].name. */
+  /** Per-service rich content. Renamed services lose Phase 3 link
+   *  by design — content step IS the canonical post-edit list.
+   *  `description` and `priceFrom` are SEEDED from Phase 3 on first
+   *  edit and become canonical thereafter. */
   services: z
     .array(
       z.object({
         serviceName: z.string().trim().max(200),
+        /** Short 1-2 sentence summary used on the services card grid.
+         *  Seeded from Phase 3 services[].description if names match
+         *  on first content-step open. */
+        description: z.string().trim().max(500).optional(),
+        /** Optional starting price in pounds; seeded from Phase 3. */
+        priceFrom: z.number().nonnegative().optional(),
         longDescription: z.string().trim().max(2000).optional(),
         features: z
           .array(z.string().trim().max(200))
@@ -403,6 +411,63 @@ const step4ContentSchema = z.object({
       }),
     )
     .max(10)
+    .optional(),
+  /** Customer testimonials; up to 5. Seeded from Phase 3
+   *  socialProof.testimonials on first content-step open. Renders
+   *  on the customer site home + about pages. */
+  testimonials: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(100),
+        location: z.string().trim().max(100).optional(),
+        quote: z.string().trim().min(1).max(500),
+      }),
+    )
+    .max(5)
+    .optional(),
+  /** Trust signals — render as a small horizontal strip on the
+   *  About page header ("Established 2010 • Member of FMB •
+   *  Trustmark certified"). Each field optional. */
+  trust: z
+    .object({
+      yearsExperience: z.number().int().min(0).max(200).optional(),
+      associations: z.string().trim().max(500).optional(),
+      awards: z.string().trim().max(500).optional(),
+    })
+    .optional(),
+  /** Business details — contact info that renders site-wide
+   *  (footer, contact page, JSON-LD). Seeded from Phase 3
+   *  contactDetails on first content-step open; canonical
+   *  thereafter. Adapter prefers these over Phase 3 if present. */
+  business: z
+    .object({
+      contactName: z.string().trim().max(100).optional(),
+      phoneDisplay: z.string().trim().max(30).optional(),
+      phoneTel: z.string().trim().max(30).optional(),
+      publicEmail: z
+        .string()
+        .trim()
+        .email("Enter a valid email")
+        .max(254)
+        .optional()
+        .or(z.literal("")),
+      address: z.string().trim().max(500).optional(),
+      serviceArea: z.string().trim().max(500).optional(),
+      /** Per-day hours record. Day key is "Mon" / "Tue" etc.
+       *  Each entry: { open: bool, from?: "09:00", to?: "17:00" }. */
+      openingHours: z
+        .record(
+          z.string(),
+          z
+            .object({
+              open: z.boolean(),
+              from: z.string().optional(),
+              to: z.string().optional(),
+            })
+            .optional(),
+        )
+        .optional(),
+    })
     .optional(),
   notes: z.string().trim().max(2000).optional(),
 });

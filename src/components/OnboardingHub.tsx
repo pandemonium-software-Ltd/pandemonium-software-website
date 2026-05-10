@@ -72,6 +72,11 @@ export type OnboardingHubProps = {
    *  Step 4 yet. The variable name is historical — see page.tsx
    *  for the derivation logic. */
   phase3Services: ReadonlyArray<{ name: string }>;
+  /** Phase 3 intake seeds — used by Step 4 Site Content to
+   *  pre-fill blank sections (services, testimonials, trust,
+   *  business details) the FIRST time the customer touches them.
+   *  Once a content-step value exists, it overrides the seed. */
+  phase3Seeds: import("@/app/onboarding/[token]/page").Phase3Seeds;
 };
 
 type SaveState =
@@ -300,6 +305,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     moduleChangeEligibility={props.moduleChangeEligibility}
                     pendingModuleChange={props.pendingModuleChange}
                     phase3Services={props.phase3Services}
+                    phase3Seeds={props.phase3Seeds}
                   />
                 </>
               )}
@@ -329,6 +335,7 @@ function StepRenderer({
   moduleChangeEligibility,
   pendingModuleChange,
   phase3Services,
+  phase3Seeds,
 }: {
   step: StepDef;
   data: OnboardingData;
@@ -351,6 +358,7 @@ function StepRenderer({
   moduleChangeEligibility: ChangeEligibility;
   pendingModuleChange: ModuleChangeLogEntry | null;
   phase3Services: ReadonlyArray<{ name: string }>;
+  phase3Seeds: import("@/app/onboarding/[token]/page").Phase3Seeds;
 }) {
   const slice = (data[step.id] ?? {}) as Record<string, unknown>;
   const done = doneFlags[step.id];
@@ -402,6 +410,7 @@ function StepRenderer({
           done={done}
           readOnly={readOnly}
           services={phase3Services}
+          phase3Seeds={phase3Seeds}
           savePartial={(patch) => savePartial("content", patch)}
           markDone={(patch) => markDone("content", patch)}
         />

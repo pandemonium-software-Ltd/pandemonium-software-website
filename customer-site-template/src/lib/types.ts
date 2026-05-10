@@ -43,6 +43,22 @@ export type FaqEntry = {
   answer: string;
 };
 
+/** Customer testimonial — renders on home + about pages.
+ *  From Hub Step 4 Content (seeded from Phase 3). NEW C5.5+. */
+export type Testimonial = {
+  name: string;
+  location?: string;
+  quote: string;
+};
+
+/** Trust signals — renders as a strip on the About page.
+ *  From Hub Step 4 Content (seeded from Phase 3). NEW C5.5+. */
+export type TrustSignals = {
+  yearsExperience?: number;
+  associations?: string;
+  awards?: string;
+};
+
 export type ModuleConfig = {
   booking?: { calcomUrl: string };
   newsletter?: { senderEmail: string };
@@ -78,6 +94,10 @@ export type CustomCopy = {
   /** FAQ Q&A pairs — rendered on /faq + emitted as FAQPage
    *  JSON-LD for SEO. From Hub Step 4 Content. NEW C5.5. */
   faq?: readonly FaqEntry[];
+  /** Customer testimonials. NEW C5.5+. */
+  testimonials?: readonly Testimonial[];
+  /** Trust signals (years, associations, awards). NEW C5.5+. */
+  trust?: TrustSignals;
 };
 
 export type SiteData = {

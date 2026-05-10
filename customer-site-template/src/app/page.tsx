@@ -16,6 +16,10 @@ export default function HomePage() {
   const tagline =
     copy.tagline ??
     `${business.name} — trusted local ${business.type.toLowerCase()}.`;
+  // Top 2 testimonials surface on the home page (rest only on About,
+  // to keep home page scannable). Render only when at least one
+  // testimonial exists.
+  const homeTestimonials = (copy.testimonials ?? []).slice(0, 2);
 
   return (
     <>
@@ -105,6 +109,56 @@ export default function HomePage() {
           )}
         </div>
       </section>
+
+      {/* Testimonials slice — top 2 quotes on the home page, with
+          a link to the About page for the rest. Renders nothing if
+          the customer hasn't added any testimonials in Hub Step 4
+          Content > Testimonials. */}
+      {homeTestimonials.length > 0 && (
+        <section className="py-20 md:py-28">
+          <div className="container-content">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="eyebrow">Trusted by</p>
+              <h2 className="heading-2">What customers say</h2>
+            </div>
+            <ul className="mx-auto mt-10 grid max-w-5xl gap-6 md:grid-cols-2">
+              {homeTestimonials.map((t, i) => (
+                <li
+                  key={i}
+                  className="rounded-3xl border border-navy-100 bg-cream-50 p-7 shadow-card"
+                >
+                  <svg
+                    aria-hidden="true"
+                    className="h-7 w-7 text-brand-primary-500"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M7 8c-2.21 0-4 1.79-4 4v6h6v-6H5c0-1.1.9-2 2-2V8zm10 0c-2.21 0-4 1.79-4 4v6h6v-6h-4c0-1.1.9-2 2-2V8z" />
+                  </svg>
+                  <blockquote className="mt-3 text-lg leading-relaxed text-navy-800">
+                    {t.quote}
+                  </blockquote>
+                  <footer className="mt-4 text-sm font-semibold text-navy-900">
+                    {t.name}
+                    {t.location && (
+                      <span className="ml-1 font-normal text-navy-500">
+                        — {t.location}
+                      </span>
+                    )}
+                  </footer>
+                </li>
+              ))}
+            </ul>
+            {(copy.testimonials?.length ?? 0) > 2 && (
+              <div className="mt-10 text-center">
+                <Link href="/about" className="btn-secondary">
+                  Read more reviews
+                </Link>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Inline keyframes for the hero drift animation. Tailwind's
           arbitrary animation syntax above references this. */}

@@ -109,7 +109,29 @@
         "question": "Do you offer guarantees?",
         "answer": "Every structural element comes with a 10-year warranty. Workmanship on finishes (paint, tiling, fittings) is guaranteed for 12 months. We use the FMB Insurance-Backed Guarantee scheme so cover continues even if we're no longer trading."
       }
-    ]
+    ],
+    "testimonials": [
+      {
+        "name": "Sarah Johnson",
+        "location": "Headington, Oxford",
+        "quote": "Lucas and his team transformed our loft into the perfect home office. On time, on budget, and tidied up beautifully every day. Best builders we've ever worked with."
+      },
+      {
+        "name": "Mark Thompson",
+        "location": "Witney",
+        "quote": "Total professionals from start to finish. Took the time to talk through every decision and never made us feel like a nuisance for asking questions. Highly recommended."
+      },
+      {
+        "name": "Priya Patel",
+        "location": "Bicester",
+        "quote": "We had three quotes for our extension and BobBuilders weren't the cheapest, but they were the most thorough. Glad we went with them — the work is genuinely beautiful."
+      }
+    ],
+    "trust": {
+      "yearsExperience": 15,
+      "associations": "Member of FMB, Trustmark certified",
+      "awards": "Oxfordshire Builder of the Year 2024"
+    }
   },
   "vibe": "modern",
   "domain": "test09052026moduforge.store"

@@ -20,18 +20,43 @@
 // site-build time.
 
 import { useState } from "react";
+import type { Phase3Seeds } from "@/app/onboarding/[token]/page";
 
 // Mirrors src/lib/onboarding.ts step4ContentSchema. Keeping the
 // component types close to the schema prevents drift; the API
 // validates on save anyway.
 type ServiceContent = {
   serviceName: string;
+  /** Short description for service cards (1-2 sentences). NEW —
+   *  seeded from Phase 3 services[].description on first edit. */
+  description?: string;
+  /** Optional starting price in pounds. NEW — seeded from Phase 3
+   *  services[].startingPrice on first edit. */
+  priceFrom?: number;
   longDescription?: string;
   features?: string[];
   pricingNotes?: string;
 };
 
 type FaqEntry = { question: string; answer: string };
+type Testimonial = { name: string; location?: string; quote: string };
+type TrustData = {
+  yearsExperience?: number;
+  associations?: string;
+  awards?: string;
+};
+type BusinessDetails = {
+  contactName?: string;
+  phoneDisplay?: string;
+  phoneTel?: string;
+  publicEmail?: string;
+  address?: string;
+  serviceArea?: string;
+  openingHours?: Record<
+    string,
+    { open: boolean; from?: string; to?: string }
+  >;
+};
 
 type ContentData = {
   tagline?: string;
@@ -39,6 +64,9 @@ type ContentData = {
   aboutBullets?: string[];
   services?: ServiceContent[];
   faq?: FaqEntry[];
+  testimonials?: Testimonial[];
+  trust?: TrustData;
+  business?: BusinessDetails;
   notes?: string;
 };
 
@@ -52,6 +80,11 @@ type Props = {
    *  deleted, or added a service), the canonical list lives in
    *  `data.services` and this prop is just history. */
   services: ReadonlyArray<{ name: string }>;
+  /** Richer Phase 3 seeds — used to pre-fill blank sections of the
+   *  Site Content step (services description+priceFrom, testimonials,
+   *  trust signals, business details). Each section seeds ONLY when
+   *  the customer's content-step value is blank for that section. */
+  phase3Seeds: Phase3Seeds;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
@@ -59,11 +92,13 @@ type Props = {
 /** Internal state row — adds a stable client-only id so React can
  *  track entries through renames + reorders. Stripped on save. */
 type ServiceRow = ServiceContent & { _localId: string };
+type TestimonialRow = Testimonial & { _localId: string };
 
 const TAGLINE_MAX = 200;
 const ABOUT_BLURB_MAX = 5000;
 const BULLET_MAX = 300;
 const ABOUT_BULLET_CAP = 8;
+const SERVICE_DESC_MAX = 500;
 const SERVICE_LONG_DESC_MAX = 2000;
 const SERVICE_FEATURE_MAX = 200;
 const SERVICE_FEATURE_CAP = 8;
@@ -71,31 +106,61 @@ const SERVICE_PRICING_MAX = 500;
 const FAQ_QUESTION_MAX = 300;
 const FAQ_ANSWER_MAX = 2000;
 const FAQ_CAP = 10;
+const TESTIMONIAL_NAME_MAX = 100;
+const TESTIMONIAL_LOCATION_MAX = 100;
+const TESTIMONIAL_QUOTE_MAX = 500;
+const TESTIMONIAL_CAP = 5;
+const ASSOCIATIONS_MAX = 500;
+const AWARDS_MAX = 500;
+const CONTACT_NAME_MAX = 100;
+const PHONE_MAX = 30;
+const EMAIL_MAX = 254;
+const ADDRESS_MAX = 500;
+const SERVICE_AREA_MAX = 500;
 const NOTES_MAX = 2000;
+
+/** Days of the week for the opening-hours editor — same order as
+ *  Phase 3 intake so renders match. */
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+type Day = (typeof DAYS)[number];
 
 export default function Step4Content({
   data,
   done,
   readOnly,
   services,
+  phase3Seeds,
   savePartial,
   markDone,
 }: Props) {
   // ---------- Initialise from saved data ----------
   // Defensive reads — `data` is the raw JSON slice and may be
   // partially populated. Fall through to safe empty values.
+  //
+  // Seeding policy (per section): if the content-step value is
+  // present (even an empty array — which means "the customer
+  // explicitly cleared it"), use it. ONLY if the field is missing
+  // entirely, fall back to Phase 3. This means seeding happens
+  // exactly once — on first visit to the content step — after
+  // which the customer's edits (including deletes) are preserved.
   const initial = data as ContentData;
 
   const [tagline, setTagline] = useState(initial.tagline ?? "");
-  const [aboutBlurb, setAboutBlurb] = useState(initial.aboutBlurb ?? "");
+  // About blurb: seeded from Phase 3 differentiator if blank — the
+  // differentiator is the closest pre-existing free-text we have to
+  // an "about us" copy starting point.
+  const [aboutBlurb, setAboutBlurb] = useState(
+    initial.aboutBlurb ?? phase3Seeds.differentiator ?? "",
+  );
   const [aboutBullets, setAboutBullets] = useState<string[]>(
     Array.isArray(initial.aboutBullets) ? initial.aboutBullets : [],
   );
   // Per-service content — ordered list with stable client-only ids
   // so renames + reorders work cleanly. Initialised in this order:
   //   1. If the content step has saved services, use them as-is
-  //   2. Otherwise seed from the Phase 3 intake services prop
-  //   3. If neither (no Phase 3 + no edits), start empty
+  //   2. Otherwise seed from Phase 3 intake (rich seed: name +
+  //      description + priceFrom carried forward)
+  //   3. If neither, start empty
   // The customer can rename, delete, or add — the rendered list
   // becomes the canonical "services on the site" list at save time.
   const [serviceList, setServiceList] = useState<ServiceRow[]>(() => {
@@ -108,6 +173,18 @@ export default function Step4Content({
           _localId: crypto.randomUUID(),
         }));
     }
+    // Seed from Phase 3 — name + description + priceFrom. If the
+    // page-level phase3Services already includes additional names
+    // (e.g. content step was populated then cleared), use those
+    // names but with no Phase 3 metadata.
+    if (phase3Seeds.services.length > 0) {
+      return phase3Seeds.services.map((s) => ({
+        serviceName: s.name,
+        description: s.description,
+        priceFrom: s.priceFrom,
+        _localId: crypto.randomUUID(),
+      }));
+    }
     return services.map((s) => ({
       serviceName: s.name,
       _localId: crypto.randomUUID(),
@@ -116,6 +193,33 @@ export default function Step4Content({
   const [faq, setFaq] = useState<FaqEntry[]>(
     Array.isArray(initial.faq) ? initial.faq : [],
   );
+  const [testimonials, setTestimonials] = useState<TestimonialRow[]>(() => {
+    // Same first-visit seeding policy as services.
+    if (Array.isArray(initial.testimonials)) {
+      return initial.testimonials
+        .filter(
+          (t): t is Testimonial =>
+            !!t && typeof t.name === "string" && typeof t.quote === "string",
+        )
+        .map((t) => ({ ...t, _localId: crypto.randomUUID() }));
+    }
+    return phase3Seeds.testimonials.map((t) => ({
+      ...t,
+      _localId: crypto.randomUUID(),
+    }));
+  });
+  const [trust, setTrust] = useState<TrustData>(() => {
+    if (initial.trust && typeof initial.trust === "object") {
+      return initial.trust;
+    }
+    return phase3Seeds.trust;
+  });
+  const [business, setBusiness] = useState<BusinessDetails>(() => {
+    if (initial.business && typeof initial.business === "object") {
+      return initial.business;
+    }
+    return phase3Seeds.business;
+  });
   const [notes, setNotes] = useState(initial.notes ?? "");
 
   const [pending, setPending] = useState<
@@ -143,12 +247,19 @@ export default function Step4Content({
       .map((s): ServiceContent | null => {
         const name = s.serviceName.trim();
         if (!name) return null;
+        const description = s.description?.trim() || undefined;
         const longDescription = s.longDescription?.trim() || undefined;
         const features = (s.features ?? [])
           .map((f) => f.trim())
           .filter((f) => f.length > 0);
         const pricingNotes = s.pricingNotes?.trim() || undefined;
+        const priceFrom =
+          typeof s.priceFrom === "number" && s.priceFrom >= 0
+            ? Math.round(s.priceFrom)
+            : undefined;
         const entry: ServiceContent = { serviceName: name };
+        if (description) entry.description = description;
+        if (priceFrom !== undefined) entry.priceFrom = priceFrom;
         if (longDescription) entry.longDescription = longDescription;
         if (features.length > 0) entry.features = features;
         if (pricingNotes) entry.pricingNotes = pricingNotes;
@@ -160,12 +271,59 @@ export default function Step4Content({
       .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
       .filter((f) => f.question.length > 0 && f.answer.length > 0);
 
+    // Testimonials — drop entries with empty name or quote.
+    const cleanedTestimonials: Testimonial[] = testimonials
+      .map((t): Testimonial | null => {
+        const name = t.name.trim();
+        const quote = t.quote.trim();
+        if (!name || !quote) return null;
+        const location = t.location?.trim() || undefined;
+        return { name, quote, ...(location ? { location } : {}) };
+      })
+      .filter((t): t is Testimonial => t !== null);
+
+    // Trust — undefined any blank-string fields, drop the section
+    // entirely if every field is empty.
+    const trustClean: TrustData = {};
+    if (typeof trust.yearsExperience === "number" && trust.yearsExperience >= 0) {
+      trustClean.yearsExperience = Math.round(trust.yearsExperience);
+    }
+    const associations = trust.associations?.trim();
+    if (associations) trustClean.associations = associations;
+    const awards = trust.awards?.trim();
+    if (awards) trustClean.awards = awards;
+    const trustHasContent = Object.keys(trustClean).length > 0;
+
+    // Business — same pattern: clean each field, drop empties,
+    // omit the section entirely if no field is set.
+    const businessClean: BusinessDetails = {};
+    const contactName = business.contactName?.trim();
+    if (contactName) businessClean.contactName = contactName;
+    const phoneDisplay = business.phoneDisplay?.trim();
+    if (phoneDisplay) businessClean.phoneDisplay = phoneDisplay;
+    const phoneTel = business.phoneTel?.trim();
+    if (phoneTel) businessClean.phoneTel = phoneTel;
+    const publicEmail = business.publicEmail?.trim();
+    if (publicEmail) businessClean.publicEmail = publicEmail;
+    const address = business.address?.trim();
+    if (address) businessClean.address = address;
+    const serviceArea = business.serviceArea?.trim();
+    if (serviceArea) businessClean.serviceArea = serviceArea;
+    if (business.openingHours && Object.keys(business.openingHours).length > 0) {
+      businessClean.openingHours = business.openingHours;
+    }
+    const businessHasContent = Object.keys(businessClean).length > 0;
+
     return {
       tagline: trimmedTagline || undefined,
       aboutBlurb: trimmedAbout || undefined,
       aboutBullets: cleanedBullets.length > 0 ? cleanedBullets : undefined,
       services: servicesArr.length > 0 ? servicesArr : undefined,
       faq: cleanedFaq.length > 0 ? cleanedFaq : undefined,
+      testimonials:
+        cleanedTestimonials.length > 0 ? cleanedTestimonials : undefined,
+      trust: trustHasContent ? trustClean : undefined,
+      business: businessHasContent ? businessClean : undefined,
       notes: notes.trim() || undefined,
     };
   }
@@ -240,6 +398,7 @@ export default function Step4Content({
         letter="A"
         title="Tagline + about us"
         helper="The hero subtitle people see first, then a few short paragraphs about who you are and why customers should pick you."
+        filled={!!(tagline.trim() || aboutBlurb.trim())}
       >
         <FieldLabel>Tagline (optional)</FieldLabel>
         <input
@@ -276,6 +435,7 @@ export default function Step4Content({
         letter="B"
         title="What makes you different"
         helper="A handful of bullets — your unique angle. Up to 8. Keep them short and concrete."
+        filled={aboutBullets.some((b) => b.trim().length > 0)}
       >
         <BulletEditor
           bullets={aboutBullets}
@@ -291,7 +451,8 @@ export default function Step4Content({
       <SectionCard
         letter="C"
         title="Services"
-        helper="Each service gets its own card. Edit the name, delete a service, or add a new one — this list becomes the canonical services list on your site."
+        helper="Each service gets its own card. Edit the name, short description, starting price, longer description, features and pricing notes. Add or delete services freely — this list becomes the canonical services list on your site."
+        filled={serviceList.some((s) => s.serviceName.trim().length > 0)}
       >
         {serviceList.length === 0 ? (
           <p className="rounded-lg border border-dashed border-navy-200 bg-white p-4 text-sm text-navy-500">
@@ -305,12 +466,20 @@ export default function Step4Content({
               <ServiceContentCard
                 key={s._localId}
                 serviceName={s.serviceName}
+                description={s.description ?? ""}
+                priceFrom={s.priceFrom}
                 longDescription={s.longDescription ?? ""}
                 features={s.features ?? []}
                 pricingNotes={s.pricingNotes ?? ""}
                 disabled={disabled}
                 onNameChange={(v) =>
                   patchService(s._localId, { serviceName: v })
+                }
+                onDescriptionChange={(v) =>
+                  patchService(s._localId, { description: v })
+                }
+                onPriceFromChange={(v) =>
+                  patchService(s._localId, { priceFrom: v })
                 }
                 onLongDescChange={(v) =>
                   patchService(s._localId, { longDescription: v })
@@ -347,12 +516,74 @@ export default function Step4Content({
         letter="D"
         title="FAQ"
         helper="Up to 10 question-and-answer pairs. The questions you actually get asked. Great for SEO + customer trust."
+        filled={faq.some(
+          (f) => f.question.trim().length > 0 || f.answer.trim().length > 0,
+        )}
       >
         <FaqEditor
           faq={faq}
           onChange={setFaq}
           disabled={disabled}
           cap={FAQ_CAP}
+        />
+      </SectionCard>
+
+      {/* ---------- E. Testimonials ---------- */}
+      <SectionCard
+        letter="E"
+        title="Testimonials"
+        helper="Up to 5 quotes from happy customers. Each: name, location (optional), and the quote itself. Render on your home page + about page — huge trust boost."
+        filled={testimonials.some(
+          (t) => t.name.trim().length > 0 || t.quote.trim().length > 0,
+        )}
+      >
+        <TestimonialEditor
+          testimonials={testimonials}
+          onChange={setTestimonials}
+          disabled={disabled}
+          cap={TESTIMONIAL_CAP}
+        />
+      </SectionCard>
+
+      {/* ---------- F. Trust signals ---------- */}
+      <SectionCard
+        letter="F"
+        title="Trust signals"
+        helper="Years of experience, professional associations, and any awards. Render as a small strip near the top of your About page (e.g. 'Established 2010 • Member of FMB • Trustmark certified')."
+        filled={
+          typeof trust.yearsExperience === "number" ||
+          !!trust.associations?.trim() ||
+          !!trust.awards?.trim()
+        }
+      >
+        <TrustEditor
+          trust={trust}
+          onChange={setTrust}
+          disabled={disabled}
+        />
+      </SectionCard>
+
+      {/* ---------- G. Business details ---------- */}
+      <SectionCard
+        letter="G"
+        title="Business details"
+        helper="Contact info, opening hours and service area — appears in the footer of every page, on the contact page, and in the structured data search engines read."
+        filled={
+          !!(
+            business.contactName?.trim() ||
+            business.phoneDisplay?.trim() ||
+            business.publicEmail?.trim() ||
+            business.address?.trim() ||
+            business.serviceArea?.trim() ||
+            (business.openingHours &&
+              Object.keys(business.openingHours).length > 0)
+          )
+        }
+      >
+        <BusinessDetailsEditor
+          business={business}
+          onChange={setBusiness}
+          disabled={disabled}
         />
       </SectionCard>
 
@@ -435,26 +666,52 @@ function SectionCard({
   letter,
   title,
   helper,
+  filled,
+  defaultOpen = true,
   children,
 }: {
   letter: string;
   title: string;
   helper: string;
+  /** Visual indicator on the summary chip showing whether this
+   *  section has any content. Customer can scan the page to see
+   *  what they've filled in vs what's still empty. */
+  filled: boolean;
+  /** Open by default? All sections default to open so customers
+   *  can see everything at once. They can collapse anything they
+   *  consider done. State is per-render (resets on page reload). */
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-7 rounded-2xl border border-navy-100 bg-cream-50 p-6">
-      <header className="flex items-baseline gap-3">
+    <details
+      className="group mt-5 rounded-2xl border border-navy-100 bg-cream-50 p-6 [&[open]>summary>.chevron]:rotate-90"
+      open={defaultOpen}
+    >
+      <summary className="flex cursor-pointer list-none items-baseline gap-3 [&::-webkit-details-marker]:hidden">
+        <span className="chevron flex-none text-navy-500 transition-transform">
+          ▸
+        </span>
         <span className="font-serif text-sm font-semibold text-ember-600">
           Section {letter}
         </span>
-        <h3 className="font-serif text-lg font-semibold text-navy-900">
+        <h3 className="flex-1 font-serif text-lg font-semibold text-navy-900">
           {title}
         </h3>
-      </header>
-      <p className="mt-1 text-sm text-navy-600">{helper}</p>
+        <span
+          className={[
+            "flex-none rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+            filled
+              ? "bg-green-100 text-green-800"
+              : "bg-navy-100/70 text-navy-500",
+          ].join(" ")}
+        >
+          {filled ? "Filled in" : "Empty"}
+        </span>
+      </summary>
+      <p className="mt-2 text-sm text-navy-600">{helper}</p>
       <div className="mt-4">{children}</div>
-    </section>
+    </details>
   );
 }
 
@@ -710,22 +967,30 @@ const SERVICE_NAME_MAX = 200;
 
 function ServiceContentCard({
   serviceName,
+  description,
+  priceFrom,
   longDescription,
   features,
   pricingNotes,
   disabled,
   onNameChange,
+  onDescriptionChange,
+  onPriceFromChange,
   onLongDescChange,
   onFeaturesChange,
   onPricingNotesChange,
   onDelete,
 }: {
   serviceName: string;
+  description: string;
+  priceFrom: number | undefined;
   longDescription: string;
   features: string[];
   pricingNotes: string;
   disabled: boolean;
   onNameChange: (v: string) => void;
+  onDescriptionChange: (v: string) => void;
+  onPriceFromChange: (v: number | undefined) => void;
   onLongDescChange: (v: string) => void;
   onFeaturesChange: (v: string[]) => void;
   onPricingNotesChange: (v: string) => void;
@@ -763,13 +1028,62 @@ function ServiceContentCard({
         />
       </div>
 
+      {/* Short description + starting price — the canonical fields
+          that drive the services card grid. Both seeded from Phase 3
+          on first edit; canonical thereafter. */}
+      <div className="mt-4 grid gap-4 md:grid-cols-[2fr_1fr]">
+        <div>
+          <FieldLabel>Short description (optional)</FieldLabel>
+          <p className="text-xs text-navy-600">
+            1-2 sentences. The summary that appears on the services
+            card grid.
+          </p>
+          <textarea
+            value={description}
+            disabled={disabled}
+            onChange={(e) => onDescriptionChange(e.target.value)}
+            maxLength={SERVICE_DESC_MAX}
+            rows={2}
+            placeholder="e.g. Convert your loft into usable living space — bedroom, office, or playroom. Full project from drawings to handover."
+            className="mt-1 w-full resize-y rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+          <CharCount value={description} max={SERVICE_DESC_MAX} />
+        </div>
+        <div>
+          <FieldLabel>Starting price (£) — optional</FieldLabel>
+          <p className="text-xs text-navy-600">
+            Renders as &ldquo;From £X&rdquo; on the card. Leave blank
+            if you&apos;d rather not show one.
+          </p>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            value={typeof priceFrom === "number" ? priceFrom : ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw === "") {
+                onPriceFromChange(undefined);
+                return;
+              }
+              const num = Number(raw);
+              onPriceFromChange(
+                Number.isFinite(num) && num >= 0 ? num : undefined,
+              );
+            }}
+            placeholder="e.g. 25000"
+            className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+      </div>
+
       <FieldLabel className="mt-4">
         Longer description (optional)
       </FieldLabel>
       <p className="text-xs text-navy-600">
-        2-4 sentences expanding on the short description from
-        intake. What&apos;s included, typical scope, what makes
-        you good at it.
+        2-4 sentences for the dedicated services page. What&apos;s
+        included, typical scope, what makes you good at it.
       </p>
       <textarea
         value={longDescription}
@@ -901,5 +1215,374 @@ function RowDeleteButton({
         />
       </svg>
     </button>
+  );
+}
+
+// ---------- Testimonial editor ----------
+//
+// Up to 5 customer testimonials. Each: required name, optional
+// location, required quote. List uses the same stable-id pattern
+// as services so reorders/deletes don't lose state. Add button
+// disabled at cap.
+
+function TestimonialEditor({
+  testimonials,
+  onChange,
+  disabled,
+  cap,
+}: {
+  testimonials: TestimonialRow[];
+  onChange: (next: TestimonialRow[]) => void;
+  disabled: boolean;
+  cap: number;
+}) {
+  function patch(id: string, p: Partial<Testimonial>) {
+    onChange(testimonials.map((t) => (t._localId === id ? { ...t, ...p } : t)));
+  }
+  function remove(id: string) {
+    onChange(testimonials.filter((t) => t._localId !== id));
+  }
+  function add() {
+    onChange([
+      ...testimonials,
+      { name: "", quote: "", _localId: crypto.randomUUID() },
+    ]);
+  }
+  return (
+    <div>
+      {testimonials.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-navy-200 bg-white p-4 text-sm text-navy-500">
+          No testimonials yet. Click &ldquo;Add a testimonial&rdquo;
+          below to start. Even one or two real customer quotes makes
+          your site noticeably more trustworthy.
+        </p>
+      ) : (
+        <ul className="space-y-4">
+          {testimonials.map((t) => (
+            <li
+              key={t._localId}
+              className="rounded-xl border border-navy-100 bg-white p-5"
+            >
+              <div className="flex items-start gap-3">
+                <div className="grid flex-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <FieldLabel>Customer name</FieldLabel>
+                    <input
+                      type="text"
+                      value={t.name}
+                      disabled={disabled}
+                      onChange={(e) => patch(t._localId, { name: e.target.value })}
+                      maxLength={TESTIMONIAL_NAME_MAX}
+                      placeholder="e.g. Sarah Johnson"
+                      className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                    />
+                  </div>
+                  <div>
+                    <FieldLabel>Location (optional)</FieldLabel>
+                    <input
+                      type="text"
+                      value={t.location ?? ""}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        patch(t._localId, { location: e.target.value })
+                      }
+                      maxLength={TESTIMONIAL_LOCATION_MAX}
+                      placeholder="e.g. Headington, Oxford"
+                      className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                    />
+                  </div>
+                </div>
+                <RowDeleteButton
+                  disabled={disabled}
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Remove this testimonial${t.name.trim() ? ` (from ${t.name.trim()})` : ""}?`,
+                      )
+                    ) {
+                      remove(t._localId);
+                    }
+                  }}
+                  label={`Remove testimonial${t.name.trim() ? ` from ${t.name.trim()}` : ""}`}
+                />
+              </div>
+              <FieldLabel className="mt-3">Quote</FieldLabel>
+              <textarea
+                value={t.quote}
+                disabled={disabled}
+                onChange={(e) => patch(t._localId, { quote: e.target.value })}
+                maxLength={TESTIMONIAL_QUOTE_MAX}
+                rows={3}
+                placeholder="e.g. Lucas and his team transformed our loft into the perfect home office. On time, on budget, and tidied up beautifully every day."
+                className="mt-1 w-full resize-y rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+              />
+              <CharCount value={t.quote} max={TESTIMONIAL_QUOTE_MAX} />
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={add}
+          disabled={disabled || testimonials.length >= cap}
+          className="rounded-lg border-2 border-navy-200 bg-white px-3 py-1.5 text-sm font-semibold text-navy-900 hover:border-navy-400 disabled:opacity-50"
+        >
+          + Add a testimonial
+        </button>
+        <span className="text-xs text-navy-500">
+          {testimonials.length} / {cap} testimonial
+          {testimonials.length === 1 ? "" : "s"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Trust signals editor ----------
+//
+// Three flat fields, all optional. Renders as a tiny grid for
+// scanning. Years experience is a number; the other two are short
+// free-text.
+
+function TrustEditor({
+  trust,
+  onChange,
+  disabled,
+}: {
+  trust: TrustData;
+  onChange: (next: TrustData) => void;
+  disabled: boolean;
+}) {
+  function patch(p: Partial<TrustData>) {
+    onChange({ ...trust, ...p });
+  }
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <div>
+        <FieldLabel>Years of experience (optional)</FieldLabel>
+        <input
+          type="number"
+          min={0}
+          max={200}
+          step={1}
+          value={
+            typeof trust.yearsExperience === "number"
+              ? trust.yearsExperience
+              : ""
+          }
+          disabled={disabled}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === "") return patch({ yearsExperience: undefined });
+            const num = Number(raw);
+            patch({
+              yearsExperience:
+                Number.isFinite(num) && num >= 0 ? num : undefined,
+            });
+          }}
+          placeholder="e.g. 15"
+          className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+        />
+        <p className="mt-1 text-xs text-navy-500">
+          Renders as &ldquo;Established YYYY&rdquo; or &ldquo;15
+          years&rsquo; experience&rdquo;.
+        </p>
+      </div>
+      <div className="md:col-span-2">
+        <FieldLabel>Professional associations (optional)</FieldLabel>
+        <input
+          type="text"
+          value={trust.associations ?? ""}
+          disabled={disabled}
+          onChange={(e) => patch({ associations: e.target.value })}
+          maxLength={ASSOCIATIONS_MAX}
+          placeholder="e.g. Member of FMB, NICEIC certified, Trustmark approved"
+          className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+        />
+        <CharCount value={trust.associations ?? ""} max={ASSOCIATIONS_MAX} />
+      </div>
+      <div className="md:col-span-2">
+        <FieldLabel>Awards or recognitions (optional)</FieldLabel>
+        <input
+          type="text"
+          value={trust.awards ?? ""}
+          disabled={disabled}
+          onChange={(e) => patch({ awards: e.target.value })}
+          maxLength={AWARDS_MAX}
+          placeholder="e.g. Oxfordshire Builder of the Year 2024"
+          className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+        />
+        <CharCount value={trust.awards ?? ""} max={AWARDS_MAX} />
+      </div>
+    </div>
+  );
+}
+
+// ---------- Business details editor ----------
+//
+// Contact info + opening hours. Every field optional individually
+// — adapter prefers any value here over Phase 3, falls through to
+// Phase 3 / prospect record for missing fields. Lets customers
+// update their contact info without emailing Ben.
+
+function BusinessDetailsEditor({
+  business,
+  onChange,
+  disabled,
+}: {
+  business: BusinessDetails;
+  onChange: (next: BusinessDetails) => void;
+  disabled: boolean;
+}) {
+  function patch(p: Partial<BusinessDetails>) {
+    onChange({ ...business, ...p });
+  }
+  function patchHours(day: Day, p: Partial<{ open: boolean; from?: string; to?: string }>) {
+    const current = business.openingHours ?? {};
+    const dayCurrent = current[day] ?? { open: false };
+    onChange({
+      ...business,
+      openingHours: {
+        ...current,
+        [day]: { ...dayCurrent, ...p },
+      },
+    });
+  }
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <FieldLabel>Main contact name (optional)</FieldLabel>
+          <input
+            type="text"
+            value={business.contactName ?? ""}
+            disabled={disabled}
+            onChange={(e) => patch({ contactName: e.target.value })}
+            maxLength={CONTACT_NAME_MAX}
+            placeholder="e.g. Lucas Smith"
+            className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+        <div>
+          <FieldLabel>Public email</FieldLabel>
+          <input
+            type="email"
+            value={business.publicEmail ?? ""}
+            disabled={disabled}
+            onChange={(e) => patch({ publicEmail: e.target.value })}
+            maxLength={EMAIL_MAX}
+            placeholder="e.g. hello@bobbuilders.co.uk"
+            className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+        <div>
+          <FieldLabel>Phone (display format)</FieldLabel>
+          <input
+            type="text"
+            value={business.phoneDisplay ?? ""}
+            disabled={disabled}
+            onChange={(e) => patch({ phoneDisplay: e.target.value })}
+            maxLength={PHONE_MAX}
+            placeholder="e.g. 01865 123 456"
+            className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+        <div>
+          <FieldLabel>Phone (digits only, for tap-to-call)</FieldLabel>
+          <input
+            type="tel"
+            value={business.phoneTel ?? ""}
+            disabled={disabled}
+            onChange={(e) => patch({ phoneTel: e.target.value })}
+            maxLength={PHONE_MAX}
+            placeholder="e.g. 01865123456"
+            className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+      </div>
+
+      <div>
+        <FieldLabel>Business address</FieldLabel>
+        <textarea
+          value={business.address ?? ""}
+          disabled={disabled}
+          onChange={(e) => patch({ address: e.target.value })}
+          maxLength={ADDRESS_MAX}
+          rows={2}
+          placeholder="e.g. 12 High Street, Oxford OX1 4AB"
+          className="mt-1 w-full resize-y rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+        />
+      </div>
+
+      <div>
+        <FieldLabel>Service area</FieldLabel>
+        <input
+          type="text"
+          value={business.serviceArea ?? ""}
+          disabled={disabled}
+          onChange={(e) => patch({ serviceArea: e.target.value })}
+          maxLength={SERVICE_AREA_MAX}
+          placeholder="e.g. Oxford and within 20 miles"
+          className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+        />
+      </div>
+
+      <div>
+        <FieldLabel>Opening hours</FieldLabel>
+        <p className="text-xs text-navy-600">
+          Tick the days you&apos;re open and set the times. Anything
+          left unticked renders as &ldquo;Closed&rdquo;.
+        </p>
+        <div className="mt-3 space-y-2">
+          {DAYS.map((day) => {
+            const h = business.openingHours?.[day];
+            const open = h?.open ?? false;
+            return (
+              <div
+                key={day}
+                className="flex flex-wrap items-center gap-3 rounded-lg border border-navy-100 bg-white px-3 py-2"
+              >
+                <label className="flex w-20 flex-none items-center gap-2 text-sm font-semibold text-navy-900">
+                  <input
+                    type="checkbox"
+                    checked={open}
+                    disabled={disabled}
+                    onChange={(e) =>
+                      patchHours(day, { open: e.target.checked })
+                    }
+                    className="h-4 w-4 accent-navy-900"
+                  />
+                  {day}
+                </label>
+                {open ? (
+                  <>
+                    <input
+                      type="time"
+                      value={h?.from ?? ""}
+                      disabled={disabled}
+                      onChange={(e) => patchHours(day, { from: e.target.value })}
+                      aria-label={`${day} open from`}
+                      className="rounded-lg border-2 border-navy-200 bg-white px-2 py-1 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                    />
+                    <span className="text-xs text-navy-600">to</span>
+                    <input
+                      type="time"
+                      value={h?.to ?? ""}
+                      disabled={disabled}
+                      onChange={(e) => patchHours(day, { to: e.target.value })}
+                      aria-label={`${day} open until`}
+                      className="rounded-lg border-2 border-navy-200 bg-white px-2 py-1 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                    />
+                  </>
+                ) : (
+                  <span className="text-xs text-navy-500">Closed</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }

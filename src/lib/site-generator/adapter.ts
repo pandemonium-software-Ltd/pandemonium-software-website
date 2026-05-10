@@ -22,6 +22,8 @@ import type {
   ModuleConfig,
   Service,
   SiteGeneratorInput,
+  Testimonial,
+  TrustSignals,
   Vibe,
 } from "./types";
 
@@ -72,6 +74,17 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
   const intake = (prospect.phase3Data ?? {}) as Record<string, unknown>;
 
   // --- Business info ---
+  // Three-tier preference (most specific wins):
+  //   1. content.business (Hub Step 4 Site Content > G. Business
+  //      details — customer-edited canonical post-onboarding)
+  //   2. prospect.* (set at Phase 1 / Phase 3 — original intake)
+  //   3. intake.contactDetails / intake.address (Phase 3 deeper
+  //      contact fields, may be richer than the bare prospect rec)
+  const contentBusiness = (content.business ?? {}) as Record<string, unknown>;
+  const intakeContact = (intake.contactDetails ?? {}) as Record<
+    string,
+    unknown
+  >;
   const businessName = prospect.business?.trim() || "";
   if (!businessName) {
     throw new AdapterError(
@@ -82,10 +95,26 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
     name: businessName,
     type: prospect.businessType?.trim() || "Local business",
     location: prospect.location?.trim() || "",
-    phone: prospect.phone?.trim() || "",
-    email: prospect.email?.trim() || "",
-    address: optionalString(intake.address) ?? optionalString(ob.address),
-    hours: optionalString(intake.hours) ?? optionalString(ob.hours),
+    phone:
+      optionalString(contentBusiness.phoneDisplay) ??
+      optionalString(intakeContact.phoneDisplay) ??
+      prospect.phone?.trim() ??
+      "",
+    email:
+      optionalString(contentBusiness.publicEmail) ??
+      optionalString(intakeContact.publicEmail) ??
+      prospect.email?.trim() ??
+      "",
+    address:
+      optionalString(contentBusiness.address) ??
+      optionalString(intakeContact.address) ??
+      optionalString(intake.address) ??
+      optionalString(ob.address),
+    hours:
+      formatOpeningHours(contentBusiness.openingHours) ??
+      formatOpeningHours(intakeContact.openingHours) ??
+      optionalString(intake.hours) ??
+      optionalString(ob.hours),
   };
   if (!business.phone || !business.email) {
     throw new AdapterError(
@@ -148,8 +177,11 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
 
   let services: Service[];
   if (contentServicesRaw.length > 0) {
-    // Content step has services — use them as the canonical list,
-    // merging in Phase 3 description/price/duration where names match.
+    // Content step has services — use them as the canonical list.
+    // For description + priceFrom + duration, prefer content step
+    // values (NEW C5.5 — these are now editable in Site Content),
+    // fall back to Phase 3 by name match, then to a derived /
+    // placeholder description so cards are never empty.
     services = contentServicesRaw
       .map((cs): Service | null => {
         if (!cs || typeof cs !== "object") return null;
@@ -167,21 +199,32 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
         const pricingNotes = optionalString(obj.pricingNotes);
 
         const phase3Match = phase3ByName.get(name);
-        // Description fallback chain: long → phase3 short → first
-        // sentence of long description → bare placeholder. We always
-        // need *some* description so cards aren't empty.
+
+        // Description: content step preferred, Phase 3 fallback,
+        // derive-from-long fallback, placeholder last.
+        const contentDescription = optionalString(obj.description);
         const description =
+          contentDescription ??
           phase3Match?.description ??
           (longDescription
             ? longDescription.split(/[.!?]\s/)[0] + "."
             : "Get in touch for details.");
+
+        // Price: content step preferred (allows updates), Phase 3
+        // fallback. Either may be undefined ("from £X" not shown).
+        const contentPriceFrom =
+          typeof obj.priceFrom === "number" && obj.priceFrom >= 0
+            ? Math.round(obj.priceFrom)
+            : undefined;
+        const priceFrom = contentPriceFrom ?? phase3Match?.priceFrom;
+
         return {
           name,
           description,
           longDescription,
           features: features && features.length > 0 ? features : undefined,
           pricingNotes,
-          priceFrom: phase3Match?.priceFrom,
+          priceFrom,
           durationMinutes: phase3Match?.durationMinutes,
         };
       })
@@ -327,6 +370,50 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
         .filter((e): e is FaqEntry => e !== null)
     : undefined;
 
+  // Testimonials — content step canonical, Phase 3 socialProof
+  // fallback (so older customers without content-step testimonials
+  // still see their intake quotes on the live site).
+  const intakeSocial = (intake.socialProof ?? {}) as Record<string, unknown>;
+  const testimonialsRaw =
+    Array.isArray(content.testimonials) && content.testimonials.length > 0
+      ? (content.testimonials as unknown[])
+      : Array.isArray(intakeSocial.testimonials)
+        ? (intakeSocial.testimonials as unknown[])
+        : [];
+  const testimonials = testimonialsRaw
+    .map((t): Testimonial | null => {
+      if (!t || typeof t !== "object") return null;
+      const obj = t as Record<string, unknown>;
+      const name = optionalString(obj.name);
+      const quote = optionalString(obj.quote);
+      if (!name || !quote) return null;
+      return { name, quote, location: optionalString(obj.location) };
+    })
+    .filter((t): t is Testimonial => t !== null);
+
+  // Trust signals — content step canonical, Phase 3 socialProof
+  // fallback for each individual field.
+  const contentTrust = (content.trust ?? {}) as Record<string, unknown>;
+  const trust: TrustSignals = {
+    yearsExperience:
+      (typeof contentTrust.yearsExperience === "number"
+        ? contentTrust.yearsExperience
+        : undefined) ??
+      (typeof intakeSocial.yearsExperience === "number"
+        ? intakeSocial.yearsExperience
+        : undefined),
+    associations:
+      optionalString(contentTrust.associations) ??
+      optionalString(intakeSocial.associations),
+    awards:
+      optionalString(contentTrust.awards) ??
+      optionalString(intakeSocial.awards),
+  };
+  const trustHasAny =
+    typeof trust.yearsExperience === "number" ||
+    !!trust.associations ||
+    !!trust.awards;
+
   const copy: CustomCopy = {
     tagline:
       optionalString(content.tagline) ?? optionalString(intake.tagline),
@@ -335,6 +422,8 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
     aboutBullets: aboutBullets && aboutBullets.length > 0 ? aboutBullets : undefined,
     servicesIntro: optionalString(intake.servicesIntro),
     faq: faq && faq.length > 0 ? faq : undefined,
+    testimonials: testimonials.length > 0 ? testimonials : undefined,
+    trust: trustHasAny ? trust : undefined,
   };
 
   return {
@@ -355,6 +444,46 @@ function optionalString(v: unknown): string | undefined {
   if (typeof v !== "string") return undefined;
   const t = v.trim();
   return t.length > 0 ? t : undefined;
+}
+
+/**
+ * Convert a structured openingHours record (from Hub Step 4 G or
+ * Phase 3 contactDetails) into a single human-readable string for
+ * the BusinessInfo.hours field. Returns undefined if the record is
+ * missing or every day is closed.
+ *
+ * Example output: "Mon-Fri 09:00-17:00, Sat 10:00-14:00, closed Sun"
+ */
+function formatOpeningHours(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+  const entries: { day: string; from: string; to: string }[] = [];
+  for (const day of days) {
+    const slot = (raw as Record<string, unknown>)[day];
+    if (!slot || typeof slot !== "object") continue;
+    const obj = slot as { open?: boolean; from?: string; to?: string };
+    if (obj.open && obj.from && obj.to) {
+      entries.push({ day, from: obj.from, to: obj.to });
+    }
+  }
+  if (entries.length === 0) return undefined;
+  // Compress contiguous same-hours runs into ranges (Mon-Fri 09:00-17:00).
+  const groups: { days: string[]; from: string; to: string }[] = [];
+  for (const e of entries) {
+    const last = groups[groups.length - 1];
+    if (last && last.from === e.from && last.to === e.to) {
+      last.days.push(e.day);
+    } else {
+      groups.push({ days: [e.day], from: e.from, to: e.to });
+    }
+  }
+  return groups
+    .map((g) => {
+      const range =
+        g.days.length === 1 ? g.days[0] : `${g.days[0]}-${g.days[g.days.length - 1]}`;
+      return `${range} ${g.from}-${g.to}`;
+    })
+    .join(", ");
 }
 
 function readDomainSlug(ob: Record<string, unknown>): string {

@@ -70,6 +70,32 @@ export type FaqEntry = {
   answer: string;
 };
 
+/**
+ * Customer testimonial captured in Hub Step 4 Content (seeded from
+ * Phase 3 socialProof.testimonials). Renders on the home page +
+ * About page. Up to 5.
+ */
+export type Testimonial = {
+  name: string;
+  /** Optional location ("Headington, Oxford"). */
+  location?: string;
+  quote: string;
+};
+
+/**
+ * Trust signals captured in Hub Step 4 Content (seeded from Phase
+ * 3 socialProof). Renders as a small horizontal strip on the
+ * About page header. Every field optional.
+ */
+export type TrustSignals = {
+  /** Years of experience. Renders as "15 years' experience". */
+  yearsExperience?: number;
+  /** Free-text list of professional bodies / certifications. */
+  associations?: string;
+  /** Free-text list of awards or recognitions. */
+  awards?: string;
+};
+
 export type ModuleConfig = {
   /** Cal.com event link if booking module bought. */
   booking?: { calcomUrl: string };
@@ -127,6 +153,12 @@ export type CustomCopy = {
   /** FAQ Q&A pairs — rendered on the dedicated /faq page +
    *  emitted as FAQPage JSON-LD. From Hub Step 4 Content. */
   faq?: readonly FaqEntry[];
+  /** Customer testimonials — rendered on home + About pages.
+   *  Up to 5. From Hub Step 4 Content (seeded from Phase 3). */
+  testimonials?: readonly Testimonial[];
+  /** Trust signals — rendered as a strip on the About page.
+   *  From Hub Step 4 Content (seeded from Phase 3). */
+  trust?: TrustSignals;
 };
 
 /**
