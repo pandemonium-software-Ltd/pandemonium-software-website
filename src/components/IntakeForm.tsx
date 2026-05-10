@@ -58,6 +58,7 @@ import {
   MODULE_NEWSLETTER_SETUP_GBP,
   MODULE_NEWSLETTER_MONTHLY_GBP,
   GBP_ADDON_ONE_OFF_GBP,
+  GBP_ADDON_MONTHLY_GBP,
   calculateFees,
 } from "@/lib/fees";
 import { site } from "@/lib/site";
@@ -967,10 +968,10 @@ function ModulesSection({
           register={register("modules.moduleNewsletter")}
         />
         <ModuleRow
-          label="Google Business Profile Setup/Audit"
-          tagline="One-off setup or audit so locals find you."
+          label="Google Business Profile + live reviews"
+          tagline="One-off setup or audit, plus your top Google reviews refreshed on your site automatically (powered by the Google Places API)."
           setup={`£${GBP_ADDON_ONE_OFF_GBP}`}
-          monthly="no monthly fee"
+          monthly={`+£${GBP_ADDON_MONTHLY_GBP}/mo`}
           register={register("modules.gbpAddon")}
         />
       </div>

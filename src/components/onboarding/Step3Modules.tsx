@@ -803,6 +803,13 @@ function ModuleGbp({
         search-friendly description, fill in opening hours, services
         and photos.
       </p>
+      <p className="mt-3 rounded-lg border border-brand-primary-100 bg-brand-primary-50 p-3 text-[0.9rem] leading-relaxed text-brand-primary-900">
+        <strong>Bonus included with your monthly:</strong> once
+        you&apos;ve added me as a Manager (steps below), your top
+        Google reviews will be pulled onto your site automatically
+        and refreshed every day. No copying-pasting; star ratings
+        also light up in Google search results, helping click-through.
+      </p>
       <ol className="mt-4 space-y-3 text-[0.95rem] leading-relaxed text-navy-700">
         <li className="flex gap-3">
           <Bullet n={1} />

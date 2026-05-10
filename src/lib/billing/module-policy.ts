@@ -171,7 +171,8 @@ export type ModuleDelta = {
  * by Ben). Founding members get a flat rate that doesn't itemise per
  * module — but the delta calculation still works because both old
  * and new sides see the same flat rate; setup delta lands at zero
- * unless the GBP one-off addon changed.
+ * unless the GBP one-off addon changed, and monthly delta lands at
+ * zero unless the GBP monthly addon (NEW C5.5+) changed.
  */
 export function calculateModuleDelta(args: {
   fromModules: string[];

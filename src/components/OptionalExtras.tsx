@@ -11,9 +11,9 @@ export default function OptionalExtras() {
 
       <div className="mt-6 grid gap-5 md:grid-cols-1">
         <ExtraCard
-          title="Google Business Profile setup or audit"
-          price="£29"
-          frequency="one-off"
+          title="Google Business Profile + live reviews"
+          price="£29 + £2/mo"
+          frequency="one-off setup, then monthly"
           body={
             <>
               <p>
@@ -22,6 +22,15 @@ export default function OptionalExtras() {
                 you a step-by-step so you can do the final Google
                 verification) or audit your existing profile and give you a
                 prioritised list of fixes that actually move the needle.
+              </p>
+              <p className="mt-3">
+                <strong>Live reviews on your site:</strong> the £2/month
+                covers an automated daily refresh of your top Google
+                reviews onto your site — powered by Google&apos;s own
+                Places API. Star ratings show up in search results too,
+                bumping your click-through. If you stop the monthly, the
+                refresh stops (no cost to me) and your last-cached reviews
+                stay until your next site rebuild.
               </p>
               <p className="mt-3 text-[0.95rem] text-navy-600">
                 Optional but recommended for any local business that gets

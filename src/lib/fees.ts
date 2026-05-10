@@ -19,6 +19,14 @@ export const MODULE_NEWSLETTER_SETUP_GBP = 39;
 export const MODULE_NEWSLETTER_MONTHLY_GBP = 6;
 
 export const GBP_ADDON_ONE_OFF_GBP = 29;
+// Monthly fee for the GBP module — covers the Google Places API
+// cost of refreshing the customer's reviews on their site daily.
+// Real cost is ~£0.40/month per customer (5 reviews per refresh,
+// 30 refreshes/month at $0.017 each); £2/month gives ~5x margin
+// for Google price increases, occasional retries on errors, and
+// the Stripe transaction fee. Stops when the monthly subscription
+// stops — see the GBP reviews cron in the ops worker.
+export const GBP_ADDON_MONTHLY_GBP = 2;
 
 export const FOUNDING_MEMBER_SETUP_GBP = 99;
 export const FOUNDING_MEMBER_MONTHLY_GBP = 15;
@@ -58,7 +66,12 @@ export function calculateFees(
   if (foundingMember) {
     return {
       setup: FOUNDING_MEMBER_SETUP_GBP + (selection.gbpAddon ? GBP_ADDON_ONE_OFF_GBP : 0),
-      monthly: FOUNDING_MEMBER_MONTHLY_GBP,
+      // Founding members still pay the GBP monthly when they tick
+      // the addon — the API cost we're covering is per-customer
+      // not per-tier.
+      monthly:
+        FOUNDING_MEMBER_MONTHLY_GBP +
+        (selection.gbpAddon ? GBP_ADDON_MONTHLY_GBP : 0),
       founding: true,
       modules,
     };
@@ -80,6 +93,7 @@ export function calculateFees(
   }
   if (selection.gbpAddon) {
     setup += GBP_ADDON_ONE_OFF_GBP;
+    monthly += GBP_ADDON_MONTHLY_GBP;
   }
 
   return { setup, monthly, founding: false, modules };
@@ -115,7 +129,7 @@ export function buildModuleListMarkdown(
   }
   if (selection.gbpAddon) {
     lines.push(
-      "  • Google Business Profile setup (I'll claim your listing and embed it)",
+      "  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)",
     );
   }
   return lines.join("\n");

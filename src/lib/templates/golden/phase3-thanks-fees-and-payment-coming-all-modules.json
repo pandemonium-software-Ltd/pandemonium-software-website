@@ -4,11 +4,11 @@
   "values": {
     "customerName": "Sam",
     "setupFee": 275,
-    "monthlyFee": 33,
-    "moduleList": "  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Google Business Profile setup (I'll claim your listing and embed it)"
+    "monthlyFee": 35,
+    "moduleList": "  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)"
   },
   "expected": {
     "subject": "Intake received — your fee summary",
-    "body": "Hi Sam,\n\nThanks for completing the intake form.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Google Business Profile setup (I'll claim your listing and embed it)\n\nPricing:\n  Setup (one-off):  £275\n  Monthly:          £33/mo\n\nWhat happens next: in a moment you'll get a second email with\nyour onboarding hub link. The hub walks you through 4-5 short\nsteps (~30 minutes total) to set up your Cloudflare account,\nyour domain, your brand assets, and pick a launch date.\n\nI'll handle everything technical from there — DNS, hosting, TLS,\nsender domain setup, the lot. You'll get an email each time I\nmake progress.\n\n— Ben"
+    "body": "Hi Sam,\n\nThanks for completing the intake form.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)\n\nPricing:\n  Setup (one-off):  £275\n  Monthly:          £35/mo\n\nWhat happens next: in a moment you'll get a second email with\nyour onboarding hub link. The hub walks you through 4-5 short\nsteps (~30 minutes total) to set up your Cloudflare account,\nyour domain, your brand assets, and pick a launch date.\n\nI'll handle everything technical from there — DNS, hosting, TLS,\nsender domain setup, the lot. You'll get an email each time I\nmake progress.\n\n— Ben"
   }
 }

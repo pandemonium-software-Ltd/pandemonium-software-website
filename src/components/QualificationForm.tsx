@@ -49,8 +49,9 @@ const MODULE_DETAILS: Record<
   },
   "Google Business Profile Setup/Audit": {
     setup: "£29 one-off",
-    monthly: "no monthly fee",
-    tagline: "I sort out your Google listing so locals can find you.",
+    monthly: "+£2/mo",
+    tagline:
+      "I sort your Google listing AND your top reviews refresh on your site automatically.",
   },
 };
 
