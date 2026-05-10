@@ -145,6 +145,12 @@ export type ProspectRecord = {
    *  site build fails. Cleared on next successful build. Useful
    *  for surfacing "last build failed" in /admin. NEW C5.4. */
   previewBuildFailedAt?: string;
+  /** Haiku polish cache — JSON object keyed by polish target (e.g.
+   *  "tagline", "service:Loft conversions:longDesc", "faq:0:answer").
+   *  Each value carries an `inputHash` so we re-polish when the
+   *  customer's source bullets change. See src/lib/haiku/cache.ts.
+   *  NEW C5.5. */
+  haikuCache?: Record<string, unknown>;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
@@ -697,6 +703,18 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     siteLiveAt: readDate(p["Site Live At"]),
     previewBuildTriggeredAt: readDate(p["Preview Build Triggered At"]),
     previewBuildFailedAt: readDate(p["Preview Build Failed At"]),
+    haikuCache: (() => {
+      const raw = readRichText(p["Haiku Cache"]);
+      if (!raw) return undefined;
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        return typeof parsed === "object" && parsed !== null
+          ? (parsed as Record<string, unknown>)
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    })(),
     changeRequests,
     moduleChangeRoundUsedAt: readDate(p["Module Change Round Used At"]),
     moduleChangeLog: parseModuleChangeLog(
@@ -921,6 +939,30 @@ export async function markPreviewBuildTriggered(
         "Preview Build Triggered At": {
           date: { start: new Date().toISOString() },
         },
+      },
+    },
+  });
+}
+
+/**
+ * Overwrite the Haiku Cache JSON blob. Called by the polish
+ * pipeline (src/lib/haiku/cache.ts) after each polish call to
+ * persist the new entry. Read-modify-write inside one PATCH so
+ * we don't lose concurrent updates from a parallel build (rare
+ * but possible if two builds are in flight for the same prospect).
+ *
+ * Idempotent: passing the same cache value twice is a no-op on
+ * Notion's side.
+ */
+export async function writeHaikuCache(
+  pageId: string,
+  cache: Record<string, unknown>,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Haiku Cache": rt(JSON.stringify(cache)),
       },
     },
   });

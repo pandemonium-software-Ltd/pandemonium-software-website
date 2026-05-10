@@ -20,11 +20,16 @@
 // the operator can see + fix the data in Notion).
 
 import { NextResponse } from "next/server";
-import { getProspectByToken } from "@/lib/notion-prospects";
+import {
+  getProspectByToken,
+  writeHaikuCache,
+} from "@/lib/notion-prospects";
 import {
   adaptProspect,
   AdapterError,
 } from "@/lib/site-generator/adapter";
+import { enrichWithHaiku } from "@/lib/haiku/enrich";
+import type { HaikuCache } from "@/lib/haiku/cache";
 import { getServerEnv } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -91,10 +96,32 @@ export async function GET(request: Request) {
     );
   }
 
+  // Haiku 4.5 copy assist (C5.5). Polishes tagline + about blurb +
+  // long service descriptions + FAQ answers using the cache stored
+  // in Notion. Cache hit = free + instant; cache miss = one Haiku
+  // call per changed field. NEVER throws — if Anthropic is down or
+  // the key is missing, raw customer text passes straight through.
+  const initialCache = (prospect.haikuCache ?? {}) as HaikuCache;
+  const { enriched, cache, cacheChanged } = await enrichWithHaiku(
+    input,
+    initialCache,
+  );
+  if (cacheChanged) {
+    // Persist new cache entries so the next build is a full hit.
+    // Best-effort: a Notion write failure is logged but doesn't
+    // fail the build (the polished copy is already in `enriched`).
+    try {
+      await writeHaikuCache(prospect.pageId, cache);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[haiku] cache persist failed: ${msg}`);
+    }
+  }
+
   // Resolve r2:// asset URLs to public URLs the build can hot-link
   // directly. Same logic as the marketing site's render path.
   const r2Base = env.R2_PUBLIC_URL_BASE ?? "https://assets.modu-forge.co.uk";
-  const resolved = resolveR2Urls(input, r2Base);
+  const resolved = resolveR2Urls(enriched, r2Base);
 
   // Plus the operational fields the Action needs to know which
   // Worker to deploy to.

@@ -83,6 +83,19 @@ const serverEnvSchema = z.object({
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_OWNER: z.string().optional(),
   GITHUB_REPO: z.string().optional(),
+
+  // Stage 2C C5.5 — Haiku copy assist.
+  //
+  // Anthropic API key. Workspace-scoped with a £30 monthly cap
+  // (set in console.anthropic.com). Used by /api/internal/site-data
+  // to polish customer bullets → marketing copy at site-build time.
+  // Optional so deploys without it skip enrichment gracefully (the
+  // adapter's raw output goes straight through).
+  //
+  // The model is HARDCODED in src/lib/haiku/client.ts as
+  // "claude-haiku-4-5" — there's no env switch for the model name,
+  // and that's deliberate. The spend cap is the safety net.
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
