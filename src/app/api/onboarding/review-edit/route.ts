@@ -36,6 +36,10 @@ import {
   sendInternalNotification,
 } from "@/lib/email";
 import { site } from "@/lib/site";
+import {
+  looksLikeMultipleItems,
+  MULTI_ITEM_DECLINE_MESSAGE,
+} from "@/lib/multi-item-detector";
 
 export const runtime = "nodejs";
 
@@ -88,6 +92,23 @@ export async function POST(request: Request) {
           "Your onboarding is signed off — pre-launch revisions are closed. For any change requests, use the 'Need a change?' form on your account dashboard.",
       },
       { status: 403 },
+    );
+  }
+
+  // Multi-item check — same logic as /api/account/change-request.
+  // Each pre-launch edit must be a single ask so Cowork's classifier
+  // can apply or escalate cleanly. Multi-field requests (e.g.
+  // "change email and phone") slip past the regex but Haiku is
+  // also instructed to refuse them. Detector returning false here
+  // doesn't guarantee acceptance — it's the cheap first gate.
+  // Doesn't burn the cap — nothing's saved.
+  if (looksLikeMultipleItems(message)) {
+    return NextResponse.json(
+      {
+        error: MULTI_ITEM_DECLINE_MESSAGE,
+        suggestion: "split-into-separate-requests",
+      },
+      { status: 422 },
     );
   }
 

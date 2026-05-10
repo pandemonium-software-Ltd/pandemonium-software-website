@@ -134,7 +134,16 @@ export async function classifyChangeRequest(args: {
     `5. Confidence below 0.7 means the request is risky — Cowork will ` +
     `escalate to a human regardless of classification, so be honest about ` +
     `your uncertainty.\n` +
-    `6. NEVER use "patch" with a target outside the list above.`;
+    `6. NEVER use "patch" with a target outside the list above.\n` +
+    `7. MULTI-FIELD requests: if the customer asks to change MORE THAN ` +
+    `ONE distinct field in this single request (e.g. "change email AND ` +
+    `phone", "update tagline and address", "change my hours and contact ` +
+    `name"), ALWAYS classify as "ambiguous" and DO NOT propose a patch. ` +
+    `The reasoning should mention "multi-field — please split into ` +
+    `separate requests" so the operator knows to ask the customer to ` +
+    `re-submit. Single fields with multiple data points (e.g. "update ` +
+    `address to X, Y, postcode Z") are still ONE field and may be ` +
+    `patched normally.`;
 
   const out = await callHaiku({
     system,

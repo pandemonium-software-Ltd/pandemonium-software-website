@@ -35,6 +35,10 @@ import {
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
+import {
+  looksLikeMultipleItems,
+  MULTI_ITEM_DECLINE_MESSAGE,
+} from "@/lib/multi-item-detector";
 
 export const runtime = "nodejs";
 
@@ -113,8 +117,7 @@ export async function POST(request: Request) {
   if (looksLikeMultipleItems(message)) {
     return NextResponse.json(
       {
-        error:
-          "Looks like you've sent multiple changes in one request. Please split them into separate change requests — one item per request — so each can be tracked and applied cleanly.",
+        error: MULTI_ITEM_DECLINE_MESSAGE,
         suggestion: "split-into-separate-requests",
       },
       { status: 422 },
@@ -230,58 +233,9 @@ function firstName(fullName: string): string {
   return trimmed.split(/\s+/)[0];
 }
 
-// ---------- Multi-item detector ----------
-//
-// Conservative heuristic — flags obvious multi-item submissions
-// without being noisy on single-item-with-multiple-data-points
-// requests like "update opening hours: Mon-Fri 8-6, Sat 9-12".
-// Any one of the rules below triggers a decline:
-//   1. Numbered list with 2+ items
-//   2. Bullet list with 2+ items
-//   3. Explicit conjunctive markers ("Also,", "and also",
-//      "additionally", "secondly", "thirdly")
-//   4. "Please" appearing 2+ times — typically each "Please X" is
-//      a separate ask
-//
-// Stage 2C (Cowork's LLM classifier) will replace this regex with
-// proper semantic classification.
-
-function looksLikeMultipleItems(message: string): boolean {
-  // Numbered list: lines like "1." "1)" "(1)" with content after
-  const numbered = (
-    message.match(/(?:^|\n)\s*\(?\d+[.)]\s+\S/g) ?? []
-  ).length;
-  if (numbered >= 2) return true;
-
-  // Bullet list: lines starting with -, *, • with content after
-  const bullets = (
-    message.match(/(?:^|\n)\s*[-*•]\s+\S/g) ?? []
-  ).length;
-  if (bullets >= 2) return true;
-
-  // Sentence-starting conjunctive markers ("Also,", "Additionally,",
-  // "Secondly,", etc. — anywhere a new sentence begins). Restricting
-  // to sentence start avoids false-positives on filler "also" mid-
-  // sentence ("I have also uploaded the new file" should NOT match).
-  if (
-    /(?:^|[.!?\n]\s*)(?:also|additionally|secondly|thirdly|second:|third:)\b[,.\s]/i.test(
-      message,
-    )
-  ) {
-    return true;
-  }
-  // "and also" anywhere — that's a compound conjunction joining two
-  // distinct asks ("change X and also do Y"), not filler.
-  if (/\band\s+also\b/i.test(message)) {
-    return true;
-  }
-
-  // 2+ "Please" instances — each typically heads a separate ask
-  const pleases = (message.match(/(?:^|\W)please\b/gi) ?? []).length;
-  if (pleases >= 2) return true;
-
-  return false;
-}
+// (Multi-item detector extracted to src/lib/multi-item-detector.ts
+// — same logic, now shared with /api/onboarding/review-edit so
+// pre-commit edits get the same protection.)
 
 // ---------- Date helpers ----------
 

@@ -16,6 +16,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getProspectByToken } from "@/lib/notion-prospects";
 import ChangeRequestEditor from "@/components/admin/ChangeRequestEditor";
+import ReviewEditEditor from "@/components/admin/ReviewEditEditor";
 import ModuleChangeEditor from "@/components/admin/ModuleChangeEditor";
 import PreviewUrlEditor from "@/components/admin/PreviewUrlEditor";
 import { site } from "@/lib/site";
@@ -403,6 +404,68 @@ export default async function AdminDetailPage({
           your reply verbatim. They also see it on their dashboard.
         </p>
       </div>
+
+      {/* ---------- Pre-launch review edits (Hub Step 5) ---------- */}
+      {(() => {
+        const reviewEdits =
+          ((prospect.onboardingData ?? {}) as {
+            review?: { edits?: import("@/lib/onboarding").ReviewEdit[] };
+          }).review?.edits ?? [];
+        if (reviewEdits.length === 0) return null;
+        return (
+          <div className="mt-8">
+            <h2 className="font-serif text-2xl font-semibold text-navy-900">
+              Pre-launch review edits{" "}
+              <span className="text-sm font-normal text-navy-500">
+                ({reviewEdits.length})
+              </span>
+            </h2>
+            <p className="mt-2 text-sm text-navy-600">
+              Edits the customer submitted via the Hub Step 5 Review.
+              Cowork classified + (where confident) auto-applied each.
+              Anything escalated lands here for you to approve or reject.
+            </p>
+            <ul className="mt-4 space-y-4">
+              {reviewEdits.map((re) => (
+                <li
+                  key={re.id}
+                  // Same anchor pattern as change-requests for the
+                  // step6 escalation deep links (/admin/[token]#re-<id>).
+                  id={`re-${re.id}`}
+                  className="scroll-mt-24 rounded-xl border border-navy-100 bg-white p-5 shadow-card target:ring-4 target:ring-amber-200"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-xs text-navy-500">
+                      <span className="font-semibold text-navy-900">
+                        Submitted {formatDateTime(re.submittedAt)}
+                      </span>
+                      <span className="ml-2 font-mono text-[11px]">
+                        {re.id.slice(0, 8)}
+                      </span>
+                      <span
+                        className={[
+                          "ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                          re.status === "submitted"
+                            ? "bg-amber-100 text-amber-900"
+                            : re.status === "applied"
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800",
+                        ].join(" ")}
+                      >
+                        {re.status}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-navy-800">
+                    {re.message}
+                  </p>
+                  <ReviewEditEditor token={token} edit={re} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* ---------- Notes ---------- */}
       {prospect.notes && (
