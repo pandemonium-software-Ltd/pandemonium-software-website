@@ -348,10 +348,18 @@ async function tryAutoApply(args: {
   } catch (e) {
     const msg =
       e instanceof GithubApiError
-        ? e.message
+        ? `${e.message} (HTTP ${e.status})`
         : e instanceof Error
           ? e.message
           : String(e);
+    // Loud log to wrangler tail — repository_dispatch failures are
+    // typically a token-scope problem, and silent failures here lead
+    // to applied-but-not-built rows in the inbox + confusing UX.
+    console.error(
+      `[step6:${args.prospect.token.slice(0, 8)}] dispatchRepositoryEvent FAILED: ${msg}. ` +
+        `Token scope check: classic PAT needs 'repo'; fine-grained needs 'Actions: write' + 'Contents: read'. ` +
+        `Owner=${args.env.GITHUB_OWNER} Repo=${args.env.GITHUB_REPO}`,
+    );
     return { kind: "fail", reason: `dispatch failed: ${msg}` };
   }
   return { kind: "ok" };
