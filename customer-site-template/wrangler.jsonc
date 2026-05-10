@@ -17,7 +17,10 @@
 // every customer account where Ben is a team member.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "PLACEHOLDER",
+  // Wrangler validates `name` against /[a-z0-9-]+/, so we use a
+  // sentinel that satisfies the schema. The Action's `wrangler
+  // deploy --name <customer-worker>` flag always overrides this.
+  "name": "customer-site-placeholder",
   "main": ".open-next/worker.js",
   "compatibility_date": "2024-09-23",
   "compatibility_flags": ["nodejs_compat"],

@@ -1,34 +1,19 @@
-// Site-data resolver. Reads the per-customer build artifact if
-// present, falls back to the committed local-dev fixture otherwise.
+// Site-data resolver. Always imports `src/data/site-data.json` —
+// the file is GUARANTEED to exist by the `prebuild` / `predev` npm
+// script (`scripts/ensure-site-data.mjs`), which copies the dev
+// fixture if no live customer data is present.
 //
-// CI build flow:
-//   1. GitHub Actions writes prospect intake JSON →
-//      `src/data/site-data.json` before `next build`.
-//   2. This module imports it (statically, so Next.js can include
-//      it in the build).
-//   3. If the file doesn't exist (local dev), Node throws on import.
-//      We catch via a try-import pattern — fall back to fixture.json.
+// CI flow (GitHub Actions): the workflow writes the prospect's
+// real intake data to site-data.json BEFORE invoking
+// `npm run build`. The prebuild step then sees the file already
+// exists and is a no-op.
 //
-// Static imports mean both files end up evaluated at build time.
-// Bundle bloat is minimal (a few KB JSON each).
+// Local dev: prebuild copies fixture.json → site-data.json on
+// first run. Edit fixture.json (committed) to change the dev
+// experience; site-data.json (gitignored) gets refreshed every
+// `npm run dev` if absent.
 
 import type { SiteData } from "./types";
-import fixture from "../data/fixture.json";
+import siteData from "../data/site-data.json";
 
-// Per-customer data is OPTIONAL at the type level — falls back to
-// fixture for local dev. The CI build replaces the fixture import
-// path or writes to site-data.json before invoking next build.
-//
-// We use a runtime require-style pattern via dynamic-resolved
-// import to handle the fallback cleanly. Next.js' static analyser
-// allows this when the path is constant.
-let siteData: SiteData;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const live = require("../data/site-data.json");
-  siteData = live as SiteData;
-} catch {
-  siteData = fixture as SiteData;
-}
-
-export const SITE_DATA: SiteData = siteData;
+export const SITE_DATA: SiteData = siteData as SiteData;
