@@ -20,8 +20,19 @@ const nextConfig = {
   images: {
     remotePatterns: [
       {
+        // Future custom domain for R2 (assets.modu-forge.co.uk → R2
+        // bucket). Not currently configured but kept here so it
+        // works when the DNS lands.
         protocol: "https",
         hostname: "assets.modu-forge.co.uk",
+      },
+      {
+        // R2 public bucket URLs — every R2 bucket gets a
+        // pub-<hash>.r2.dev hostname when "Allow Public Access" is
+        // enabled. The hash is per-bucket so we wildcard across
+        // any customer's bucket.
+        protocol: "https",
+        hostname: "**.r2.dev",
       },
       {
         // Dev/fixture only — placehold.co for the local-dev fixture.
@@ -29,8 +40,6 @@ const nextConfig = {
         protocol: "https",
         hostname: "placehold.co",
       },
-      // C5.3b will add per-customer hosts if customers ever upload
-      // to their own R2 buckets (current model: shared bucket).
     ],
   },
 };
