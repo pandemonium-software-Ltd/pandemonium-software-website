@@ -16,10 +16,18 @@ import { z } from "zod";
 import {
   getProspectByToken,
   updateChangeRequest,
+  markPreviewBuildTriggered,
 } from "@/lib/notion-prospects";
 import { site } from "@/lib/site";
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { dispatchRepositoryEvent, GithubApiError } from "@/lib/github";
+
+/** Anti-spam latch — same window step5-review uses. If a build
+ *  was triggered in the last 15 minutes, skip rather than queue
+ *  another one. Resolve actions usually pair with a single change
+ *  + a single rebuild; bursts are typos in the operator's reply. */
+const REBUILD_COOLDOWN_MS = 15 * 60 * 1000;
 
 export const runtime = "nodejs";
 
@@ -122,13 +130,126 @@ export async function PATCH(request: Request) {
     }
   }
 
+  // Auto-rebuild on FIRST resolve transition. The operator's
+  // implied workflow is: customer asks for X → operator goes and
+  // changes X in Notion / the Hub → operator marks resolved here
+  // → email goes out → site rebuilds reflecting X. We trigger the
+  // rebuild AT resolve time so the customer's "your change is
+  // live" email isn't a lie by the time they click through.
+  //
+  // Skipped (with a structured reason in the response) when:
+  //   - status isn't `resolved` (rejected = no change to ship)
+  //   - this isn't the first terminal transition (no double builds
+  //     when the operator re-saves an already-resolved request)
+  //   - prospect has no workerName yet (Hub Step 5 hasn't run, no
+  //     site to rebuild)
+  //   - GitHub creds aren't configured (dev env)
+  //   - cooldown latch — already triggered in the last 15 min
+  let rebuildStatus:
+    | { dispatched: true; via: "change-request-resolve" }
+    | { dispatched: false; reason: string }
+    | null = null;
+  if (status === "resolved" && updateResult.transitionedToTerminal) {
+    rebuildStatus = await maybeDispatchRebuild(prospect);
+  }
+
   return NextResponse.json({
     success: true,
     request: updateResult.updated,
     customerNotified:
       updateResult.transitionedToTerminal && !emailErr,
     emailWarning: emailErr,
+    rebuild: rebuildStatus,
   });
+}
+
+/**
+ * Fire a customer-site-build workflow_dispatch and stamp the
+ * cooldown latch. All failure paths return a structured reason
+ * rather than throwing — this is best-effort plumbing on top of
+ * an already-successful change-request update + customer email.
+ *
+ * The operator can re-trigger manually via the Re-build button on
+ * /admin/[token] if this leg fails.
+ */
+async function maybeDispatchRebuild(
+  prospect: { token: string; pageId: string; name: string; business?: string;
+    workerName?: string; cloudflareAccountId?: string;
+    previewBuildTriggeredAt?: string },
+):
+  | Promise<
+      | { dispatched: true; via: "change-request-resolve" }
+      | { dispatched: false; reason: string }
+    > {
+  const env = getServerEnv();
+  if (!env.GITHUB_TOKEN || !env.GITHUB_OWNER || !env.GITHUB_REPO) {
+    return {
+      dispatched: false,
+      reason:
+        "GITHUB_TOKEN / GITHUB_OWNER / GITHUB_REPO not all configured — site rebuild skipped, you'll need to trigger one manually.",
+    };
+  }
+  if (!prospect.workerName || !prospect.cloudflareAccountId) {
+    return {
+      dispatched: false,
+      reason:
+        "Customer has no Worker yet (Hub Step 2 + 5 haven't run). Resolve was applied to Notion but no site exists to rebuild.",
+    };
+  }
+  if (prospect.previewBuildTriggeredAt) {
+    const last = Date.parse(prospect.previewBuildTriggeredAt);
+    if (Number.isFinite(last) && Date.now() - last < REBUILD_COOLDOWN_MS) {
+      const minsLeft = Math.ceil(
+        (REBUILD_COOLDOWN_MS - (Date.now() - last)) / 60_000,
+      );
+      return {
+        dispatched: false,
+        reason: `Recent build still in flight (cooldown: ${minsLeft} min). The next manual rebuild will pick up this change.`,
+      };
+    }
+  }
+  try {
+    await dispatchRepositoryEvent({
+      token: env.GITHUB_TOKEN,
+      owner: env.GITHUB_OWNER,
+      repo: env.GITHUB_REPO,
+      eventType: "customer-site-build",
+      clientPayload: {
+        token: prospect.token,
+        prospectName: prospect.name,
+        businessName: prospect.business ?? "",
+        // Surfaces in the GitHub Action's run name so logs show
+        // "triggered by change-request-resolve" rather than just
+        // "triggered by repository_dispatch".
+        trigger: "change-request-resolve",
+      },
+    });
+  } catch (e) {
+    const msg =
+      e instanceof GithubApiError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    console.warn(
+      `[api/admin/change-request] dispatchRepositoryEvent failed: ${msg}`,
+    );
+    return {
+      dispatched: false,
+      reason: `GitHub dispatch failed: ${msg}. Customer email + Notion update still went through; you'll need to trigger a rebuild manually.`,
+    };
+  }
+  // Stamp the latch — best effort, don't fail the whole leg if it
+  // doesn't write. Worst case the next resolve in the cooldown
+  // window also dispatches (fine, it's idempotent on GitHub's side).
+  try {
+    await markPreviewBuildTriggered(prospect.pageId);
+  } catch (e) {
+    console.warn(
+      `[api/admin/change-request] dispatch fired but latch write failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  return { dispatched: true, via: "change-request-resolve" };
 }
 
 export async function GET() {

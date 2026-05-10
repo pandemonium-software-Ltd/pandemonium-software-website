@@ -88,6 +88,10 @@ export default function ChangeRequestEditor({ token, request }: Props) {
         request?: ChangeRequest;
         customerNotified?: boolean;
         emailWarning?: string | null;
+        rebuild?:
+          | { dispatched: true; via: string }
+          | { dispatched: false; reason: string }
+          | null;
         error?: string;
       };
       if (!res.ok || !json.success || !json.request) {
@@ -96,17 +100,26 @@ export default function ChangeRequestEditor({ token, request }: Props) {
       }
       setCurrent(json.request);
       setEditing(false);
+      // Compose a single success line that summarises EVERY side
+      // effect of this save (Notion, customer email, rebuild). The
+      // operator can scan one line + know whether anything needs
+      // manual follow-up.
+      const parts: string[] = ["Saved."];
       if (json.customerNotified) {
-        setSuccess("Saved. Customer was emailed.");
+        parts.push("Customer emailed.");
       } else if (json.emailWarning) {
-        setSuccess(
-          `Saved. Customer email failed (${json.emailWarning}) — please follow up manually.`,
-        );
-      } else {
-        setSuccess("Saved.");
+        parts.push(`Customer email FAILED (${json.emailWarning}).`);
       }
+      if (json.rebuild?.dispatched) {
+        parts.push("Site rebuild dispatched — preview live in ~90s.");
+      } else if (json.rebuild && !json.rebuild.dispatched) {
+        parts.push(`Rebuild skipped: ${json.rebuild.reason}`);
+      }
+      setSuccess(parts.join(" "));
       // Clear success after a few seconds so it doesn't linger.
-      setTimeout(() => setSuccess(null), 5000);
+      // 8s instead of 5s because the longer rebuild messages need
+      // a moment to read.
+      setTimeout(() => setSuccess(null), 8000);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
