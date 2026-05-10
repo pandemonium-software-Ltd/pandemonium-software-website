@@ -6,8 +6,15 @@
 // (sharp doesn't bundle, Cloudflare Images costs $5/mo + per-tx).
 //
 // Triggered when:
-//   - file size > COMPRESS_SIZE_THRESHOLD (1.5 MB) OR
-//   - any side > COMPRESS_DIMENSION_THRESHOLD (2400 px)
+//   - file size > COMPRESS_SIZE_THRESHOLD (1 MB) OR
+//   - any side > COMPRESS_DIMENSION_THRESHOLD (1920 px)
+//
+// HEIC handling:
+//   - iPhone default camera format; Chrome/Firefox/Edge can't
+//     decode it via Canvas. We lazy-import heic2any (~150 KB) to
+//     convert HEIC → JPEG in the browser, then run the rest of
+//     the compression pipeline. Lazy = non-iPhone uploads pay 0
+//     bytes for this.
 //
 // Skipped when:
 //   - file is SVG (vector — Canvas API would rasterise it badly)
@@ -19,29 +26,79 @@
 
 import imageCompression from "browser-image-compression";
 
-/** Files larger than this get compressed. 1.5 MB is the sweet
- *  spot: most pages can serve <1.5 MB images without lazy-loading
- *  noticeably hurting LCP. */
-const COMPRESS_SIZE_THRESHOLD_MB = 1.5;
+/** Files larger than this get compressed. Tightened to 1 MB on
+ *  2026-05-10 so that the 5 MB server cap is effectively
+ *  unreachable for any normal phone/camera photo — most non-tech
+ *  customers should never see a "file too big" error. Pages stay
+ *  fast: 1 MB is comfortably under the LCP-friendly threshold. */
+const COMPRESS_SIZE_THRESHOLD_MB = 1.0;
 
-/** Resize images wider/taller than this. 2400 px covers retina
- *  hero displays (1920px @ 2x = 3840 nominal but real viewport is
- *  rarely that wide; next/image's srcset breakpoints stop at 1920
- *  for non-retina, 3840 for retina; 2400 is a sensible mid-cap that
- *  keeps retina sharpness while shedding most of the surplus). */
-const COMPRESS_DIMENSION_PX = 2400;
+/** Resize images wider/taller than this. Tightened from 2400 →
+ *  1920 px (Full HD) since next/image's srcset stops at 1920 for
+ *  non-retina and customer sites don't target retina hero photos.
+ *  Smaller cap = smaller bytes = faster pages on mobile. */
+const COMPRESS_DIMENSION_PX = 1920;
 
 /** Bypass compression for these mime types. SVG = vector;
  *  rasterising it would inflate file size + lose scalability. */
 const SKIP_TYPES = new Set(["image/svg+xml"]);
 
+/** HEIC/HEIF = the iPhone default camera format. Browser Canvas
+ *  API can't decode it (Safari can, Chrome/Firefox/Edge can't),
+ *  so we run a one-shot client-side conversion to JPEG via
+ *  heic2any (lazy-loaded — non-iPhone customers pay zero bytes).
+ *  After conversion the file falls through to the same
+ *  compression path as a JPEG. */
+const HEIC_TYPES = new Set(["image/heic", "image/heif"]);
+
 /**
  * Returns either the (smaller) compressed file or the original if
  * compression isn't worth it. Always returns SOME File so callers
  * don't need a separate failure path.
+ *
+ * Pipeline:
+ *   1. SVG → return as-is
+ *   2. HEIC → lazy-load heic2any → convert to JPEG → fall through
+ *   3. Already-small AND already-narrow → return as-is
+ *   4. Anything else → run browser-image-compression
  */
 export async function maybeCompress(file: File): Promise<File> {
   if (SKIP_TYPES.has(file.type.toLowerCase())) return file;
+
+  // HEIC pre-step. Lazy import keeps the ~150 KB heic2any bundle
+  // off non-iPhone uploads. After conversion, `file` is a JPEG and
+  // the rest of the pipeline runs normally. Detect via mime type
+  // OR file extension — Safari sometimes reports an empty type and
+  // iPhone files are reliably named .heic/.heif.
+  const lowerName = file.name.toLowerCase();
+  const isHeic =
+    HEIC_TYPES.has(file.type.toLowerCase()) ||
+    /\.(heic|heif)$/.test(lowerName);
+  if (isHeic) {
+    try {
+      const { default: heic2any } = await import("heic2any");
+      const converted = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9, // visually lossless; later compression step
+        // will further squeeze if needed.
+      });
+      const blob = Array.isArray(converted) ? converted[0]! : converted;
+      const newName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+      file = new File([blob], newName, {
+        type: "image/jpeg",
+        lastModified: file.lastModified,
+      });
+    } catch (e) {
+      console.warn(
+        "[compress] HEIC decode failed, passing original through:",
+        e instanceof Error ? e.message : String(e),
+      );
+      // Server will reject HEIC with a friendly message; we don't
+      // want to silently store an unrenderable file.
+      return file;
+    }
+  }
 
   // Cheap pre-check: if it's already under the size threshold, we
   // can skip the dimension check (which requires loading the image).

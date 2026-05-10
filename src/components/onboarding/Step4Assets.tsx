@@ -50,7 +50,13 @@ type Props = {
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
 
-const ACCEPTED_TYPES = "image/png,image/jpeg,image/webp,image/svg+xml";
+// What the file picker offers. HEIC is included so iPhone photos
+// don't appear greyed out — they get auto-converted to JPEG by
+// compress.ts before reaching the server. The server's
+// ALLOWED_TYPES whitelist excludes HEIC because it should never
+// reach R2 raw (next/image at build time can't render it).
+const ACCEPTED_TYPES =
+  "image/png,image/jpeg,image/webp,image/svg+xml,image/heic,image/heif,.heic,.heif";
 const MAX_GALLERY = 20;
 const MAX_BACKGROUNDS = 5;
 
@@ -160,12 +166,15 @@ export default function Step4Assets({
       const file = await maybeCompress(rawFile);
 
       // 2) Per-file cap. Server enforces this too, but failing here
-      //    saves a round-trip + gives a friendlier message.
+      //    saves a round-trip + gives a friendlier message. With the
+      //    1 MB compression target this almost never fires — only on
+      //    PNG-of-pure-photographs or 50-megapixel raw camera files.
       if (file.size > MAX_BYTES_PER_FILE) {
         setError(
-          `${file.name} is ${formatBytes(file.size)} after compression. ` +
+          `${file.name} is ${formatBytes(file.size)} even after we tried to compress it. ` +
             `Max is ${formatBytes(MAX_BYTES_PER_FILE)} per file. ` +
-            `Try a smaller image or one with less detail.`,
+            `If it's a PNG, save it as a JPEG instead — usually 5-10× smaller. ` +
+            `Or use squoosh.app (free, browser-based) to resize it manually.`,
         );
         return null;
       }
@@ -396,11 +405,23 @@ export default function Step4Assets({
         <p className="mt-3 text-[1.05rem] leading-relaxed text-navy-700">
           Each section below maps to a specific spot on your site. The
           more you tag the photos by what they&apos;re for, the better
-          the site fits together. PNG, JPEG, WebP or SVG; 5 MB per
-          file. Large photos are automatically compressed in your
-          browser before upload. If you&apos;re short on photos, flag
-          it in the notes and I&apos;ll use stock placeholders until
-          you send me good ones.
+          the site fits together. JPEG, PNG, WebP, SVG, or HEIC
+          (iPhone) — they all work. Big photos and iPhone HEIC files
+          are converted and resized automatically in your browser, so
+          you don&apos;t have to think about it. If you ever hit
+          trouble with a stubborn file,{" "}
+          <a
+            href="https://squoosh.app"
+            target="_blank"
+            rel="noreferrer"
+            className="link"
+          >
+            squoosh.app
+          </a>{" "}
+          is a free browser tool that&apos;ll resize anything in
+          seconds. If you&apos;re short on photos, flag it in the
+          notes and I&apos;ll use stock placeholders until you send me
+          good ones.
         </p>
         {budgetWarn && !budgetFull && (
           <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -475,7 +496,7 @@ export default function Step4Assets({
           per service is plenty.
         </p>
         <p className="mt-1 font-mono text-xs text-navy-500">
-          Best size: 4:3 ratio, ≥ 800×600 px.
+          Looks best at 4:3 ratio, ≥ 800×600 px.
         </p>
         {services.length === 0 ? (
           <p className="mt-4 rounded-lg border border-navy-100 bg-cream-50 p-4 text-sm text-navy-700">
@@ -765,7 +786,7 @@ function SingleAssetSection({
       <p className="mt-2 text-sm text-navy-600">{helper}</p>
       {specs && (
         <p className="mt-1 font-mono text-xs text-navy-500">
-          Best size: {specs}
+          Looks best at {specs}
         </p>
       )}
 
@@ -991,7 +1012,7 @@ function MultiAssetSection({
       <p className="mt-2 text-sm text-navy-600">{helper}</p>
       {specs && (
         <p className="mt-1 font-mono text-xs text-navy-500">
-          Best size: {specs}
+          Looks best at {specs}
         </p>
       )}
 
@@ -1040,7 +1061,8 @@ function MultiAssetSection({
               : `Drop ${kind === "gallery" ? "photos" : "images"} here, or click to browse`}
         </p>
         <p className="mt-1 text-xs text-navy-500">
-          PNG, JPEG, WebP — 5 MB each (auto-compressed in your browser)
+          JPEG, PNG, WebP, HEIC (iPhone) — automatically resized in
+          your browser before upload
         </p>
         <input
           ref={inputRef}

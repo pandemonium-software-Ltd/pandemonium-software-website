@@ -21,6 +21,7 @@
     "@hookform/resolvers": "^3.9.1",
     "@notionhq/client": "^2.3.0",
     "browser-image-compression": "^2.0.2",
+    "heic2any": "^0.0.4",
     "next": "15.5.15",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
