@@ -151,6 +151,13 @@ export type ProspectRecord = {
    *  customer's source bullets change. See src/lib/haiku/cache.ts.
    *  NEW C5.5. */
   haikuCache?: Record<string, unknown>;
+  /** Customer login password hash (PBKDF2:SHA-256 — see
+   *  src/lib/auth/password.ts for the storage format). Generated +
+   *  emailed at Phase 2 acceptance time. NEW C5.7+. */
+  passwordHash?: string;
+  /** ISO-8601 — when passwordHash was last set (originally OR via
+   *  forgot-password regenerate). Audit field for /admin. */
+  passwordSetAt?: string;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
@@ -830,6 +837,8 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
         return undefined;
       }
     })(),
+    passwordHash: readRichText(p["Password Hash"]) || undefined,
+    passwordSetAt: readDate(p["Password Set At"]),
     changeRequests,
     moduleChangeRoundUsedAt: readDate(p["Module Change Round Used At"]),
     moduleChangeLog: parseModuleChangeLog(
@@ -1441,6 +1450,30 @@ export async function patchChangeRequest(
     },
   });
   return merged;
+}
+
+/**
+ * Set / overwrite a customer's password hash. Called by the
+ * Phase 2 acceptance flow (initial password) AND the forgot-
+ * password regenerate flow. Writes both Password Hash + the
+ * Password Set At audit timestamp atomically.
+ *
+ * Caller is responsible for emailing the customer the new
+ * plain-text password — this writer never sees the plaintext.
+ */
+export async function setProspectPassword(
+  pageId: string,
+  passwordHash: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Password Hash": rt(passwordHash),
+        "Password Set At": { date: { start: new Date().toISOString() } },
+      },
+    },
+  });
 }
 
 /**

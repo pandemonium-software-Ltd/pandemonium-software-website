@@ -26,8 +26,10 @@ import { NextResponse } from "next/server";
 import { phase2Schema, type Phase1Data } from "@/lib/schemas";
 import {
   getProspectByToken,
+  setProspectPassword,
   updateProspectPhase2,
 } from "@/lib/notion-prospects";
+import { generatePassword, hashPassword } from "@/lib/auth/password";
 import { runCompatibilityCheck } from "@/lib/compatibility";
 import {
   buildPhase2Notification,
@@ -189,24 +191,52 @@ export async function POST(request: Request) {
 
   // Customer-facing email — only on Accept. Non-Accept outcomes
   // need careful copy and stay manual (Drafts inbox post-C6).
+  //
+  // ALSO: generate + persist the customer's password (Stage 2C
+  // C5.7+ auth). Order matters:
+  //   1. Generate plain password
+  //   2. Hash + persist to Notion (so login works AS SOON AS the
+  //      email lands)
+  //   3. Send email containing the plain password
+  // If step 2 fails, abort + log — sending a password the customer
+  // can't use is worse than them not getting one at all (they'd
+  // contact Ben who'd see the issue).
+  // If step 3 fails (Resend hiccup), the password IS persisted —
+  // customer hits Forgot Password to get a re-email.
   if (outcome.outcome === "accept") {
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL ??
       "https://pandemonium-software-website.benpandher.workers.dev";
+
+    let plainPassword: string | null = null;
     try {
-      await sendCustomerEmail(
-        getServerEnv(),
-        prospect.email,
-        "phase2-accept-here-is-intake-link",
-        {
-          customerName: firstName(prospect.name),
-          intakeUrl: `${baseUrl}/intake/${token}`,
-        },
-      );
+      plainPassword = generatePassword();
+      const hash = await hashPassword(plainPassword);
+      await setProspectPassword(prospect.pageId, hash);
     } catch (e) {
-      console.warn(
-        `[api/qualify] Customer accept email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
+      console.error(
+        `[api/qualify] Couldn't persist password — accept email skipped: ${e instanceof Error ? e.message : String(e)}`,
       );
+      plainPassword = null;
+    }
+
+    if (plainPassword) {
+      try {
+        await sendCustomerEmail(
+          getServerEnv(),
+          prospect.email,
+          "phase2-accept-here-is-intake-link",
+          {
+            customerName: firstName(prospect.name),
+            intakeUrl: `${baseUrl}/intake/${token}`,
+            password: plainPassword,
+          },
+        );
+      } catch (e) {
+        console.warn(
+          `[api/qualify] Customer accept email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)} (password is persisted; customer can use Forgot Password to retry)`,
+        );
+      }
     }
   }
 

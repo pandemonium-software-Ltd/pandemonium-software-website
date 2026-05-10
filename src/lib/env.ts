@@ -42,6 +42,15 @@ const serverEnvSchema = z.object({
   // Admin gate
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 chars"),
 
+  // Customer-side session signing key (Stage 2C C5.7+). HMAC-SHA256
+  // signs the cookie issued by /login/[token]. Rotate by setting a
+  // new value — all existing sessions become invalid (customers
+  // re-login). 32+ random bytes is plenty; e.g.
+  //   `openssl rand -base64 48`
+  // Optional during early dev; the middleware fails closed if
+  // missing in prod.
+  SESSION_SECRET: z.string().min(32).optional(),
+
   // Onboarding Hub — the email customers should invite as a team
   // member across Cloudflare (Step 1), Resend (Step 2) and Google
   // Business Profile Manager (Step 3). Same gmail keeps Ben's life
