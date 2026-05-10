@@ -8,7 +8,7 @@ type Props = { data: SiteData };
 
 export default function Footer({ data }: Props) {
   const year = new Date().getFullYear();
-  const { business, modules, copy } = data;
+  const { business, copy } = data;
   const hasFaq = (copy.faq?.length ?? 0) > 0;
   return (
     <footer className="mt-20 bg-navy-950 text-cream-100">
@@ -74,13 +74,6 @@ export default function Footer({ data }: Props) {
               <li>
                 <Link href="/faq" className="hover:text-white">
                   FAQs
-                </Link>
-              </li>
-            )}
-            {modules.booking && (
-              <li>
-                <Link href="/book" className="hover:text-white">
-                  Book
                 </Link>
               </li>
             )}

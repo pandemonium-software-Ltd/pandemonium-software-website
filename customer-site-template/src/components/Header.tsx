@@ -14,8 +14,10 @@ type Props = { data: SiteData };
 
 export default function Header({ data }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { business, modules, copy } = data;
-  const hasBooking = !!modules.booking;
+  const { business, copy } = data;
+  // Booking + enquiry are now folded into the unified /contact page,
+  // so neither needs a top-level nav link. /contact's "Get in touch"
+  // CTA covers all of them.
   const hasFaq = (copy.faq?.length ?? 0) > 0;
 
   return (
@@ -47,7 +49,6 @@ export default function Header({ data }: Props) {
           <NavLink href="/about">About</NavLink>
           <NavLink href="/services">Services</NavLink>
           {hasFaq && <NavLink href="/faq">FAQs</NavLink>}
-          {hasBooking && <NavLink href="/book">Book</NavLink>}
           <Link
             href="/contact"
             className="rounded-full bg-brand-primary-500 px-5 py-2.5 font-semibold text-brand-primary-text transition-all duration-200 hover:-translate-y-px hover:bg-brand-primary-600"
@@ -85,11 +86,6 @@ export default function Header({ data }: Props) {
             {hasFaq && (
               <MobileLink href="/faq" onClick={() => setMobileOpen(false)}>
                 FAQs
-              </MobileLink>
-            )}
-            {hasBooking && (
-              <MobileLink href="/book" onClick={() => setMobileOpen(false)}>
-                Book
               </MobileLink>
             )}
             <MobileLink href="/contact" onClick={() => setMobileOpen(false)}>
