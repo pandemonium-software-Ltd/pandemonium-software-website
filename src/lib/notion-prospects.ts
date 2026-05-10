@@ -533,6 +533,12 @@ export async function listAllProspects(): Promise<ProspectRecord[]> {
 export async function listProspectsNeedingOps(): Promise<ProspectRecord[]> {
   const env = getServerEnv();
 
+  // Prospects the cron should iterate. Includes:
+  //   - Onboarding Started / Complete: needs steps 1-5 to progress
+  //   - Build Started: needs step5 to complete the build callback
+  //   - Live: needs step6 (change-request automation) post-launch
+  // Cancelled / earlier-phase prospects are excluded — no work for
+  // the cron to do on them.
   const result = await notionFetch<NotionQueryResponse>(
     `/databases/${env.NOTION_PROSPECTS_DB_ID}/query`,
     {
@@ -540,14 +546,10 @@ export async function listProspectsNeedingOps(): Promise<ProspectRecord[]> {
       body: {
         filter: {
           or: [
-            {
-              property: "Status",
-              select: { equals: "Onboarding Started" },
-            },
-            {
-              property: "Status",
-              select: { equals: "Onboarding Complete" },
-            },
+            { property: "Status", select: { equals: "Onboarding Started" } },
+            { property: "Status", select: { equals: "Onboarding Complete" } },
+            { property: "Status", select: { equals: "Build Started" } },
+            { property: "Status", select: { equals: "Live" } },
           ],
         },
         sorts: [{ property: "Phase 1 Submitted At", direction: "ascending" }],

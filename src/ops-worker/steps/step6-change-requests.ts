@@ -74,7 +74,24 @@ const MAX_ESCALATIONS_PER_TICK = 5;
 export const step6ChangeRequests: Step = {
   id: "step6",
   shouldRun(prospect) {
-    return findActionable(prospect).length > 0;
+    const actionable = findActionable(prospect);
+    // Diagnostic — surfaces what each prospect's change-request
+    // inbox looks like every tick. Keeps DEBUG-level: only logs
+    // when there's something interesting (any change requests at
+    // all OR any reason to skip an existing request). Quiet for
+    // prospects with empty inboxes.
+    if (prospect.changeRequests.length > 0) {
+      const breakdown = prospect.changeRequests.map((c) => {
+        const ageMin = Math.floor(
+          (Date.now() - Date.parse(c.submittedAt)) / 60_000,
+        );
+        return `${c.id.slice(0, 8)}[${c.status},${ageMin}min,classified=${!!c.coworkClassification},escalated=${!!c.coworkEscalatedAt},applied=${!!c.coworkPatchAppliedAt},preview=${!!c.previewVersionId}]`;
+      }).join(", ");
+      console.log(
+        `[step6:${prospect.token.slice(0, 8)}] inbox=${prospect.changeRequests.length} actionable=${actionable.length} | ${breakdown}`,
+      );
+    }
+    return actionable.length > 0;
   },
   async run(prospect, env) {
     const actionable = findActionable(prospect).slice(
