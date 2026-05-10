@@ -11,6 +11,18 @@
 export type Vibe = "traditional" | "modern" | "premium" | "friendly";
 export type HexColor = `#${string}`;
 
+/** Day-of-week keys for the structured opening-hours record.
+ *  Mirror of marketing-site DayOfWeek. NEW C5.5+. */
+export type DayOfWeek = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+
+/** Per-day opening-hours entry. `from` / `to` are 24-hour HH:mm.
+ *  NEW C5.5+. */
+export type OpeningHoursEntry = {
+  open: boolean;
+  from?: string;
+  to?: string;
+};
+
 export type BusinessInfo = {
   name: string;
   type: string;
@@ -18,7 +30,12 @@ export type BusinessInfo = {
   phone: string;
   email: string;
   address?: string;
+  /** Compact one-liner for the footer ("Mon-Fri 09:00-17:00, Sat
+   *  10:00-14:00"). Derived from `hoursStructured` or free-text. */
   hours?: string;
+  /** Per-day structured hours — populates the Contact page table
+   *  with explicit "Closed" rows for unset days. NEW C5.5+. */
+  hoursStructured?: Partial<Record<DayOfWeek, OpeningHoursEntry>>;
 };
 
 export type Service = {

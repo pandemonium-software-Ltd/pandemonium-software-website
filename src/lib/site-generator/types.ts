@@ -21,6 +21,25 @@ export type Vibe = "traditional" | "modern" | "premium" | "friendly";
  */
 export type HexColor = `#${string}`;
 
+/**
+ * Day-of-week keys used by the structured opening-hours record.
+ * Keep these short three-letter forms aligned with the Hub Step 4
+ * Site Content > Business details editor + Phase 3 intake.
+ */
+export type DayOfWeek = "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+
+/**
+ * Per-day opening-hours entry. `from` / `to` are 24-hour HH:mm
+ * strings (matching the Hub editor's <input type="time"> output).
+ * When `open` is false, both `from` and `to` are ignored — render
+ * as "Closed".
+ */
+export type OpeningHoursEntry = {
+  open: boolean;
+  from?: string;
+  to?: string;
+};
+
 export type BusinessInfo = {
   /** Trading name shown in header / hero / footer. */
   name: string;
@@ -34,8 +53,18 @@ export type BusinessInfo = {
   email: string;
   /** Optional postal address — populates footer NAP + JSON-LD. */
   address?: string;
-  /** Opening hours — flexible string customer types in. */
+  /** Compact human-readable hours summary for inline display
+   *  (footer NAP, header banner). Compresses contiguous same-hours
+   *  runs ("Mon-Fri 09:00-17:00, Sat 10:00-14:00"). Derived from
+   *  `hoursStructured` when present; falls back to the customer's
+   *  free-text hours if no structured record exists. */
   hours?: string;
+  /** Per-day structured hours for the Contact page table render.
+   *  Optional — only present when the customer set hours via the
+   *  Hub Step 4 Business details opening-hours grid (not via the
+   *  legacy free-text field). Keys are absent when the customer
+   *  hasn't touched a particular day. */
+  hoursStructured?: Partial<Record<DayOfWeek, OpeningHoursEntry>>;
 };
 
 export type Service = {

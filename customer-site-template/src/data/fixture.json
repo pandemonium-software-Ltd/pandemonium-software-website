@@ -6,7 +6,16 @@
     "phone": "07824 369087",
     "email": "lucas@bobbuilders.co.uk",
     "address": "BobBuilders Yard, Witney, Oxfordshire OX28",
-    "hours": "Mon-Fri 7:30am - 5:30pm. Saturday by appointment."
+    "hours": "Mon-Fri 07:30-17:30, Sat 09:00-13:00",
+    "hoursStructured": {
+      "Mon": { "open": true, "from": "07:30", "to": "17:30" },
+      "Tue": { "open": true, "from": "07:30", "to": "17:30" },
+      "Wed": { "open": true, "from": "07:30", "to": "17:30" },
+      "Thu": { "open": true, "from": "07:30", "to": "17:30" },
+      "Fri": { "open": true, "from": "07:30", "to": "17:30" },
+      "Sat": { "open": true, "from": "09:00", "to": "13:00" },
+      "Sun": { "open": false }
+    }
   },
   "services": [
     {

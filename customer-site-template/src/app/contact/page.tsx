@@ -1,5 +1,29 @@
 import type { Metadata } from "next";
 import { SITE_DATA } from "@/lib/site-data";
+import type { DayOfWeek } from "@/lib/types";
+
+/** Display order for the opening-hours table. Mon-first matches
+ *  most UK convention; flip to Sun-first for US-style if a future
+ *  vibe needs it. */
+const HOURS_DAY_ORDER: readonly DayOfWeek[] = [
+  "Mon",
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+  "Sun",
+];
+
+const DAY_LABELS: Record<DayOfWeek, string> = {
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+  Sun: "Sunday",
+};
 
 export const metadata: Metadata = {
   title: "Get in touch",
@@ -159,7 +183,7 @@ export default function ContactPage() {
       )}
 
       {/* ---------- Address + hours (only if set) ---------- */}
-      {(business.address || business.hours) && (
+      {(business.address || business.hours || business.hoursStructured) && (
         <section className="bg-cream-100 py-20 md:py-28">
           <div className="container-content">
             <div className="mx-auto max-w-2xl text-center">
@@ -176,7 +200,42 @@ export default function ContactPage() {
                   </address>
                 </div>
               )}
-              {business.hours && (
+              {/* Hours: prefer the structured per-day table when the
+                  customer set hours via the Hub Step 4 grid. Fall
+                  back to the flat string render for legacy customers
+                  / free-text intake values. */}
+              {business.hoursStructured ? (
+                <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-card">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
+                    Opening hours
+                  </p>
+                  <dl className="mt-3 divide-y divide-navy-100 text-sm">
+                    {HOURS_DAY_ORDER.map((day) => {
+                      const entry = business.hoursStructured?.[day];
+                      const open = entry?.open && entry.from && entry.to;
+                      return (
+                        <div
+                          key={day}
+                          className="flex items-baseline justify-between gap-3 py-2"
+                        >
+                          <dt className="font-semibold text-navy-900">
+                            {DAY_LABELS[day]}
+                          </dt>
+                          <dd
+                            className={
+                              open
+                                ? "font-mono text-navy-800"
+                                : "text-navy-400"
+                            }
+                          >
+                            {open ? `${entry.from} – ${entry.to}` : "Closed"}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                </div>
+              ) : business.hours ? (
                 <div className="rounded-2xl border border-navy-100 bg-white p-6 shadow-card">
                   <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
                     Opening hours
@@ -185,7 +244,7 @@ export default function ContactPage() {
                     {business.hours}
                   </p>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </section>

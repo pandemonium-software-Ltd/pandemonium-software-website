@@ -17,9 +17,11 @@ import type {
   BrandColors,
   BusinessInfo,
   CustomCopy,
+  DayOfWeek,
   FaqEntry,
   HexColor,
   ModuleConfig,
+  OpeningHoursEntry,
   Service,
   SiteGeneratorInput,
   Testimonial,
@@ -115,6 +117,13 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
       formatOpeningHours(intakeContact.openingHours) ??
       optionalString(intake.hours) ??
       optionalString(ob.hours),
+    // Structured per-day record for the Contact page hours table.
+    // Same source preference as `hours` (content step → intake
+    // contactDetails). Undefined when neither has structured data
+    // — Contact page falls back to the flat string render.
+    hoursStructured:
+      readOpeningHoursStructured(contentBusiness.openingHours) ??
+      readOpeningHoursStructured(intakeContact.openingHours),
   };
   if (!business.phone || !business.email) {
     throw new AdapterError(
@@ -484,6 +493,46 @@ function formatOpeningHours(raw: unknown): string | undefined {
       return `${range} ${g.from}-${g.to}`;
     })
     .join(", ");
+}
+
+/**
+ * Validate + normalise a raw openingHours record into the typed
+ * structured shape templates can render directly. Returns
+ * undefined if the input is missing or has zero usable entries
+ * (every day either absent or `open: false` with nothing else),
+ * so the caller can fall back to a free-text representation.
+ *
+ * Defensive: tolerates extra/wrong keys, coerces only what
+ * matches the {open, from?, to?} shape. Only known weekday keys
+ * (Mon-Sun) get through — typos or wrong-case keys ("monday",
+ * "MON") are dropped silently rather than rendered as "Closed".
+ */
+function readOpeningHoursStructured(
+  raw: unknown,
+): Partial<Record<DayOfWeek, OpeningHoursEntry>> | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const validDays: ReadonlySet<DayOfWeek> = new Set([
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat",
+    "Sun",
+  ]);
+  const out: Partial<Record<DayOfWeek, OpeningHoursEntry>> = {};
+  let hasAny = false;
+  for (const [day, val] of Object.entries(raw as Record<string, unknown>)) {
+    if (!validDays.has(day as DayOfWeek)) continue;
+    if (!val || typeof val !== "object") continue;
+    const obj = val as Record<string, unknown>;
+    const open = typeof obj.open === "boolean" ? obj.open : false;
+    const from = typeof obj.from === "string" ? obj.from : undefined;
+    const to = typeof obj.to === "string" ? obj.to : undefined;
+    out[day as DayOfWeek] = { open, from, to };
+    hasAny = true;
+  }
+  return hasAny ? out : undefined;
 }
 
 function readDomainSlug(ob: Record<string, unknown>): string {
