@@ -30,6 +30,7 @@ import {
   updateProspectOnboarding,
   clearPreviewBuildTriggered,
   patchChangeRequest,
+  patchReviewEdit,
   updateChangeRequest,
 } from "@/lib/notion-prospects";
 import {
@@ -49,6 +50,13 @@ const TOKEN_RE =
 // Three-mode discriminated union. `mode` is optional in legacy
 // payloads (defaults to "live") so older workflow runs don't break
 // when this endpoint upgrades.
+//
+// `reviewEditId` is for the C5.7 Phase B v2 pre-commit auto-apply
+// path: when step6 auto-applies a Step 5 review edit + dispatches
+// a LIVE build (because pre-commit there's no live site to
+// protect), the workflow's clientPayload threads the edit id
+// through here so we can email the customer "your edit is
+// applied" + stamp the right entry.
 const requestSchema = z.discriminatedUnion("status", [
   z.object({
     token: z.string().regex(TOKEN_RE),
@@ -58,6 +66,7 @@ const requestSchema = z.discriminatedUnion("status", [
     previewVersionId: z.string().trim().max(100).optional(),
     promotedVersionId: z.string().trim().max(100).optional(),
     changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
+    reviewEditId: z.string().trim().max(50).optional().or(z.literal("")),
   }),
   z.object({
     token: z.string().regex(TOKEN_RE),
@@ -65,6 +74,7 @@ const requestSchema = z.discriminatedUnion("status", [
     mode: z.enum(["live", "preview", "promote"]).default("live"),
     errorMessage: z.string().trim().max(2000),
     changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
+    reviewEditId: z.string().trim().max(50).optional().or(z.literal("")),
   }),
 ]);
 
@@ -127,6 +137,22 @@ export async function POST(request: Request) {
           `[build-callback] couldn't clear build latches: ${e instanceof Error ? e.message : String(e)}`,
         );
       }
+      // For pre-commit auto-apply failures, also stamp the edit so
+      // Ben can see WHY it failed in /admin (the failure path so
+      // far stays in worker logs, which is hard to find later).
+      if (parsed.data.reviewEditId) {
+        await patchReviewEdit(
+          prospect.pageId,
+          parsed.data.reviewEditId,
+          {
+            coworkReasoning: `[live build failed] ${parsed.data.errorMessage}`,
+          },
+        ).catch((e) => {
+          console.warn(
+            `[build-callback] couldn't stamp review-edit failure: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        });
+      }
       console.error(
         `[build-callback] LIVE build FAILED for ${parsed.data.token}: ${parsed.data.errorMessage}`,
       );
@@ -176,7 +202,14 @@ export async function POST(request: Request) {
 
   // --- Success branches ----------------------------------------------------
 
-  // Mode: LIVE build (Hub Step 5 launch path) — existing behaviour.
+  // Mode: LIVE build. Two sub-cases:
+  //   (a) Pre-commit Hub Step 5 launch path — stamps previewUrl on
+  //       review slice, sends "preview-ready" email
+  //   (b) NEW: pre-commit auto-apply by Cowork (reviewEditId set)
+  //       — preview Worker has been refreshed with the customer's
+  //       edit; send "review-edit-applied" email instead. The
+  //       previewUrl might be the same (the customer's domain or
+  //       workers.dev fallback) but the messaging is different.
   if (parsed.data.mode === "live") {
     if (!parsed.data.previewUrl) {
       return NextResponse.json(
@@ -184,6 +217,11 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    // Detect sub-case (b): step6 auto-apply for a review edit.
+    const isReviewEditApply =
+      parsed.data.reviewEditId && parsed.data.reviewEditId.length > 0;
+
     const existing = onboardingDataSchema.safeParse(
       prospect.onboardingData ?? {},
     );
@@ -213,7 +251,41 @@ export async function POST(request: Request) {
         `[build-callback] couldn't clear build latches: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
+
     let emailWarning: string | null = null;
+    if (isReviewEditApply) {
+      // Sub-case (b): pre-commit auto-apply finished. Customer
+      // gets a different email — the live site (their preview
+      // Worker) has been updated with their requested edit.
+      try {
+        await sendCustomerEmail(
+          env,
+          prospect.email,
+          "review-edit-applied",
+          {
+            customerName: firstName(prospect.name),
+            previewUrl: parsed.data.previewUrl,
+            hubUrl: `${baseUrl}/onboarding/${parsed.data.token}`,
+          },
+        );
+      } catch (e) {
+        emailWarning = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[build-callback] review-edit-applied email failed: ${emailWarning}`,
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        action: "review-edit-applied",
+        mode: "live",
+        reviewEditId: parsed.data.reviewEditId,
+        customerNotified: !emailWarning,
+        emailWarning,
+      });
+    }
+
+    // Sub-case (a): existing pre-launch / pre-commit preview-ready
+    // path — customer hasn't seen their site yet; build complete.
     try {
       await sendCustomerEmail(env, prospect.email, "preview-ready", {
         customerName: firstName(prospect.name),

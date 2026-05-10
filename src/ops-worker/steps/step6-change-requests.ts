@@ -1,14 +1,19 @@
 // Step 6 — Change-request automation.
 //
 // Stage 2C C5.7 Phase B v2 — for each prospect's pending change
-// request, classify with Haiku and either:
+// request OR pre-commit Hub Step 5 review edit, classify with
+// Haiku and either:
 //   IN-SCOPE + safe target + confidence ≥ AUTO_APPLY_CONFIDENCE
 //     → apply the patch to onboardingData (with previousValue
 //       captured for revert)
-//     → dispatch customer-site-build with mode=preview (uploads
-//       a Cloudflare Worker version WITHOUT replacing live)
-//     → callback emails the customer the preview URL +
-//       approve/reject CTAs
+//     → dispatch customer-site-build:
+//         POST-COMMIT (live customer): mode=preview (uploads a
+//           Cloudflare Worker version WITHOUT replacing live;
+//           customer approves to promote)
+//         PRE-COMMIT (Hub Step 5, customer hasn't gone live):
+//           mode=live (replaces the customer's preview Worker
+//           directly — there's nothing to protect; the whole
+//           Step 5 IS the approval gate)
 //   OTHERWISE (out_of_scope / ambiguous / classifier failure /
 //             apply failure / dispatch failure)
 //     → email Ben a richer escalation with the model's reasoning
@@ -17,11 +22,15 @@
 //     → stamp coworkEscalatedAt latch
 //
 // Trust + safety:
-//   - Customer is ALWAYS the gate before any change goes live.
-//     Even high-confidence in-scope patches sit as preview
-//     versions until the customer clicks Approve. So a Haiku
-//     misclassification ends in an unwanted preview the customer
-//     rejects, NOT a broken live site.
+//   - Post-commit: customer is ALWAYS the gate before any change
+//     goes live. Even high-confidence in-scope patches sit as
+//     preview versions until the customer clicks Approve.
+//   - Pre-commit: rebuild deploys directly to the customer's
+//     preview Worker. No customer-approval gate because the
+//     customer hasn't committed to the site yet — the whole
+//     Step 5 review process IS the gate. Worst case Cowork
+//     misclassifies, the customer sees the change in their
+//     preview, asks Ben to revert (manual escape hatch).
 //   - All applies stamp coworkPatch.previousValue so the reject
 //     handler can roll back the data layer before re-opening the
 //     request.
@@ -35,6 +44,7 @@ import type { Step } from "../types";
 import {
   markChangeRequestEscalated,
   patchChangeRequest,
+  patchReviewEdit,
   type ChangeRequest,
   type ProspectRecord,
 } from "../../lib/notion-prospects";
@@ -51,7 +61,8 @@ import { dispatchRepositoryEvent, GithubApiError } from "../../lib/github";
 
 /** Auto-apply confidence threshold. Below this we escalate to
  *  Ben even if the model said in-scope. The customer-approval
- *  gate provides a second safety net so we can be moderately
+ *  gate (post-commit) and Step 5 review process (pre-commit)
+ *  provide a second safety net so we can be moderately
  *  aggressive here; tune up if false-positives become a problem. */
 const AUTO_APPLY_CONFIDENCE = 0.75;
 
@@ -61,34 +72,46 @@ const AUTO_APPLY_CONFIDENCE = 0.75;
 const MIN_AGE_BEFORE_CLASSIFY_MS = 5 * 60 * 1000;
 
 /** Per-customer daily classification cap. At max 5/day, worst-
- *  case spend is 5 × £0.001 (Haiku) per customer = £0.005/day —
- *  comfortably under the GBP-monthly £2 if we ever bundle this
- *  with the GBP module's pricing. */
+ *  case spend is 5 × £0.001 (Haiku) per customer = £0.005/day. */
 const MAX_CLASSIFICATIONS_PER_DAY = 5;
 
-/** Cap escalations per cron tick to prevent inbox flooding. Same
- *  rationale as Phase B v1 — if there are 10+ open requests on
- *  one tick, that's a "Ben needs a focused session" signal. */
+/** Cap escalations per cron tick to prevent inbox flooding. */
 const MAX_ESCALATIONS_PER_TICK = 5;
+
+/** Discriminated union — step6 handles both kinds uniformly. */
+type Actionable =
+  | { kind: "post-commit"; request: ChangeRequest }
+  | { kind: "pre-commit"; edit: ReviewEditWithCowork };
+
+/** Local view of a Hub Step 5 review edit with the cowork audit
+ *  fields pulled out. The schema in src/lib/onboarding.ts is the
+ *  truth; this is just for type ergonomics here. */
+type ReviewEditWithCowork = {
+  id: string;
+  submittedAt: string;
+  message: string;
+  status: "submitted" | "applied" | "rejected";
+  coworkClassification?: "in_scope" | "out_of_scope" | "ambiguous";
+  coworkEscalatedAt?: string;
+  coworkPatchAppliedAt?: string;
+};
 
 export const step6ChangeRequests: Step = {
   id: "step6",
   shouldRun(prospect) {
     const actionable = findActionable(prospect);
-    // Diagnostic — surfaces what each prospect's change-request
-    // inbox looks like every tick. Keeps DEBUG-level: only logs
-    // when there's something interesting (any change requests at
-    // all OR any reason to skip an existing request). Quiet for
-    // prospects with empty inboxes.
-    if (prospect.changeRequests.length > 0) {
-      const breakdown = prospect.changeRequests.map((c) => {
-        const ageMin = Math.floor(
-          (Date.now() - Date.parse(c.submittedAt)) / 60_000,
-        );
-        return `${c.id.slice(0, 8)}[${c.status},${ageMin}min,classified=${!!c.coworkClassification},escalated=${!!c.coworkEscalatedAt},applied=${!!c.coworkPatchAppliedAt},preview=${!!c.previewVersionId}]`;
-      }).join(", ");
+    if (
+      prospect.changeRequests.length > 0 ||
+      readReviewEdits(prospect).length > 0
+    ) {
+      const crBreakdown = prospect.changeRequests
+        .map((c) => formatBreakdown(c, "post"))
+        .join(", ");
+      const reBreakdown = readReviewEdits(prospect)
+        .map((e) => formatBreakdown(e, "pre"))
+        .join(", ");
       console.log(
-        `[step6:${prospect.token.slice(0, 8)}] inbox=${prospect.changeRequests.length} actionable=${actionable.length} | ${breakdown}`,
+        `[step6:${prospect.token.slice(0, 8)}] post-commit=${prospect.changeRequests.length} pre-commit=${readReviewEdits(prospect).length} actionable=${actionable.length} | post:[${crBreakdown}] pre:[${reBreakdown}]`,
       );
     }
     return actionable.length > 0;
@@ -99,18 +122,13 @@ export const step6ChangeRequests: Step = {
       MAX_ESCALATIONS_PER_TICK,
     );
     if (actionable.length === 0) {
-      return { status: "skip", reason: "No actionable requests" };
+      return { status: "skip", reason: "No actionable items" };
     }
 
-    // Per-customer daily classification cap. Counts requests
-    // already classified in the last 24h regardless of outcome.
-    const recentClassified = prospect.changeRequests.filter(
-      (cr) =>
-        cr.coworkClassification &&
-        cr.coworkEscalatedAt &&
-        Date.now() - Date.parse(cr.coworkEscalatedAt) <
-          24 * 60 * 60 * 1000,
-    ).length;
+    // Per-customer daily classification cap counts BOTH kinds so a
+    // burst of pre-commit edits + a post-commit request doesn't
+    // double-charge.
+    const recentClassified = countRecentClassifications(prospect);
     let remainingBudget = Math.max(
       0,
       MAX_CLASSIFICATIONS_PER_DAY - recentClassified,
@@ -122,36 +140,44 @@ export const step6ChangeRequests: Step = {
     const summary: string[] = [];
     const failures: string[] = [];
 
-    for (const cr of actionable) {
+    for (const item of actionable) {
+      const itemId =
+        item.kind === "post-commit" ? item.request.id : item.edit.id;
+      const itemMessage =
+        item.kind === "post-commit" ? item.request.message : item.edit.message;
+      const itemSubmitted =
+        item.kind === "post-commit"
+          ? item.request.submittedAt
+          : item.edit.submittedAt;
+      const tag = `${item.kind === "post-commit" ? "cr" : "re"}=${itemId.slice(0, 8)}`;
+
       if (remainingBudget <= 0) {
-        // Soft-escalate the rest as "over daily cap" so Ben sees
-        // there's a backlog. Stamp escalation so we don't re-email
-        // tomorrow either.
-        await escalateOnly(prospect, cr, baseUrl, "Daily classification cap reached for this customer; please review.").catch((e) => failures.push(`cr=${cr.id.slice(0, 8)} cap-escalate failed: ${e}`));
-        summary.push(`cr=${cr.id.slice(0, 8)} cap-escalated`);
+        await escalateOnly({
+          prospect,
+          item,
+          baseUrl,
+          reasonForBen:
+            "Daily classification cap reached for this customer; please review.",
+        }).catch((e) => failures.push(`${tag} cap-escalate failed: ${e}`));
+        summary.push(`${tag} cap-escalated`);
         continue;
       }
 
       const classification = await classifyChangeRequest({
-        message: cr.message,
+        message: itemMessage,
         snapshot: buildSiteSnapshot(prospect),
       });
       remainingBudget -= 1;
 
-      // Stamp classification regardless of outcome — gives the audit
-      // trail + lets the admin UI show "Cowork thought: out_of_scope
-      // (0.85): ..." per request.
-      await patchChangeRequest(prospect.pageId, cr.id, {
-        coworkClassification: classification?.classification ?? "ambiguous",
-        coworkConfidence: classification?.confidence ?? 0,
-        coworkReasoning:
-          classification?.reasoning ??
-          "Cowork couldn't classify (model unavailable or returned malformed JSON).",
+      // Audit-stamp on the right entry (post-commit OR pre-commit).
+      await stampClassification({
+        prospect,
+        item,
+        classification,
       }).catch(() => {
-        // Stamping is best-effort; main flow continues
+        /* best-effort */
       });
 
-      // Decide branch.
       const isHighConfidenceInScopePatch =
         classification &&
         classification.classification === "in_scope" &&
@@ -159,50 +185,52 @@ export const step6ChangeRequests: Step = {
         classification.patch;
 
       if (!isHighConfidenceInScopePatch) {
-        const reason =
-          !classification
-            ? "Cowork couldn't classify — please reply manually."
-            : `Cowork classified as ${classification.classification} (confidence ${classification.confidence.toFixed(2)}): ${classification.reasoning}` +
-              (classification.patch
-                ? `\nSuggested patch (NOT applied — confidence below ${AUTO_APPLY_CONFIDENCE} threshold):\n  Target: ${classification.patch.target}\n  New value: ${classification.patch.newValue}`
-                : "");
-        await escalateOnly(prospect, cr, baseUrl, reason).catch((e) =>
-          failures.push(`cr=${cr.id.slice(0, 8)} escalate failed: ${e}`),
-        );
+        const reason = classification
+          ? `Cowork classified as ${classification.classification} (confidence ${classification.confidence.toFixed(2)}): ${classification.reasoning}` +
+            (classification.patch
+              ? `\nSuggested patch (NOT applied — confidence below ${AUTO_APPLY_CONFIDENCE} threshold):\n  Target: ${classification.patch.target}\n  New value: ${classification.patch.newValue}`
+              : "")
+          : "Cowork couldn't classify — please reply manually.";
+        await escalateOnly({
+          prospect,
+          item,
+          baseUrl,
+          reasonForBen: reason,
+        }).catch((e) => failures.push(`${tag} escalate failed: ${e}`));
         summary.push(
-          `cr=${cr.id.slice(0, 8)} escalated (${classification?.classification ?? "no-classify"})`,
+          `${tag} escalated (${classification?.classification ?? "no-classify"})`,
         );
         continue;
       }
 
-      // High-confidence in-scope branch: apply + dispatch preview build.
+      // High-confidence in-scope branch.
       const result = await tryAutoApply({
         prospect,
-        cr,
+        item,
         target: classification.patch!.target,
         newValue: classification.patch!.newValue,
         env,
-        baseUrl,
         reasoning: classification.reasoning,
-        confidence: classification.confidence,
       });
       if (result.kind === "ok") {
         summary.push(
-          `cr=${cr.id.slice(0, 8)} auto-applied (${classification.patch!.target})`,
+          `${tag} auto-applied (${classification.patch!.target})`,
         );
       } else {
-        failures.push(`cr=${cr.id.slice(0, 8)} ${result.reason}`);
-        // Apply or dispatch failed — escalate with the technical
-        // reason so Ben can decide manually.
-        await escalateOnly(
+        failures.push(`${tag} ${result.reason}`);
+        await escalateOnly({
           prospect,
-          cr,
+          item,
           baseUrl,
-          `Cowork tried to auto-apply but failed: ${result.reason}. ` +
-            `Please review + decide manually.`,
-        ).catch(() => {});
-        summary.push(`cr=${cr.id.slice(0, 8)} escalated (apply-failed)`);
+          reasonForBen: `Cowork tried to auto-apply but failed: ${result.reason}. Please review + decide manually.`,
+        }).catch(() => {
+          /* nothing more we can do */
+        });
+        summary.push(`${tag} escalated (apply-failed)`);
       }
+      // Suppress unused-var warning on itemSubmitted (kept for
+      // future use if we add age-based summary lines).
+      void itemSubmitted;
     }
 
     if (summary.length === 0 && failures.length > 0) {
@@ -210,31 +238,22 @@ export const step6ChangeRequests: Step = {
         `All step6 actions failed: ${failures.join("; ")}`,
       );
     }
-    return {
-      status: "ok",
-      notes: summary.join("; "),
-    };
+    return { status: "ok", notes: summary.join("; ") };
   },
 };
 
-// ---------- Branch helpers ----------
+// ---------- Auto-apply branch (per kind) ----------
 
-type AutoApplyResult =
-  | { kind: "ok" }
-  | { kind: "fail"; reason: string };
+type AutoApplyResult = { kind: "ok" } | { kind: "fail"; reason: string };
 
 async function tryAutoApply(args: {
   prospect: ProspectRecord;
-  cr: ChangeRequest;
+  item: Actionable;
   target: SafeTarget;
   newValue: string;
   env: Parameters<Step["run"]>[1];
-  baseUrl: string;
   reasoning: string;
-  confidence: number;
 }): Promise<AutoApplyResult> {
-  // Apply the patch first. If apply fails, abort without dispatching
-  // a wasted build.
   const apply = await applyChangeRequestPatch({
     prospect: args.prospect,
     target: args.target,
@@ -244,22 +263,33 @@ async function tryAutoApply(args: {
     return { kind: "fail", reason: `apply failed: ${apply.reason}` };
   }
 
-  // Generate the per-request approval token customer-side approve
-  // / reject pages will check.
-  const approvalToken = randomHex(32);
+  const patchPayload = {
+    target: args.target,
+    newValue: args.newValue as unknown,
+    previousValue: apply.previousValue,
+  };
 
-  await patchChangeRequest(args.prospect.pageId, args.cr.id, {
-    status: "in-progress",
-    coworkPatch: {
-      target: args.target,
-      newValue: args.newValue,
-      previousValue: apply.previousValue,
-    },
-    coworkPatchAppliedAt: new Date().toISOString(),
-    customerApprovalToken: approvalToken,
-  });
+  if (args.item.kind === "post-commit") {
+    // Generate per-request approval token; customer's email link
+    // requires it before promoting.
+    const approvalToken = randomHex(32);
+    await patchChangeRequest(args.prospect.pageId, args.item.request.id, {
+      status: "in-progress",
+      coworkPatch: patchPayload,
+      coworkPatchAppliedAt: new Date().toISOString(),
+      customerApprovalToken: approvalToken,
+    });
+  } else {
+    // Pre-commit: no approval token; the rebuild updates the
+    // preview Worker directly.
+    await patchReviewEdit(args.prospect.pageId, args.item.edit.id, {
+      status: "applied",
+      coworkPatch: patchPayload,
+      coworkPatchAppliedAt: new Date().toISOString(),
+    });
+  }
 
-  // Dispatch preview build.
+  // Dispatch the build. Mode differs by kind.
   if (
     !args.env.GITHUB_TOKEN ||
     !args.env.GITHUB_OWNER ||
@@ -267,15 +297,27 @@ async function tryAutoApply(args: {
   ) {
     return {
       kind: "fail",
-      reason: "GitHub creds not configured — patch applied but no preview built",
+      reason:
+        "GitHub creds not configured — patch applied but no build dispatched",
     };
   }
   if (!args.prospect.workerName || !args.prospect.cloudflareAccountId) {
     return {
       kind: "fail",
-      reason: "Customer has no per-customer Worker yet — preview build skipped",
+      reason:
+        "Customer has no per-customer Worker yet — build dispatch skipped",
     };
   }
+  const mode = args.item.kind === "post-commit" ? "preview" : "live";
+  const itemIdField =
+    args.item.kind === "post-commit"
+      ? { changeRequestId: args.item.request.id }
+      : {
+          // Pre-commit edits don't have a separate post-commit
+          // changeRequestId, but we thread the edit id through
+          // for the callback's audit log.
+          reviewEditId: args.item.edit.id,
+        };
   try {
     await dispatchRepositoryEvent({
       token: args.env.GITHUB_TOKEN,
@@ -286,8 +328,8 @@ async function tryAutoApply(args: {
         token: args.prospect.token,
         prospectName: args.prospect.name,
         businessName: args.prospect.business ?? "",
-        mode: "preview",
-        changeRequestId: args.cr.id,
+        mode,
+        ...itemIdField,
       },
     });
   } catch (e) {
@@ -297,29 +339,39 @@ async function tryAutoApply(args: {
         : e instanceof Error
           ? e.message
           : String(e);
-    return {
-      kind: "fail",
-      reason: `dispatch failed: ${msg}`,
-    };
+    return { kind: "fail", reason: `dispatch failed: ${msg}` };
   }
   return { kind: "ok" };
 }
 
-async function escalateOnly(
-  prospect: ProspectRecord,
-  cr: ChangeRequest,
-  baseUrl: string,
-  reasonForBen: string,
-): Promise<void> {
+async function escalateOnly(args: {
+  prospect: ProspectRecord;
+  item: Actionable;
+  baseUrl: string;
+  reasonForBen: string;
+}): Promise<void> {
+  const { prospect, item, baseUrl, reasonForBen } = args;
+  const submittedAt =
+    item.kind === "post-commit"
+      ? item.request.submittedAt
+      : item.edit.submittedAt;
+  const message =
+    item.kind === "post-commit" ? item.request.message : item.edit.message;
+  const itemId =
+    item.kind === "post-commit" ? item.request.id : item.edit.id;
   const ageH = Math.floor(
-    (Date.now() - Date.parse(cr.submittedAt)) / (60 * 60 * 1000),
+    (Date.now() - Date.parse(submittedAt)) / (60 * 60 * 1000),
   );
-  const adminDeepLink = `${baseUrl}/admin/${prospect.token}#cr-${cr.id}`;
+  const adminDeepLink = `${baseUrl}/admin/${prospect.token}#${item.kind === "post-commit" ? "cr" : "re"}-${itemId}`;
+  const tagLabel =
+    item.kind === "post-commit"
+      ? "[CHANGE REQUEST · needs you]"
+      : "[STEP 5 REVIEW EDIT · needs you]";
   const notif: NotificationPayload = {
-    subject: `[CHANGE REQUEST · needs you] ${prospect.name}${prospect.business ? ` (${prospect.business})` : ""} · ${ageH}h old`,
+    subject: `${tagLabel} ${prospect.name}${prospect.business ? ` (${prospect.business})` : ""} · ${ageH}h old`,
     body:
-      `A change request from ${prospect.name}${prospect.business ? ` at ${prospect.business}` : ""} needs your eye.\n\n` +
-      `--- Their request ---\n${cr.message}\n--- End ---\n\n` +
+      `${item.kind === "post-commit" ? "A change request" : "A pre-launch review edit"} from ${prospect.name}${prospect.business ? ` at ${prospect.business}` : ""} needs your eye.\n\n` +
+      `--- Their request ---\n${message}\n--- End ---\n\n` +
       `Cowork's take:\n${reasonForBen}\n\n` +
       `Reply with one click:\n${adminDeepLink}\n\n` +
       `— Cowork`,
@@ -328,41 +380,134 @@ async function escalateOnly(
   if (emailErr) {
     throw new Error(`email failed: ${emailErr}`);
   }
-  await markChangeRequestEscalated(prospect.pageId, cr.id);
+  if (item.kind === "post-commit") {
+    await markChangeRequestEscalated(prospect.pageId, itemId);
+  } else {
+    await patchReviewEdit(prospect.pageId, itemId, {
+      coworkEscalatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+async function stampClassification(args: {
+  prospect: ProspectRecord;
+  item: Actionable;
+  classification: Awaited<ReturnType<typeof classifyChangeRequest>>;
+}): Promise<void> {
+  const fields = {
+    coworkClassification:
+      args.classification?.classification ?? "ambiguous",
+    coworkConfidence: args.classification?.confidence ?? 0,
+    coworkReasoning:
+      args.classification?.reasoning ??
+      "Cowork couldn't classify (model unavailable or returned malformed JSON).",
+  };
+  if (args.item.kind === "post-commit") {
+    await patchChangeRequest(
+      args.prospect.pageId,
+      args.item.request.id,
+      fields,
+    );
+  } else {
+    await patchReviewEdit(args.prospect.pageId, args.item.edit.id, fields);
+  }
 }
 
 // ---------- Predicates + builders ----------
 
-/** Pull change requests this tick should classify-or-escalate.
- *  Skips:
- *   - non-pending (closed / retracted / mid-promote)
- *   - too young (give the customer a chance to retract)
- *   - already escalated AND classified (audit done)
- *   - in-progress with a preview already built (waiting on
- *     customer approval; nothing for us to do until their click) */
-function findActionable(prospect: ProspectRecord): ChangeRequest[] {
+/** Combined actionable list across post-commit + pre-commit kinds.
+ *  Sorted oldest-first so Ben sees the most-overdue at the top of
+ *  any batched escalation summary. */
+function findActionable(prospect: ProspectRecord): Actionable[] {
   const now = Date.now();
-  return prospect.changeRequests
+  const post: Actionable[] = prospect.changeRequests
     .filter((cr) => {
       if (cr.status !== "pending" && cr.status !== "in-progress") return false;
-      // Once classified + escalated, stop processing — admin has it.
       if (cr.coworkClassification && cr.coworkEscalatedAt) return false;
-      // If we already applied + built a preview, the customer's
-      // click drives the next action, not the cron.
       if (cr.coworkPatchAppliedAt && cr.previewVersionId) return false;
       const submitted = Date.parse(cr.submittedAt);
       if (!Number.isFinite(submitted)) return false;
       if (now - submitted < MIN_AGE_BEFORE_CLASSIFY_MS) return false;
       return true;
     })
-    .sort((a, b) => Date.parse(a.submittedAt) - Date.parse(b.submittedAt));
+    .map((cr): Actionable => ({ kind: "post-commit", request: cr }));
+
+  const pre: Actionable[] = readReviewEdits(prospect)
+    .filter((re) => {
+      // Pre-commit edits are "submitted" until applied or rejected.
+      // We process anything still "submitted" that's not been
+      // classified+escalated yet AND not already applied.
+      if (re.status !== "submitted") return false;
+      if (re.coworkClassification && re.coworkEscalatedAt) return false;
+      if (re.coworkPatchAppliedAt) return false;
+      const submitted = Date.parse(re.submittedAt);
+      if (!Number.isFinite(submitted)) return false;
+      if (now - submitted < MIN_AGE_BEFORE_CLASSIFY_MS) return false;
+      return true;
+    })
+    .map((re): Actionable => ({ kind: "pre-commit", edit: re }));
+
+  return [...post, ...pre].sort((a, b) => {
+    const aSub = Date.parse(
+      a.kind === "post-commit" ? a.request.submittedAt : a.edit.submittedAt,
+    );
+    const bSub = Date.parse(
+      b.kind === "post-commit" ? b.request.submittedAt : b.edit.submittedAt,
+    );
+    return aSub - bSub;
+  });
+}
+
+/** Read the Hub Step 5 review edits as ReviewEditWithCowork[].
+ *  Defensive on every read — onboardingData may be malformed. */
+function readReviewEdits(prospect: ProspectRecord): ReviewEditWithCowork[] {
+  const ob = (prospect.onboardingData ?? {}) as Record<string, unknown>;
+  const review = (ob.review ?? {}) as Record<string, unknown>;
+  const edits = Array.isArray(review.edits) ? review.edits : [];
+  return edits
+    .filter(
+      (e): e is Record<string, unknown> =>
+        !!e && typeof e === "object" && typeof (e as { id?: unknown }).id === "string",
+    )
+    .map((e) => e as unknown as ReviewEditWithCowork);
+}
+
+/** Combined daily classification count across both kinds. */
+function countRecentClassifications(prospect: ProspectRecord): number {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const post = prospect.changeRequests.filter(
+    (cr) =>
+      cr.coworkClassification &&
+      cr.coworkEscalatedAt &&
+      Date.parse(cr.coworkEscalatedAt) > cutoff,
+  ).length;
+  const pre = readReviewEdits(prospect).filter(
+    (re) =>
+      re.coworkClassification &&
+      re.coworkEscalatedAt &&
+      Date.parse(re.coworkEscalatedAt) > cutoff,
+  ).length;
+  return post + pre;
+}
+
+function formatBreakdown(
+  item: { id: string; status: string; submittedAt: string } & {
+    coworkClassification?: string;
+    coworkEscalatedAt?: string;
+    coworkPatchAppliedAt?: string;
+    previewVersionId?: string;
+  },
+  prefix: "pre" | "post",
+): string {
+  const ageMin = Math.floor(
+    (Date.now() - Date.parse(item.submittedAt)) / 60_000,
+  );
+  return `${prefix}:${item.id.slice(0, 8)}[${item.status},${ageMin}min,classified=${!!item.coworkClassification},escalated=${!!item.coworkEscalatedAt},applied=${!!item.coworkPatchAppliedAt}${"previewVersionId" in item ? `,preview=${!!item.previewVersionId}` : ""}]`;
 }
 
 /** Build the SiteSnapshot the classifier reads. Pulled from the
  *  same place the adapter reads — content step preferred, prospect
- *  record fallback. Same precedence the live site uses, so the
- *  snapshot reflects what the customer is looking at when they
- *  submit a request. */
+ *  record fallback. */
 function buildSiteSnapshot(prospect: ProspectRecord): {
   business: {
     name: string;
@@ -403,9 +548,6 @@ function optionalString(v: unknown): string | undefined {
   return t.length > 0 ? t : undefined;
 }
 
-/** Random hex string of `bytes` characters. Used for the per-
- *  request customer approval token. crypto.getRandomValues is
- *  available in both Workers and Node 20+. */
 function randomHex(chars: number): string {
   const arr = new Uint8Array(Math.ceil(chars / 2));
   crypto.getRandomValues(arr);

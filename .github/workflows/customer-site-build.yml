@@ -60,7 +60,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Resolve token + mode + changeRequestId
+      - name: Resolve token + mode + changeRequestId + reviewEditId
         id: token
         run: |
           TOKEN="${{ github.event.client_payload.token || inputs.token }}"
@@ -74,14 +74,17 @@ jobs:
             echo "::error::mode must be 'live' or 'preview' (got '$MODE')"
             exit 1
           fi
-          # Change request id only relevant for preview builds — the
-          # callback uses it to stamp the preview URL on the right
-          # request entry. Empty for live builds.
+          # Change request id only relevant for preview builds (post-
+          # commit auto-apply path). Review edit id only relevant for
+          # live builds dispatched as part of pre-commit auto-apply.
+          # The callback uses each to stamp the right entry in Notion.
           CR_ID="${{ github.event.client_payload.changeRequestId || inputs.changeRequestId }}"
+          RE_ID="${{ github.event.client_payload.reviewEditId }}"
           echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "change_request_id=$CR_ID" >> "$GITHUB_OUTPUT"
-          echo "Building site for token: $TOKEN (mode=$MODE${CR_ID:+, cr=$CR_ID})"
+          echo "review_edit_id=$RE_ID" >> "$GITHUB_OUTPUT"
+          echo "Building site for token: $TOKEN (mode=$MODE${CR_ID:+, cr=$CR_ID}${RE_ID:+, re=$RE_ID})"
 
       - name: Fetch site data + deploy metadata from marketing site
         id: fetch
@@ -179,10 +182,14 @@ jobs:
               --arg crid "${{ steps.token.outputs.change_request_id }}" \
               '{token: $token, status: "success", mode: "preview", previewUrl: $url, previewVersionId: $vid, changeRequestId: $crid}')
           else
+            # live mode — include reviewEditId if this is a pre-commit
+            # auto-apply build so the callback can email the customer
+            # the right "your edit is applied" template.
             PAYLOAD=$(jq -nc \
               --arg token "${{ steps.token.outputs.value }}" \
               --arg url "${{ steps.fetch.outputs.preview_url }}" \
-              '{token: $token, status: "success", mode: "live", previewUrl: $url}')
+              --arg reid "${{ steps.token.outputs.review_edit_id }}" \
+              '{token: $token, status: "success", mode: "live", previewUrl: $url, reviewEditId: $reid}')
           fi
           curl -sS -X POST \
             -H "Content-Type: application/json" \
@@ -205,5 +212,6 @@ jobs:
                 --arg msg "$ERROR_MSG" \
                 --arg mode "${{ steps.token.outputs.mode }}" \
                 --arg crid "${{ steps.token.outputs.change_request_id }}" \
-                '{token: $token, status: "failure", mode: $mode, changeRequestId: $crid, errorMessage: $msg}')" \
+                --arg reid "${{ steps.token.outputs.review_edit_id }}" \
+                '{token: $token, status: "failure", mode: $mode, changeRequestId: $crid, reviewEditId: $reid, errorMessage: $msg}')" \
             "${MARKETING_SITE_BASE}/api/internal/build-callback" || true

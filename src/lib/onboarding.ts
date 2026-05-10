@@ -509,6 +509,30 @@ const reviewEditSchema = z.object({
    *  Cowork or Ben deems it out of scope. Customers see this on
    *  their Hub. */
   status: z.enum(["submitted", "applied", "rejected"]).default("submitted"),
+  // --- Cowork classify-and-apply audit (NEW C5.7 Phase B v2 pre-commit) ---
+  // Same fields as ChangeRequest.cowork* — step6-change-requests
+  // iterates BOTH change requests AND review edits and treats them
+  // uniformly (single classifier prompt, single applier whitelist).
+  // Pre-commit edits skip the customer-approval gate (the whole
+  // Step 5 IS the approval) — the cron applies + dispatches a LIVE
+  // build that updates the customer's preview Worker directly.
+  coworkClassification: z.enum(["in_scope", "out_of_scope", "ambiguous"]).optional(),
+  coworkConfidence: z.number().min(0).max(1).optional(),
+  coworkReasoning: z.string().max(2000).optional(),
+  /** Pre-commit patches use the same shape as post-commit. */
+  coworkPatch: z
+    .object({
+      target: z.string(),
+      newValue: z.unknown(),
+      previousValue: z.unknown(),
+      serviceName: z.string().optional(),
+      faqQuestion: z.string().optional(),
+    })
+    .optional(),
+  coworkPatchAppliedAt: z.string().optional(),
+  /** Stamped when Ben gets an escalation email for an
+   *  out-of-scope / ambiguous edit. */
+  coworkEscalatedAt: z.string().optional(),
 });
 
 export type ReviewEdit = z.infer<typeof reviewEditSchema>;

@@ -1444,6 +1444,65 @@ export async function patchChangeRequest(
 }
 
 /**
+ * Patch a single Hub Step 5 review edit's cowork audit fields.
+ * Reads onboardingData, finds the edit by id in
+ * `data.review.edits[]`, shallow-merges the patch, writes back.
+ * Returns the merged edit, or null if not found. Used by step6
+ * for pre-commit auto-apply (review edits flow through the same
+ * classify+apply pipeline as post-commit change requests).
+ *
+ * Don't use this to set `status` — that goes through the same
+ * route's mark-applied flow (when we add it) or via the existing
+ * markdone path.
+ */
+export async function patchReviewEdit(
+  pageId: string,
+  editId: string,
+  patch: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
+  const props = page.properties as Record<string, unknown>;
+  const rawTextArr = (props["Onboarding Data"] as { rich_text?: unknown[] })
+    ?.rich_text;
+  let onboardingData: Record<string, unknown> = {};
+  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
+    const text = rawTextArr
+      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+      .join("");
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === "object") onboardingData = parsed;
+      } catch {
+        /* ignore malformed; treat as empty */
+      }
+    }
+  }
+  const review = (onboardingData.review ?? {}) as Record<string, unknown>;
+  const edits = Array.isArray(review.edits) ? [...review.edits] : [];
+  const idx = edits.findIndex(
+    (e) => e && typeof e === "object" && (e as { id?: unknown }).id === editId,
+  );
+  if (idx < 0) return null;
+  const merged = {
+    ...(edits[idx] as Record<string, unknown>),
+    ...patch,
+  };
+  edits[idx] = merged;
+  const newReview = { ...review, edits };
+  const newOnboarding = { ...onboardingData, review: newReview };
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Onboarding Data": rt(JSON.stringify(newOnboarding)),
+      },
+    },
+  });
+  return merged;
+}
+
+/**
  * Stamp `coworkEscalatedAt` on a single change request so the
  * Phase B v1 reminder cron knows it's been actioned and doesn't
  * re-email. Called by the ops worker step6-change-requests.
