@@ -11,6 +11,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { SITE_DATA } from "@/lib/site-data";
 import { brandColorsStyleBlock } from "@/lib/colors";
+import { buildLocalBusinessJsonLd } from "@/lib/jsonld";
 
 export const metadata: Metadata = {
   title: {
@@ -41,6 +42,13 @@ export default function RootLayout({
   // available before any stylesheet loads — no flash of wrong colour.
   const brandStyles = brandColorsStyleBlock(SITE_DATA.colors);
 
+  // Site-wide LocalBusiness JSON-LD (with nested Review +
+  // AggregateRating when the customer has 1+ testimonials). Sits
+  // in <head> on every page so Google sees it on the homepage AND
+  // any deep-linked subpage. Built server-side from SITE_DATA so
+  // it ships as static HTML — no client JS, no hydration cost.
+  const localBusinessJsonLd = buildLocalBusinessJsonLd(SITE_DATA);
+
   return (
     <html
       lang="en"
@@ -61,6 +69,15 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono&display=swap"
         />
         <style dangerouslySetInnerHTML={{ __html: brandStyles }} />
+        {/* JSON-LD structured data for Google. LocalBusiness is the
+            base schema; nested Review + AggregateRating qualify the
+            site for star-rating snippets in search results. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(localBusinessJsonLd),
+          }}
+        />
       </head>
       <body>
         <a
