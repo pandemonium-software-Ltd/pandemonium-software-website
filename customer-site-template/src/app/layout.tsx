@@ -49,19 +49,23 @@ export default function RootLayout({
   // it ships as static HTML — no client JS, no hydration cost.
   const localBusinessJsonLd = buildLocalBusinessJsonLd(SITE_DATA);
 
-  // Preview-mode lock-down. When this Worker version was uploaded
-  // as a PREVIEW (PREVIEW_ACCESS_TOKEN env var set on the
-  // version), we inject a small script that suppresses right-
-  // click and the common DevTools shortcuts (F12, Ctrl+U, etc.)
-  // so non-technical viewers can't easily extract the preview
-  // URL or re-share the content. Defence-in-depth alongside the
-  // wrapper page on modu-forge.co.uk doing the same. LIVE
-  // deploys (env unset) skip this entirely and the customer's
-  // actual site behaves normally — no JS injected.
+  // Lock-down injection conditions. Two paths trigger the
+  // right-click + DevTools suppressor inside the customer's site:
+  //   (1) PREVIEW_ACCESS_TOKEN env var set — the version was
+  //       uploaded as a post-commit preview (gated). Always inject.
+  //   (2) Page accessed inside an iframe (window.self !== top) —
+  //       the customer is viewing via the Hub or wrapper page on
+  //       modu-forge.co.uk. Pre-commit live builds use this path
+  //       since they don't have PREVIEW_ACCESS_TOKEN set.
   //
-  // Determined viewers with DevTools enabled before page load
-  // can bypass; that's a known limitation. Deters casual
-  // sharing without breaking the preview's interactivity.
+  // Path (2) is the wider net: it activates whenever any framing
+  // happens, regardless of build mode. Live customer-site visitors
+  // (browsing direct, not in a frame) get no suppression and the
+  // actual site behaves normally — no JS injected at all.
+  //
+  // Determined viewers with DevTools enabled before page load can
+  // bypass either path; that's a known limitation. Deters casual
+  // URL extraction + sharing without breaking interactivity.
   const isPreviewMode = !!process.env.PREVIEW_ACCESS_TOKEN;
 
   return (
@@ -93,11 +97,21 @@ export default function RootLayout({
             __html: JSON.stringify(localBusinessJsonLd),
           }}
         />
-        {isPreviewMode && (
-          // eslint-disable-next-line react/no-danger
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
+        {/* Always emit the suppressor script. The script
+            runtime-checks whether to install listeners:
+              install if PREVIEW_ACCESS_TOKEN is set (build-time
+              constant inlined below) OR window.self !== window.top
+              (we're in an iframe).
+            Live, direct visitors hit neither condition and the
+            script is a 1-line no-op — zero impact on real users. */}
+        {/* eslint-disable-next-line react/no-danger */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var IN_PREVIEW_BUILD = ${isPreviewMode ? "true" : "false"};
+                var IN_FRAME = window.self !== window.top;
+                if (!IN_PREVIEW_BUILD && !IN_FRAME) return;
                 document.addEventListener('contextmenu', function(e) {
                   e.preventDefault();
                 }, true);
@@ -116,10 +130,20 @@ export default function RootLayout({
                     e.preventDefault(); return;
                   }
                 }, true);
-              `,
-            }}
-          />
-        )}
+              })();
+            `,
+          }}
+        />
+        {/* Frame-ancestors enforcement: when we're in preview build
+            mode, this is set by the Worker middleware. For the
+            in-iframe-only case (pre-commit Hub embed), the customer-
+            site Worker doesn't add the header, so the iframe
+            embeds anywhere. The auth gate on the Hub side is the
+            primary control there — direct workers.dev visits to a
+            non-preview Worker pre-commit will work BUT the URL is
+            never published anywhere, so the risk is the customer
+            themselves accidentally sharing it. The hub-side iframe
+            is the discoverable entry point. */}
       </head>
       <body>
         <a

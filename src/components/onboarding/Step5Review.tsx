@@ -38,6 +38,7 @@
 
 import { useState } from "react";
 import { MAX_REVIEW_EDITS, type ReviewEdit } from "@/lib/onboarding";
+import PreviewFrame from "@/components/PreviewFrame";
 
 type Props = {
   data: Record<string, unknown>;
@@ -291,23 +292,17 @@ export default function Step5Review({
         {phase === 3 && (
           <div className="mt-4">
             <p className="text-sm text-navy-700">
-              Live preview at{" "}
-              <a
-                href={initialPreviewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="link"
-              >
-                {initialPreviewUrl}
-              </a>
-              . Look at it on your phone too — most traffic comes from
-              mobile.
+              Have a look at your preview below. Tap the full-screen
+              button on the top-right to view it big — and revisit
+              this step on your phone too (most traffic comes from
+              mobile). The preview only loads inside this dashboard;
+              there&apos;s no shareable link.
             </p>
-            <div className="mt-3 overflow-hidden rounded-xl border-2 border-navy-100">
-              <iframe
+            <div className="mt-3">
+              <PreviewFrame
                 src={initialPreviewUrl}
-                title="Your site preview"
-                className="block h-[600px] w-full bg-cream-50"
+                height="600px"
+                caption="Your site preview"
               />
             </div>
           </div>

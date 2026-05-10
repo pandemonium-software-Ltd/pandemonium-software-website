@@ -5,31 +5,43 @@ import type { Template } from "../types";
 // updated with the change). Pre-commit so there's no version-
 // approval gate — the customer just sees the updated preview.
 //
-// Distinct from `change-request-applied-live` (which is the
-// post-commit, customer-approved equivalent) and from
-// `preview-ready` (which is the FIRST preview build at the start
-// of Step 5 review).
+// IMPORTANT (C5.7+ preview-prevention): the email does NOT
+// include the preview Worker URL. The preview is only viewable
+// inside the Onboarding Hub (Step 6 Review) embedded in an
+// iframe with the security locks in place. Sharing the
+// workers.dev URL externally is a leak risk we deliberately
+// don't enable. CTA points the customer to the Hub.
+//
+// Distinct from `change-request-applied-live` (post-commit,
+// customer-approved equivalent) and from `preview-ready`
+// (first preview build at the start of Step 5 review).
 //
 // Tone: confirms the change is on the preview + invites the
-// customer to keep reviewing. Reminds them of remaining edits in
-// their pre-launch allowance.
+// customer to keep reviewing inside the Hub. Reminds them of
+// remaining edits in their pre-launch allowance.
 //
 // Low risk tier (§11.2) — confirmation of an already-completed
 // state; no commitments to get wrong.
 export const reviewEditApplied: Template = {
   id: "review-edit-applied",
   riskTier: "low",
-  required: ["customerName", "previewUrl", "hubUrl"],
-  cta: { urlKey: "previewUrl", label: "Open your preview" },
+  required: ["customerName", "hubUrl"],
+  cta: { urlKey: "hubUrl", label: "Open your onboarding" },
   subject: "Your edit is on the preview ✓",
   body: `Hi {{customerName}},
 
-Your edit is applied. Your preview now reflects it:
+Your edit is applied — your preview's been updated.
 
-  {{previewUrl}}
+Open your onboarding to view it:
 
-Have a look. If anything's not right, request another edit from
-the Onboarding Hub — you've got 3 edits in total before launch.
+  {{hubUrl}}
+
+The preview only loads inside your dashboard (no shareable
+link, by design). Tap the full-screen button on the top-right
+of the preview window to view it big.
+
+If anything's not right, request another edit from Step 6
+Review — you've got 3 edits in total before launch.
 
 Once you're happy with everything, hit Commit on the Hub and
 we'll go live with the final version.
