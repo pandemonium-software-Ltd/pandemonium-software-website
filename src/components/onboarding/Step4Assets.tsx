@@ -378,6 +378,67 @@ export default function Step4Assets({
             })}
           </ul>
         )}
+
+        {/* Orphan service photos — uploaded against a service name
+            that no longer exists in the canonical service list (the
+            customer renamed or deleted the service in Site content
+            after uploading). They're invisible in the slot grid above
+            and silently dropped at site-build time by the adapter. We
+            surface them here so the customer can clean up — either
+            delete the photo or re-rename the service back. */}
+        {(() => {
+          const currentNames = new Set(services.map((s) => s.name));
+          const orphans = servicePhotos.filter(
+            (sp) => !currentNames.has(sp.serviceName),
+          );
+          if (orphans.length === 0) return null;
+          return (
+            <aside
+              role="status"
+              className="mt-6 rounded-xl border-2 border-amber-300 bg-amber-50/70 p-4"
+            >
+              <p className="text-sm font-semibold text-amber-900">
+                Orphaned service photos ({orphans.length})
+              </p>
+              <p className="mt-1 text-xs text-amber-800">
+                These photos were uploaded for services you&apos;ve
+                since renamed or removed. Delete them — or rename a
+                service back if it was unintentional. Until you do,
+                they won&apos;t appear on your site.
+              </p>
+              <ul className="mt-3 space-y-2">
+                {orphans.map((orphan) => (
+                  <li
+                    key={orphan.key}
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-white p-3"
+                  >
+                    <AssetTile
+                      asset={orphan}
+                      r2PublicUrlBase={r2PublicUrlBase}
+                      variant="thumb"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-navy-900">
+                        {orphan.serviceName}
+                      </p>
+                      <p className="text-xs text-navy-600">
+                        No matching service in your list
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteAsset(orphan.key)}
+                      disabled={disabled}
+                      className="rounded-lg border-2 border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:border-amber-400 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          );
+        })()}
       </section>
 
       {/* ---------- E. Backgrounds ---------- */}
