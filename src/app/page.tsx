@@ -1,5 +1,9 @@
 import Link from "next/link";
 import HeroIllustration from "@/components/HeroIllustration";
+import VibePreview, {
+  VibePreviewCaption,
+  VIBE_PREVIEW_LIST,
+} from "@/components/VibePreview";
 import { site } from "@/lib/site";
 
 export default function HomePage() {
@@ -196,6 +200,44 @@ export default function HomePage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Vibe gallery — four home-page previews so visitors can SEE
+          the range before they enquire. Same teal accent across all
+          four so the comparison is about typography + layout, not
+          colour (which the customer picks per-site later). */}
+      <section className="section bg-cream-100/60">
+        <div className="container-content">
+          <div className="mx-auto max-w-3xl text-center">
+            <span className="eyebrow">Pick a look</span>
+            <h2 className="heading-2 mt-3">
+              Four styles. Your business, your call.
+            </h2>
+            <p className="prose-body mx-auto mt-5 max-w-2xl">
+              Every site we build slots into one of four design vibes.
+              Same modular content (services, FAQs, photos, booking,
+              newsletter); different typography + corner radii + spacing
+              rhythm. You pick the one that matches your business when
+              you fill in your details — and you can see what each one
+              looks like below.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-8 md:grid-cols-2">
+            {VIBE_PREVIEW_LIST.map((v) => (
+              <div key={v} className="flex flex-col">
+                <VibePreview vibe={v} size="full" />
+                <VibePreviewCaption vibe={v} />
+              </div>
+            ))}
+          </div>
+
+          <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-navy-600">
+            All four use your brand colours, your photos, and your copy
+            — the previews use the same teal everywhere so you can
+            compare the layouts head-to-head.
+          </p>
         </div>
       </section>
 

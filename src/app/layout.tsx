@@ -3,6 +3,7 @@ import { Fraunces, Inter } from "next/font/google";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { site } from "@/lib/site";
+import { VIBE_PREVIEW_FONTS_URL } from "@/components/VibePreview";
 import "./globals.css";
 
 const serif = Fraunces({
@@ -108,6 +109,21 @@ export default function RootLayout({
 
   return (
     <html lang="en-GB" className={`${serif.variable} ${sans.variable}`}>
+      <head>
+        {/* Preconnect + stylesheet for the 6 font families used by
+            <VibePreview /> on the homepage gallery + the intake-form
+            vibe picker. Single combined Google Fonts request covers
+            all four vibes so the previews render in the right
+            typeface immediately. Loaded once at the layout level so
+            pages with multiple previews don't duplicate the request. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link rel="stylesheet" href={VIBE_PREVIEW_FONTS_URL} />
+      </head>
       <body>
         <a href="#main-content" className="skip-link">
           Skip to content

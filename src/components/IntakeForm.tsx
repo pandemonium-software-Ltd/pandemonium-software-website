@@ -48,6 +48,7 @@ import {
   type Phase3Partial,
   VIBE_OPTIONS,
 } from "@/lib/schemas";
+import VibePreview from "@/components/VibePreview";
 import {
   BASE_SETUP_GBP,
   BASE_MONTHLY_GBP,
@@ -868,29 +869,40 @@ function BrandSection({
           Site vibe{" "}
           <span aria-hidden="true" className="text-ember-600">*</span>
         </legend>
-        <p className="mb-3 text-xs text-navy-500">
-          Pick the one that fits your customers best — I&apos;ll work within
-          this preset.
+        <p className="mb-4 text-xs text-navy-500">
+          Pick the one that fits your customers best — we&apos;ll work
+          within this preset. Each preview below uses the same teal
+          everywhere so you can compare the layouts head-to-head;
+          your real site will use your own brand colours.
         </p>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {VIBE_OPTIONS.map((v) => {
             const detail = VIBE_DETAILS[v];
             return (
               <label
                 key={v}
-                className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400"
+                className="group flex cursor-pointer flex-col gap-3 rounded-2xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400 has-[:checked]:border-brand-primary-500 has-[:checked]:bg-brand-primary-50"
               >
-                <input
-                  type="radio"
-                  value={v}
-                  {...register("brand.vibe")}
-                  className="mt-1 h-4 w-4 flex-none border-2 border-navy-300 text-navy-900"
-                />
-                <div>
-                  <span className="font-semibold text-navy-900">
-                    {detail.title}
-                  </span>
-                  <p className="mt-1 text-sm text-navy-700">{detail.tagline}</p>
+                {/* Live preview thumbnail. Same component the marketing
+                 *  homepage uses — when you change it there, this picker
+                 *  updates in lockstep. Aria-label on the preview itself
+                 *  carries the screen-reader description. */}
+                <VibePreview vibe={v} size="thumb" />
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    value={v}
+                    {...register("brand.vibe")}
+                    className="mt-1 h-4 w-4 flex-none border-2 border-navy-300 text-navy-900"
+                  />
+                  <div>
+                    <span className="font-semibold text-navy-900">
+                      {detail.title}
+                    </span>
+                    <p className="mt-1 text-sm text-navy-700">
+                      {detail.tagline}
+                    </p>
+                  </div>
                 </div>
               </label>
             );
