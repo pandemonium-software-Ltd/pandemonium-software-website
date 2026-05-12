@@ -50,6 +50,11 @@ import {
 } from "@/lib/schemas";
 import VibePreview from "@/components/VibePreview";
 import {
+  recommendedVibeFor,
+  VIBE_FEATURES,
+  VIBE_BEST_FOR,
+} from "@/lib/vibe-recommendations";
+import {
   BASE_SETUP_GBP,
   BASE_MONTHLY_GBP,
   MODULE_BOOKING_SETUP_GBP,
@@ -214,11 +219,18 @@ function buildDefaultValues(
 export default function IntakeForm({
   token,
   prospectName,
+  businessType,
   savedPartial,
   seedDefaults,
 }: {
   token: string;
   prospectName: string;
+  /** Phase 1 businessType ("Plumber", "Solicitor"…) — used by the
+   *  vibe picker to badge the recommended option for this customer.
+   *  Optional because old prospects from before Phase 1 captured
+   *  type cleanly may have it blank; the picker falls back to no
+   *  badge in that case. */
+  businessType?: string;
   savedPartial: Phase3Partial;
   seedDefaults: IntakeDefaults;
 }) {
@@ -360,7 +372,12 @@ export default function IntakeForm({
           <ServicesSection register={register} errors={errors} control={control} />
         )}
         {currentStep.key === "brand" && (
-          <BrandSection register={register} errors={errors} control={control} />
+          <BrandSection
+            register={register}
+            errors={errors}
+            control={control}
+            businessType={businessType}
+          />
         )}
         {currentStep.key === "modules" && (
           <ModulesSection register={register} errors={errors} watch={watch} />
@@ -828,8 +845,21 @@ function BrandSection({
   register,
   errors,
   control,
-}: SectionProps & { control: Control<Phase3Data> }) {
+  businessType,
+}: SectionProps & {
+  control: Control<Phase3Data>;
+  businessType?: string;
+}) {
   const e = errors.brand;
+  // Compute the vibe recommendation once. The picker below uses
+  // this to stamp a "Recommended for {businessType}" badge on the
+  // matching card. When businessType is missing or "Other", the
+  // recommendation falls back to "modern" — we suppress the badge
+  // in that case so customers don't see an unhelpful "Recommended
+  // for Other" label.
+  const recommendedVibe = recommendedVibeFor(businessType);
+  const showRecommendation =
+    !!businessType && businessType !== "Other";
   return (
     <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2">
@@ -871,23 +901,83 @@ function BrandSection({
         </legend>
         <p className="mb-4 text-xs text-navy-500">
           Pick the one that fits your customers best — we&apos;ll work
-          within this preset. Each preview below uses the same teal
-          everywhere so you can compare the layouts head-to-head;
-          your real site will use your own brand colours.
+          within this preset. Hover any preview to see its design
+          features and which businesses it suits.
+          {showRecommendation && (
+            <>
+              {" "}
+              The card marked{" "}
+              <span className="font-semibold text-green-700">
+                Recommended
+              </span>{" "}
+              is the one that usually fits a {businessType} best — but
+              you can pick any of the four.
+            </>
+          )}{" "}
+          Previews use the same teal everywhere so you can compare the
+          layouts head-to-head; your real site uses your brand colours.
         </p>
         <div className="grid gap-4 md:grid-cols-2">
           {VIBE_OPTIONS.map((v) => {
             const detail = VIBE_DETAILS[v];
+            const isRecommended =
+              showRecommendation && v === recommendedVibe;
             return (
               <label
                 key={v}
-                className="group flex cursor-pointer flex-col gap-3 rounded-2xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400 has-[:checked]:border-brand-primary-500 has-[:checked]:bg-brand-primary-50"
+                className="group relative flex cursor-pointer flex-col gap-3 rounded-2xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400 has-[:checked]:border-brand-primary-500 has-[:checked]:bg-brand-primary-50"
               >
-                {/* Live preview thumbnail. Same component the marketing
-                 *  homepage uses — when you change it there, this picker
-                 *  updates in lockstep. Aria-label on the preview itself
-                 *  carries the screen-reader description. */}
-                <VibePreview vibe={v} size="thumb" />
+                {/* Preview + hover-reveal overlay + optional
+                 *  recommendation badge. Same component the marketing
+                 *  homepage uses — when you change it there, this
+                 *  picker updates in lockstep. */}
+                <div className="relative">
+                  <VibePreview vibe={v} size="thumb" />
+                  {/* Hover-reveal overlay (desktop) — features +
+                   *  best-for content layered over the preview. Fades
+                   *  in on group-hover OR group-focus-within so
+                   *  keyboard users can reach it via tab. */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 flex flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-t from-navy-950/95 via-navy-950/85 to-navy-950/0 p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-cream-200">
+                      Features
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-cream-50">
+                      {VIBE_FEATURES[v].map((f, i) => (
+                        <li key={i} className="flex gap-1.5">
+                          <span aria-hidden="true" className="text-brand-primary-300">
+                            ·
+                          </span>
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-cream-200">
+                      Best for
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-cream-50">
+                      {VIBE_BEST_FOR[v].map((b, i) => (
+                        <li key={i} className="flex gap-1.5">
+                          <span aria-hidden="true" className="text-brand-primary-300">
+                            ·
+                          </span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {/* Recommendation badge — only on the matching
+                   *  vibe, only when we have a meaningful
+                   *  businessType ("Other" suppressed). */}
+                  {isRecommended && (
+                    <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lift">
+                      <span aria-hidden="true">★</span>
+                      Recommended
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-start gap-3">
                   <input
                     type="radio"

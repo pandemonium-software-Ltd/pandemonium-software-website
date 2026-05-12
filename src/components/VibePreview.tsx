@@ -488,3 +488,108 @@ export function VibePreviewCaption({
     </div>
   );
 }
+
+/**
+ * Compose preview + caption + an overlay that fades in on hover /
+ * focus showing the vibe's design features + which business types
+ * it suits. The overlay is absolutely positioned INSIDE the card
+ * (no popover that escapes the parent) so the layout never
+ * jumps and the hover info stays bounded.
+ *
+ * Mobile / touch behaviour: hover never fires, so users see the
+ * caption only. The features + best-for content lives in
+ * <noscript>-friendly DOM (always rendered, just transparent off-
+ * hover) so screen readers + keyboard users still hit it via
+ * focus-within or tab.
+ *
+ * Optional `recommendedFor` slot stamps a small green badge on the
+ * card — used by the intake-form picker once we know the customer's
+ * businessType. Pass undefined on the marketing homepage where no
+ * recommendation context is available.
+ */
+export function VibePreviewCard({
+  vibe,
+  size = "thumb",
+  businessName,
+  recommendedFor,
+  features,
+  bestFor,
+}: {
+  vibe: Vibe;
+  size?: "thumb" | "full";
+  businessName?: string;
+  /** When set, stamps a "Recommended for {label}" badge. The label
+   *  is the customer's businessType ("Plumber") for the intake-form
+   *  use case. */
+  recommendedFor?: string;
+  /** Feature bullets shown in the hover overlay. Sourced from
+   *  vibe-recommendations.ts — passed in (not imported here) so this
+   *  component stays purely presentational. */
+  features: readonly string[];
+  /** Best-for bullets shown in the hover overlay. Same plumbing
+   *  story as features. */
+  bestFor: readonly string[];
+}) {
+  const s = VIBE_STYLES[vibe];
+  return (
+    <div className="group relative flex h-full flex-col">
+      <div className="relative">
+        <VibePreview
+          vibe={vibe}
+          size={size}
+          businessName={businessName}
+        />
+        {/* Hover-reveal overlay — absolutely positioned to overlay
+         *  the preview ONLY (not the caption below). Pointer-events
+         *  none so the cursor still hovers the underlying card; opens
+         *  on hover or keyboard focus-within for accessibility. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-t from-navy-950/95 via-navy-950/85 to-navy-950/0 p-5 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wider text-cream-200">
+            Features
+          </p>
+          <ul className="mt-1 space-y-0.5 text-xs leading-relaxed text-cream-50">
+            {features.map((f, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span aria-hidden="true" className="text-brand-primary-300">
+                  ·
+                </span>
+                <span>{f}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-cream-200">
+            Best for
+          </p>
+          <ul className="mt-1 space-y-0.5 text-xs leading-relaxed text-cream-50">
+            {bestFor.map((b, i) => (
+              <li key={i} className="flex gap-1.5">
+                <span aria-hidden="true" className="text-brand-primary-300">
+                  ·
+                </span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {/* Recommendation badge — only renders when the parent has
+         *  computed a match from businessType. Stamps over the
+         *  top-right corner of the preview. */}
+        {recommendedFor && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-green-600 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lift">
+            <span aria-hidden="true">★</span>
+            Recommended for {recommendedFor}
+          </span>
+        )}
+      </div>
+      <div className="mt-3">
+        <p className="font-serif text-lg font-semibold text-navy-900">
+          {s.label}
+        </p>
+        <p className="mt-1 text-sm text-navy-600">{s.summary}</p>
+      </div>
+    </div>
+  );
+}

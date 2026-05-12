@@ -1,9 +1,10 @@
 import Link from "next/link";
 import HeroIllustration from "@/components/HeroIllustration";
-import VibePreview, {
-  VibePreviewCaption,
+import {
+  VibePreviewCard,
   VIBE_PREVIEW_LIST,
 } from "@/components/VibePreview";
+import { VIBE_FEATURES, VIBE_BEST_FOR } from "@/lib/vibe-recommendations";
 import { site } from "@/lib/site";
 
 export default function HomePage() {
@@ -226,17 +227,21 @@ export default function HomePage() {
 
           <div className="mt-12 grid gap-8 md:grid-cols-2">
             {VIBE_PREVIEW_LIST.map((v) => (
-              <div key={v} className="flex flex-col">
-                <VibePreview vibe={v} size="full" />
-                <VibePreviewCaption vibe={v} />
-              </div>
+              <VibePreviewCard
+                key={v}
+                vibe={v}
+                size="full"
+                features={VIBE_FEATURES[v]}
+                bestFor={VIBE_BEST_FOR[v]}
+              />
             ))}
           </div>
 
           <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-navy-600">
             All four use your brand colours, your photos, and your copy
             — the previews use the same teal everywhere so you can
-            compare the layouts head-to-head.
+            compare the layouts head-to-head. Hover over any preview to
+            see what makes it tick and which businesses it suits best.
           </p>
         </div>
       </section>

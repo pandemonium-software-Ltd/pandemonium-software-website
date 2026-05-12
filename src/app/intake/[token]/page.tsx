@@ -164,6 +164,7 @@ export default async function IntakePage({
           <IntakeForm
             token={token}
             prospectName={prospect.name}
+            businessType={prospect.businessType}
             savedPartial={savedPartial}
             seedDefaults={seedDefaults}
           />
