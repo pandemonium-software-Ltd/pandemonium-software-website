@@ -22,19 +22,26 @@ import type {
   Service,
   SiteGeneratorInput,
 } from "../site-generator/types";
+import type { CopySources } from "../site-generator/adapter";
 import { HAIKU_MODEL } from "./client";
 import { cacheKey, readCache, writeCache, type HaikuCache } from "./cache";
 import {
   polishAboutBlurb,
   polishFaqAnswer,
   polishServiceDescription,
-  polishTagline,
 } from "./polish";
 
 /**
  * Enrich a SiteGeneratorInput with Haiku-polished copy. Reads from
  * the existing cache (cheap), only calls Haiku for fields not yet
  * cached or whose raw input has changed (hash mismatch → new key).
+ *
+ * Source gating: polish ONLY fires on `intake`-sourced text (Phase 3
+ * raw dump where customers write awkwardly). `content`-sourced text
+ * — Hub Step 4 customer edits or change-request patches — passes
+ * through verbatim. Customer intent must be respected once they've
+ * touched the copy directly. The tagline polish was dropped entirely
+ * (customers always want hero taglines word-for-word).
  *
  * Returns:
  *   - enriched: the new SiteGeneratorInput with polished copy in place
@@ -46,6 +53,7 @@ import {
 export async function enrichWithHaiku(
   input: SiteGeneratorInput,
   initialCache: HaikuCache | undefined,
+  copySources: CopySources,
 ): Promise<{
   enriched: SiteGeneratorInput;
   cache: HaikuCache;
@@ -62,8 +70,12 @@ export async function enrichWithHaiku(
 
   // Plan all polish jobs as cache-aware promises. Each resolves to
   // { kind, key, polished } or null (no work needed).
+  //
+  // Tagline polish was REMOVED — customer-written taglines are short
+  // and intentional. The cost of silently rewriting them outweighs
+  // any "polish" benefit. Verbatim every time.
   type Job = {
-    target: "tagline" | "about" | "service" | "faq";
+    target: "about" | "service" | "faq";
     index: number; // for service/faq mapping back
     key: string;
     polished: string | null;
@@ -72,24 +84,10 @@ export async function enrichWithHaiku(
 
   const jobs: Promise<Job | null>[] = [];
 
-  // --- Tagline ---
-  if (input.copy.tagline) {
-    const raw = input.copy.tagline;
-    jobs.push(
-      (async () => {
-        const key = await cacheKey("tagline", raw);
-        const cached = readCache(cache, key);
-        if (cached !== null) {
-          return { target: "tagline", index: 0, key, polished: cached, fromCache: true };
-        }
-        const polished = await polishTagline(raw, ctx);
-        return { target: "tagline", index: 0, key, polished, fromCache: false };
-      })(),
-    );
-  }
-
-  // --- About blurb ---
-  if (input.copy.aboutBlurb) {
+  // --- About blurb (intake-sourced only) ---
+  // Polishing the Phase 3 dump adds value (long unstructured text);
+  // polishing Hub Step 4 edits silently overrides the customer.
+  if (input.copy.aboutBlurb && copySources.aboutBlurb === "intake") {
     const raw = input.copy.aboutBlurb;
     jobs.push(
       (async () => {
@@ -104,9 +102,14 @@ export async function enrichWithHaiku(
     );
   }
 
-  // --- Service long descriptions ---
+  // --- Service long descriptions (intake-sourced only) ---
+  // Today longDescription only ever comes from content (no intake
+  // fallback wired in adapter), so this branch never fires. Left in
+  // place behind the source gate for forward-compat if a future
+  // intake schema starts emitting longDescription.
   input.services.forEach((svc, i) => {
     if (!svc.longDescription) return;
+    if (copySources.serviceLongDescriptions?.[i] !== "intake") return;
     const raw = svc.longDescription;
     jobs.push(
       (async () => {
@@ -123,9 +126,12 @@ export async function enrichWithHaiku(
     );
   });
 
-  // --- FAQ answers ---
+  // --- FAQ answers (intake-sourced only) ---
+  // FAQ entries only live in Hub Step 4 Content today, so this
+  // branch never fires. Same forward-compat reasoning as services.
   (input.copy.faq ?? []).forEach((entry, i) => {
     if (!entry.answer) return;
+    if (copySources.faqAnswers?.[i] !== "intake") return;
     const raw = entry.answer;
     jobs.push(
       (async () => {
@@ -144,8 +150,8 @@ export async function enrichWithHaiku(
 
   // Apply results back to the input. We rebuild copy + services
   // immutably so the original input remains untouched (callers may
-  // log it for debugging).
-  let newTagline = input.copy.tagline;
+  // log it for debugging). Tagline is no longer polished — passes
+  // through unchanged from input.
   let newAboutBlurb = input.copy.aboutBlurb;
   const newServices: Service[] = input.services.map((s) => ({ ...s }));
   const newFaq = (input.copy.faq ?? []).map((e) => ({ ...e }));
@@ -158,9 +164,6 @@ export async function enrichWithHaiku(
     }
     if (r.polished === null) continue;
     switch (r.target) {
-      case "tagline":
-        newTagline = r.polished;
-        break;
       case "about":
         newAboutBlurb = r.polished;
         break;
@@ -181,7 +184,6 @@ export async function enrichWithHaiku(
 
   const enrichedCopy: CustomCopy = {
     ...input.copy,
-    tagline: newTagline,
     aboutBlurb: newAboutBlurb,
     faq: newFaq.length > 0 ? newFaq : input.copy.faq,
   };

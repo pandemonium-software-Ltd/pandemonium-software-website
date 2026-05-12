@@ -414,7 +414,30 @@ export async function classifyChangeRequest(args: {
     `to Lawn & Garden Care") are NOT yet supported — classify as ` +
     `ambiguous with reasoning explaining that rename isn't on the ` +
     `whitelist; suggest the customer remove the old entry and add a ` +
-    `new one if they want.`;
+    `new one if they want.\n` +
+    `15. VERBATIM QUOTES — when the customer wraps their replacement ` +
+    `text in straight double quotes ("...") or smart double quotes ` +
+    `("..."), that quoted text is a LITERAL string they want applied ` +
+    `as-is. For any patch whose target is a free-text field (tagline, ` +
+    `aboutBlurb, aboutBullets.add, services description/longDescription/` +
+    `pricingNotes, services.add (description fields inside JSON), ` +
+    `faq.question/answer, testimonials.quote, business.address/` +
+    `serviceArea/contactName, trust.associations/awards), the ` +
+    `\`newValue\` MUST equal the quoted text exactly — same punctuation, ` +
+    `capitalisation, spacing. Never paraphrase, polish, "improve", ` +
+    `"smooth", or "fix" quoted text. The customer chose those exact ` +
+    `words on purpose. Examples:\n` +
+    `  - "Update my tagline to \\"we fix gardens fast\\"." → ` +
+    `newValue: "we fix gardens fast" (not "We fix gardens fast." or ` +
+    `"Fast garden fixes" or any rewrite).\n` +
+    `  - "Set the FAQ answer about pricing to \\"Prices vary by job.\\"" ` +
+    `→ newValue: "Prices vary by job." (not "Prices vary depending on ` +
+    `the job.")\n` +
+    `Single quotes ('...') and apostrophes within words ("we're") are ` +
+    `NOT verbatim markers — only double quotes count. Cowork's ` +
+    `deterministic guard will overwrite any patch where you diverged ` +
+    `from a verbatim double-quoted candidate, so it's safer to copy ` +
+    `the quoted text exactly than to "improve" it.`;
 
   const out = await callHaiku({
     system,
@@ -442,7 +465,139 @@ export async function classifyChangeRequest(args: {
     );
     return null;
   }
-  return validateAndNormalise(parsed);
+  const validated = validateAndNormalise(parsed);
+  if (!validated || !validated.patches || validated.patches.length === 0) {
+    return validated;
+  }
+  // Belt + braces: even with rule #15 in the prompt, Haiku can still
+  // drift and "improve" quoted text. Apply the deterministic verbatim-
+  // quote guard so the customer's exact words ALWAYS win for free-text
+  // targets. See enforceVerbatimQuotes() docstring for the algorithm.
+  const guarded = enforceVerbatimQuotes(args.message, validated.patches);
+  if (guarded.overrideCount > 0) {
+    console.warn(
+      `[verbatim-quote-guard] Overrode ${guarded.overrideCount} ` +
+        `patch(es) on free-text targets to match the customer's ` +
+        `double-quoted text. Haiku had paraphrased the quoted value(s).`,
+    );
+  }
+  return { ...validated, patches: guarded.patches };
+}
+
+/**
+ * Free-text patch targets — those where the customer's exact words
+ * matter. Numeric, JSON-encoded, hex-colour, structured-locator, and
+ * .remove/.add-marker targets are NOT in this set: their newValue
+ * format is mechanical (a number, hex, JSON blob, or a marker token),
+ * not natural language, so the verbatim-quote guard would either
+ * misfire or be a no-op.
+ *
+ * Notably included:
+ *   - business.address / serviceArea / contactName — customer often
+ *     quotes the precise wording (postcodes, address punctuation)
+ *   - business.publicEmail / phoneDisplay / phoneTel — not free-text
+ *     per se, but commonly quoted, and the guard preserves whatever
+ *     formatting the customer used (spaces, parentheses, +44 vs 0).
+ *   - trust.associations / awards — verbatim acronyms / award names
+ *
+ * NOT included (intentionally):
+ *   - aboutBullets (full array replace via JSON)
+ *   - any *.add / *.remove
+ *   - openingHours, services.features, services.priceFrom (numeric),
+ *     trust.yearsExperience (numeric), testimonials.rating (numeric)
+ *   - branding.brandColorPrimary / Secondary (hex)
+ *   - content.offers.current (JSON blob)
+ */
+const VERBATIM_GUARDED_TARGETS: ReadonlySet<string> = new Set([
+  "copy.tagline",
+  "copy.aboutBlurb",
+  "business.contactName",
+  "business.phoneDisplay",
+  "business.phoneTel",
+  "business.publicEmail",
+  "business.address",
+  "business.serviceArea",
+  "content.trust.associations",
+  "content.trust.awards",
+  "content.services.description",
+  "content.services.longDescription",
+  "content.services.pricingNotes",
+  "content.faq.answer",
+  "content.faq.question",
+  "content.testimonials.quote",
+  "content.testimonials.location",
+]);
+
+/**
+ * Extract all straight + smart double-quoted strings from the
+ * customer's change-request message. Single quotes / apostrophes are
+ * intentionally excluded — they collide with English contractions
+ * (we're, don't) and the false-positive risk outweighs the benefit.
+ * Customers who want verbatim text can use double quotes.
+ *
+ * Returns the inner text only (without the surrounding quotes), in
+ * order of appearance. Empty / whitespace-only quotes are dropped.
+ *
+ * Exported for unit testing.
+ */
+export function extractDoubleQuotedStrings(message: string): string[] {
+  const results: string[] = [];
+  // Match: ASCII double quote OR Unicode "left double quotation
+  // mark" (U+201C) OR Unicode "right double quotation mark" (U+201D)
+  // → any non-quote, non-newline content → another double-quote
+  // variant. Multi-line quoted strings are extremely rare in change
+  // requests and could mis-bracket, so we require the content stays
+  // on one line.
+  const re = /["“”]([^"“”\n]+)["“”]/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(message)) !== null) {
+    const inner = m[1]!.trim();
+    if (inner.length > 0) results.push(inner);
+  }
+  return results;
+}
+
+/**
+ * Enforce verbatim-quote semantics on Haiku-generated patches.
+ *
+ * Algorithm:
+ *   1. Extract double-quoted strings from the customer's message in
+ *      order of appearance.
+ *   2. Walk the patches array in order. For each patch whose target
+ *      is in VERBATIM_GUARDED_TARGETS, consume the next available
+ *      quote and use it as the newValue. (Non-free-text patches do
+ *      not consume quotes — order alignment stays sensible when
+ *      customers mix numeric + free-text changes.)
+ *   3. When a patch's existing newValue already equals the matched
+ *      quote, no-op. Otherwise overwrite + count the override.
+ *
+ * Returns the (possibly mutated) patches array + an override count
+ * for caller logging.
+ *
+ * Exported for unit testing.
+ */
+export function enforceVerbatimQuotes(
+  message: string,
+  patches: NonNullable<ClassificationResult["patches"]>,
+): {
+  patches: NonNullable<ClassificationResult["patches"]>;
+  overrideCount: number;
+} {
+  const quotes = extractDoubleQuotedStrings(message);
+  if (quotes.length === 0) return { patches, overrideCount: 0 };
+
+  let cursor = 0;
+  let overrideCount = 0;
+  const next = patches.map((p) => {
+    if (!VERBATIM_GUARDED_TARGETS.has(p.target)) return p;
+    if (cursor >= quotes.length) return p;
+    const quote = quotes[cursor]!;
+    cursor++;
+    if (p.newValue === quote) return p;
+    overrideCount++;
+    return { ...p, newValue: quote };
+  });
+  return { patches: next, overrideCount };
 }
 
 /**

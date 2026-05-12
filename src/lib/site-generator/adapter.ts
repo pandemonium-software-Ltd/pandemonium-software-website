@@ -36,6 +36,29 @@ export class AdapterError extends Error {
   }
 }
 
+/**
+ * Tracks the provenance of customer-written copy fields. Consumed by
+ * the Haiku enrichment step: polish runs ONLY on intake-sourced text
+ * (Phase 3 raw dump where customers write awkwardly). Content-sourced
+ * text comes from Hub Step 4 (customer is consciously editing) OR
+ * from a change-request patch (customer has explicit intent) — those
+ * MUST pass through verbatim.
+ *
+ * Fields default to undefined when the corresponding copy field is
+ * absent from input.
+ */
+export type CopySources = {
+  tagline?: "content" | "intake";
+  aboutBlurb?: "content" | "intake";
+  /** Per-service longDescription source. Always "content" today —
+   *  intake doesn't carry longDescription. Kept here so future intake
+   *  schemas can plug in without re-shaping the enrich step. */
+  serviceLongDescriptions?: ReadonlyArray<"content" | "intake" | undefined>;
+  /** Per-FAQ answer source. Always "content" today (faq only ever
+   *  lives in Hub Step 4 Content). Forward-compatible. */
+  faqAnswers?: ReadonlyArray<"content" | "intake" | undefined>;
+};
+
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const VALID_VIBES: ReadonlySet<Vibe> = new Set([
   "traditional",
@@ -59,7 +82,10 @@ const VALID_VIBES: ReadonlySet<Vibe> = new Set([
  * Modules are optional individually — adapter only includes a
  * module config for modules in `prospect.moduleSelections`.
  */
-export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
+export function adaptProspect(prospect: ProspectRecord): {
+  input: SiteGeneratorInput;
+  copySources: CopySources;
+} {
   // --- Onboarding data (preferred source for most fields) ---
   const ob = (prospect.onboardingData ?? {}) as Record<string, unknown>;
   const domain = readDomainSlug(ob);
@@ -526,11 +552,19 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
     !!trust.associations ||
     !!trust.awards;
 
+  // Track tagline + aboutBlurb sources so the Haiku enrichment step
+  // can skip polish on customer-edited (content-sourced) text. Intake-
+  // sourced text comes from the Phase 3 dump where polish adds value;
+  // content-sourced text is from Hub Step 4 / change requests where
+  // customer intent must be respected verbatim.
+  const contentTagline = optionalString(content.tagline);
+  const intakeTagline = optionalString(intake.tagline);
+  const contentAboutBlurb = optionalString(content.aboutBlurb);
+  const intakeAboutBlurb = optionalString(intake.aboutBlurb);
+
   const copy: CustomCopy = {
-    tagline:
-      optionalString(content.tagline) ?? optionalString(intake.tagline),
-    aboutBlurb:
-      optionalString(content.aboutBlurb) ?? optionalString(intake.aboutBlurb),
+    tagline: contentTagline ?? intakeTagline,
+    aboutBlurb: contentAboutBlurb ?? intakeAboutBlurb,
     aboutBullets: aboutBullets && aboutBullets.length > 0 ? aboutBullets : undefined,
     servicesIntro: optionalString(intake.servicesIntro),
     faq: faq && faq.length > 0 ? faq : undefined,
@@ -538,15 +572,35 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
     trust: trustHasAny ? trust : undefined,
   };
 
+  const copySources: CopySources = {
+    tagline: contentTagline ? "content" : intakeTagline ? "intake" : undefined,
+    aboutBlurb: contentAboutBlurb
+      ? "content"
+      : intakeAboutBlurb
+        ? "intake"
+        : undefined,
+    // Service longDescriptions only ever live in content.services today.
+    // Marking each "content" makes the enrich step's source check explicit
+    // rather than relying on a missing-key default.
+    serviceLongDescriptions: services.map((s) =>
+      s.longDescription ? "content" : undefined,
+    ),
+    // Same story for FAQ answers — only in content.faq.
+    faqAnswers: (faq ?? []).map((e) => (e.answer ? "content" : undefined)),
+  };
+
   return {
-    business,
-    services,
-    modules,
-    brandAssets,
-    colors,
-    copy,
-    vibe,
-    domain,
+    input: {
+      business,
+      services,
+      modules,
+      brandAssets,
+      colors,
+      copy,
+      vibe,
+      domain,
+    },
+    copySources,
   };
 }
 

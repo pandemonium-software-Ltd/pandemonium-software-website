@@ -3,6 +3,14 @@
 // context (business name, type) and returns a marketing-polished
 // version. All returns are nullable: null = "use the raw input as-is".
 //
+// IMPORTANT — polishTagline was REMOVED. Hero taglines are short,
+// personal, and the customer always wants their exact words. The
+// silent-override cost was too high. Currently only aboutBlurb,
+// service longDescription, and FAQ answer have polish functions —
+// and even those only run when the source is `intake` (the Phase 3
+// raw dump). Hub Step 4 edits + change-request patches pass through
+// verbatim. See enrich.ts for the source gating.
+//
 // Design rules these prompts enforce on Haiku:
 //   1. Keep all facts the customer wrote. Don't invent prices, hours,
 //      services, or features.
@@ -12,7 +20,7 @@
 //   5. Sound like a human small-business owner — not corporate, not
 //      hype, not aggressive.
 //
-// All four functions share the same structure:
+// All polish functions share the same structure:
 //   - skip if input is too short to be worth polishing
 //   - skip if already polished-looking (heuristic: long enough +
 //     ends with proper punctuation + has at least one comma)
@@ -31,42 +39,6 @@ type PolishContext = {
 
 /** Soft minimum length below which polish isn't worth the round-trip. */
 const MIN_LEN = 20;
-
-/**
- * Polish the hero tagline. Customer-written taglines are often
- * literal ("Plumber serving Manchester since 2010") — Haiku makes
- * them snappier ("Reliable Manchester plumbing since 2010") while
- * keeping the facts. Hard-capped to ≤80 characters because the hero
- * layout breaks on longer strings.
- */
-export async function polishTagline(
-  raw: string,
-  ctx: PolishContext,
-): Promise<string | null> {
-  const trimmed = raw.trim();
-  if (trimmed.length < MIN_LEN) return null;
-
-  const system =
-    `You polish hero taglines for small UK business websites. ` +
-    `Keep every fact the user wrote. UK English. No emojis, no markdown, ` +
-    `no quotes. Output only the polished tagline, nothing else.`;
-
-  const prompt =
-    `Business: ${ctx.businessName} (${ctx.businessType}` +
-    (ctx.location ? `, ${ctx.location}` : ``) +
-    `)\n\n` +
-    `Polish this hero tagline. Maximum 80 characters. One line. ` +
-    `Make it natural and confident — not hypey, not corporate.\n\n` +
-    `Tagline:\n${trimmed}`;
-
-  const out = await callHaiku({ system, prompt, maxTokens: 80 });
-  if (!out) return null;
-  // Strip outer quotes if the model added them despite the instruction.
-  const cleaned = out.replace(/^["'`]+|["'`]+$/g, "").trim();
-  // Hard length guard — never let a runaway response break layout.
-  if (cleaned.length > 100 || cleaned.length < 10) return null;
-  return cleaned;
-}
 
 /**
  * Polish the multi-paragraph about-us blurb. Customers often write

@@ -77,8 +77,11 @@ export async function GET(request: Request) {
   }
 
   let input;
+  let copySources;
   try {
-    input = adaptProspect(prospect);
+    const adapted = adaptProspect(prospect);
+    input = adapted.input;
+    copySources = adapted.copySources;
   } catch (e) {
     if (e instanceof AdapterError) {
       return NextResponse.json(
@@ -96,15 +99,21 @@ export async function GET(request: Request) {
     );
   }
 
-  // Haiku 4.5 copy assist (C5.5). Polishes tagline + about blurb +
-  // long service descriptions + FAQ answers using the cache stored
-  // in Notion. Cache hit = free + instant; cache miss = one Haiku
-  // call per changed field. NEVER throws — if Anthropic is down or
-  // the key is missing, raw customer text passes straight through.
+  // Haiku 4.5 copy assist (C5.5). Polishes about-blurb / long service
+  // descriptions / FAQ answers using the cache stored in Notion ONLY
+  // when the source is `intake` (Phase 3 raw dump). Customer-edited
+  // text from Hub Step 4 or change-request patches passes through
+  // verbatim — see enrich.ts for the source gating. Tagline polish
+  // was dropped entirely (always content-sourced today, and customer
+  // intent on hero copy is non-negotiable). Cache hit = free + instant;
+  // cache miss = one Haiku call per changed field. NEVER throws —
+  // if Anthropic is down or the key is missing, raw customer text
+  // passes straight through.
   const initialCache = (prospect.haikuCache ?? {}) as HaikuCache;
   const { enriched, cache, cacheChanged } = await enrichWithHaiku(
     input,
     initialCache,
+    copySources,
   );
   if (cacheChanged) {
     // Persist new cache entries so the next build is a full hit.
