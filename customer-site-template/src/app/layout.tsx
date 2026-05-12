@@ -2,8 +2,15 @@
 // CSS custom properties, sets fonts, mounts the Header + Footer,
 // and renders each page's body inside.
 //
-// `data-vibe` on <html> drives any vibe-specific CSS rules. For
-// now only the modern vibe ships — others land in C5.7.
+// `data-vibe` on <html> drives vibe-specific CSS rules (see
+// globals.css for the per-vibe variable overrides — fonts, corner
+// radii, heading weight, body letter-spacing). The matching font
+// pair is loaded here from Google Fonts based on the customer's
+// vibe so each build ships only the fonts it actually uses.
+//
+// Four vibes ship today: modern (default — Geist), traditional
+// (Playfair Display + Lora), premium (Cormorant Garamond + Inter),
+// friendly (Nunito).
 
 import type { Metadata } from "next";
 import "./globals.css";
@@ -12,6 +19,33 @@ import Footer from "@/components/Footer";
 import { SITE_DATA } from "@/lib/site-data";
 import { brandColorsStyleBlock } from "@/lib/colors";
 import { buildLocalBusinessJsonLd } from "@/lib/jsonld";
+
+/** Google Fonts stylesheet URLs per vibe. Each pair covers the
+ *  heading + body families referenced in globals.css's
+ *  `[data-vibe="..."]` blocks. Only the customer's chosen vibe's
+ *  pair is loaded per build — keeps the request weight tight.
+ *
+ *  Adding a new vibe: pick fonts that read distinctively from the
+ *  existing four, update globals.css variable overrides, add the
+ *  Google Fonts URL here, extend the Vibe enum in site-generator
+ *  types.ts + adapter.ts VALID_VIBES. */
+const VIBE_FONTS_URL: Record<string, string> = {
+  // Geist — clean contemporary sans, the design-system default.
+  modern:
+    "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono&display=swap",
+  // Playfair Display headings + Lora body — classic serif duo,
+  // reads as an established firm with print heritage.
+  traditional:
+    "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Lora:wght@400;500;600&display=swap",
+  // Cormorant Garamond display + Inter body — refined high-end
+  // pairing, Cormorant's airy weights work for premium feel.
+  premium:
+    "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap",
+  // Nunito — rounded humanist sans, warm + approachable. Used for
+  // both heading + body so the friendly look stays unified.
+  friendly:
+    "https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap",
+};
 
 export const metadata: Metadata = {
   title: {
@@ -68,6 +102,13 @@ export default function RootLayout({
   // URL extraction + sharing without breaking interactivity.
   const isPreviewMode = !!process.env.PREVIEW_ACCESS_TOKEN;
 
+  // Pick the Google Fonts URL for the customer's vibe. Each entry
+  // covers BOTH heading + body font families (paired so the CSS
+  // var fallbacks in globals.css always resolve to a loaded face).
+  // Geist is the default for modern; the unknown-vibe branch also
+  // uses Geist as a safe baseline.
+  const fontsUrl = VIBE_FONTS_URL[SITE_DATA.vibe] ?? VIBE_FONTS_URL.modern;
+
   return (
     <html
       lang="en"
@@ -83,10 +124,7 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono&display=swap"
-        />
+        <link rel="stylesheet" href={fontsUrl} />
         <style dangerouslySetInnerHTML={{ __html: brandStyles }} />
         {/* JSON-LD structured data for Google. LocalBusiness is the
             base schema; nested Review + AggregateRating qualify the

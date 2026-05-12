@@ -12,9 +12,17 @@
 //   - Sender email — Resend (Newsletter OR Enquiry Form)
 //   - Online booking — Cal.com (Online Booking)
 //   - Google Business Profile (GBP addon)
+//   - Newsletter widget config (Newsletter)
+//   - Offers strip config (Offers)
+//
+// Newsletter + Offers config used to live in Step 4 Content but
+// moved here (May 2026) so module setup is colocated with the
+// "what did I buy" mental model. Same data slice (content.newsletter
+// / content.offers), just a different mount point — see /admin/[token]
+// pipeline panel for the chronology if this looks surprising.
 //
 // Step 3 itself is hidden from the wizard if the customer bought
-// none of the four. See deriveStepList in lib/onboarding.ts.
+// none of the five. See deriveStepList in lib/onboarding.ts.
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -25,6 +33,9 @@ import {
   type ModuleOption,
 } from "@/lib/billing/module-policy";
 import type { ModuleChangeLogEntry } from "@/lib/notion-prospects";
+import type { OfferEntry } from "@/lib/onboarding";
+import Step4OfferSection from "@/components/onboarding/Step4OfferSection";
+import Step4NewsletterSection from "@/components/onboarding/Step4NewsletterSection";
 
 type Props = {
   data: Record<string, unknown>;
@@ -46,8 +57,20 @@ type Props = {
    *  the re-selector shows the in-flight state instead of the
    *  picker. */
   pendingModuleChange: ModuleChangeLogEntry | null;
+  /** Onboarding content slice — used by Newsletter + Offers
+   *  config sections. Same shape Step 4 Content has access to;
+   *  only the newsletter + offers keys are read here. */
+  contentData: Record<string, unknown>;
+  /** Customer's domain (from Step 2). Used as the right-hand side
+   *  of the newsletter "From line" preview ("news@yourdomain"). */
+  customerDomain: string;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
+  /** Save a patch into the `content` slice (not `tools`). Used
+   *  by the Newsletter + Offers sections — their data lives under
+   *  content.newsletter / content.offers because the customer-
+   *  site adapter reads it from there. */
+  saveContentPartial: (patch: Record<string, unknown>) => Promise<boolean>;
 };
 
 const RESEND_SIGNUP_URL = "https://resend.com/signup";
@@ -76,8 +99,11 @@ export default function Step3Modules({
   token,
   moduleChangeEligibility,
   pendingModuleChange,
+  contentData,
+  customerDomain,
   savePartial,
   markDone,
+  saveContentPartial,
 }: Props) {
   // ---------- Initial state from saved data ----------
 
@@ -109,6 +135,8 @@ export default function Step3Modules({
     modules.includes("Newsletter") || modules.includes("Enquiry Form");
   const hasCalcom = modules.includes("Online Booking");
   const hasGbp = modules.includes("Google Business Profile Setup/Audit");
+  const hasNewsletter = modules.includes("Newsletter");
+  const hasOffers = modules.includes("Offers");
 
   // ---------- Per-module status (drives RAG pills + initial collapse) ----------
 
@@ -331,6 +359,80 @@ export default function Step3Modules({
               disabled={disabled}
             />
           </ModuleCard>
+        )}
+
+        {/* Offers — moved from Step 4 Content May 2026. Self-
+         *  contained card with its own save button (writes into
+         *  content.offers, not tools). Optional — never gates
+         *  "mark done"; customer can ship without setting one and
+         *  add their first offer post-launch via the dashboard. */}
+        {hasOffers && (
+          <Step4OfferSection
+            current={
+              (contentData as { offers?: { current?: OfferEntry } }).offers
+                ?.current
+            }
+            readOnly={readOnly}
+            onSave={async (entry) => {
+              const prevOffers = (contentData as {
+                offers?: { current?: OfferEntry; history?: OfferEntry[] };
+              }).offers;
+              const prevCurrent = prevOffers?.current;
+              const history = prevOffers?.history ?? [];
+              let nextOffers: {
+                current?: OfferEntry;
+                history?: OfferEntry[];
+              };
+              if (entry === null) {
+                nextOffers = {
+                  current: undefined,
+                  history: prevCurrent
+                    ? [prevCurrent, ...history].slice(0, 24)
+                    : history,
+                };
+              } else if (prevCurrent && prevCurrent.id !== entry.id) {
+                nextOffers = {
+                  current: entry,
+                  history: [prevCurrent, ...history].slice(0, 24),
+                };
+              } else {
+                nextOffers = { current: entry, history };
+              }
+              return saveContentPartial({ offers: nextOffers });
+            }}
+          />
+        )}
+
+        {/* Newsletter widget config — sender name, sender local-
+         *  part, widget headline / body / CTA. Same migration note
+         *  as Offers above. saveContentPartial writes to
+         *  content.newsletter.config; the subscribers / drafts /
+         *  history arrays are preserved untouched. */}
+        {hasNewsletter && (
+          <Step4NewsletterSection
+            current={
+              (contentData as { newsletter?: { config?: Record<string, unknown> } })
+                .newsletter?.config
+            }
+            customerDomain={customerDomain}
+            readOnly={readOnly}
+            onSave={async (config) => {
+              const prev = (contentData as {
+                newsletter?: {
+                  subscribers?: unknown[];
+                  drafts?: unknown[];
+                  history?: unknown[];
+                };
+              }).newsletter;
+              const nextNewsletter = {
+                config,
+                subscribers: prev?.subscribers ?? [],
+                drafts: prev?.drafts ?? [],
+                history: prev?.history ?? [],
+              };
+              return saveContentPartial({ newsletter: nextNewsletter });
+            }}
+          />
         )}
       </section>
 

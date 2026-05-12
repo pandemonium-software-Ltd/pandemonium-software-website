@@ -502,7 +502,18 @@ function StepRenderer({
           markDone={(patch) => markDone("domain", patch)}
         />
       );
-    case "tools":
+    case "tools": {
+      // Newsletter + Offers config sections live inside Step 3
+      // (moved from Step 4 May 2026) so module setup is colocated
+      // with what the customer bought. They need access to the
+      // content slice (their config + history live under
+      // content.newsletter / content.offers) and a save callback
+      // that writes back to that slice — passed alongside the
+      // tools-slice data + save callback.
+      const contentSlice =
+        (data.content as Record<string, unknown> | undefined) ?? {};
+      const customerDomain =
+        (data.domain as { domain?: string } | undefined)?.domain ?? "";
       return (
         <Step3Modules
           data={slice}
@@ -514,17 +525,15 @@ function StepRenderer({
           token={token}
           moduleChangeEligibility={moduleChangeEligibility}
           pendingModuleChange={pendingModuleChange}
+          contentData={contentSlice}
+          customerDomain={customerDomain}
           savePartial={(patch) => savePartial("tools", patch)}
           markDone={(patch) => markDone("tools", patch)}
+          saveContentPartial={(patch) => savePartial("content", patch)}
         />
       );
+    }
     case "content": {
-      // Pull the customer's domain so the newsletter section can
-      // render a live "From line" preview ("news@yourdomain"). The
-      // domain slice is populated by Step 2 — empty string is fine
-      // (the form shows a placeholder).
-      const customerDomain =
-        (data.domain as { domain?: string } | undefined)?.domain ?? "";
       return (
         <Step4Content
           data={slice}
@@ -532,8 +541,6 @@ function StepRenderer({
           readOnly={readOnly}
           services={phase3Services}
           phase3Seeds={phase3Seeds}
-          modules={modules}
-          customerDomain={customerDomain}
           savePartial={(patch) => savePartial("content", patch)}
           markDone={(patch) => markDone("content", patch)}
         />
