@@ -244,3 +244,62 @@ admin endpoint when `billing-failed` is set.
   modules at once for a discount. Currently each module change is
   a single-shot, so this doesn't apply.
 - **Annual billing toggle**: subscription is monthly-only.
+
+---
+
+## ⚠️ Pre-launch refund-review gate (not for now — flag for later)
+
+Before Stripe Phase 2 goes live to real customers, we want a
+deliberate "pause and think" moment around refunds + churn. The
+failure mode we're guarding against: customer adds a module
+(Stripe charges) → realises they don't want it → request a refund
+→ we refund → repeat. Net-negative work: we built/wired the
+module, the customer briefly used it (or didn't), and we end up
+with no revenue plus burned setup time.
+
+Specifically, the following decisions must be recorded BEFORE
+shipping Phase 2 to live customers:
+
+1. **Trial / probation window** — should new modules have a
+   72-hour or 7-day "soft launch" period before the charge fires?
+   Customer sees the module configured in their hub but the
+   Stripe charge only commits once the window elapses without a
+   cancel request. Stops "I clicked Add → realised I didn't want
+   it → got charged anyway" friction.
+2. **Refund eligibility rules** — current Phase 2 doc allows
+   refund up to 180 days post-charge. That's generous and could
+   be abused. Tighter alternatives:
+   - 14-day no-questions-asked window
+   - After 14 days, partial refund only (50% pro-rated against
+     time elapsed)
+   - After 60 days, no refund — counts as a module-removal
+     downgrade for future billing only
+3. **"Already-used-it can't be refund-removed" guard** — block
+   the module re-selector from initiating a refund on a module
+   the customer has actually used. "Used" definitions to lock
+   in:
+   - Newsletter: any subscriber added OR any send fired
+   - Offers: any offer published (current OR history non-empty)
+   - Online Booking: any Cal.com booking received via the link
+   - Enquiry Form: any enquiry submitted
+   - GBP: any review fetched / displayed
+   The hub UI tells the customer "this module's been used — you
+   can downgrade for the next billing cycle, but no refund."
+4. **Anti-churn email sequence** — before processing a refund:
+   - Auto-reply asking what went wrong (single-question survey)
+   - Offer a 50% discount for 3 months as a save attempt
+   - Operator review (one of us) before the Stripe refund fires
+   Stops the "instant refund button" being one click away when
+   the customer might've been fixable.
+5. **Cooling-off period audit** — UK consumer law gives a 14-day
+   cooling-off period on online subscriptions in most cases.
+   Confirm our Terms align. Sole traders / personal-name limited
+   companies count as consumers under UK CRA 2015 for these
+   purposes, so even though ModuForge is B2B-ish, the rule still
+   applies to most of our customer base.
+
+ACTION: do not ship Stripe Phase 2 to live customers until each
+of these 5 points has an explicit decision recorded (in this doc
+or in the playbook). The default scaffolding from Phase 2 above
+gives full refund power on day one — exactly the failure mode we
+want to gate against.

@@ -779,42 +779,29 @@ function EditHistoryItem({
         {edit.message}
       </p>
 
-      {/* Auto-classification panel (when present) */}
-      {ext.coworkClassification && (
+      {/* Auto-applied changes panel (when present). Customer-facing —
+       *  we deliberately do NOT surface the classifier's verdict
+       *  ("ambiguous", "in_scope", confidence %, raw reasoning text).
+       *  Those are internal signals; showing them to customers makes
+       *  the experience feel like a machine grading their request.
+       *  Customers see what their words turned into, nothing more. */}
+      {patches.length > 0 && ext.coworkPatchAppliedAt && (
         <div className="mt-3 rounded-lg border-l-2 border-amber-300 bg-white p-3 text-xs">
           <p className="font-semibold uppercase tracking-wider text-amber-900">
             What we did
-            {ext.coworkConfidence !== undefined && (
-              <span className="ml-2 font-mono text-[10px] text-amber-700">
-                ({ext.coworkClassification},{" "}
-                {(ext.coworkConfidence * 100).toFixed(0)}% confidence)
-              </span>
-            )}
           </p>
-          {ext.coworkReasoning && (
-            <p className="mt-1 text-amber-900">{ext.coworkReasoning}</p>
-          )}
-          {patches.length > 0 && (
-            <div className="mt-2 space-y-1">
-              <p className="font-semibold text-amber-900">
-                {patches.length === 1 ? "Change applied:" : "Changes applied:"}
-              </p>
-              <ul className="ml-3 list-disc space-y-0.5 text-navy-800">
-                {patches.map((p, i) => (
-                  <li key={i}>
-                    <span className="font-mono text-[11px]">{p.target}</span>
-                    {": "}
-                    <span className="break-all">{String(p.newValue)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {ext.coworkPatchAppliedAt && (
-            <p className="mt-1.5 text-[10px] text-amber-700">
-              Applied {formatRelative(ext.coworkPatchAppliedAt)}
-            </p>
-          )}
+          <ul className="mt-2 ml-3 list-disc space-y-0.5 text-navy-800">
+            {patches.map((p, i) => (
+              <li key={i}>
+                <span className="font-semibold">{prettifyTarget(p.target)}</span>
+                {": "}
+                <span className="break-all">{String(p.newValue)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[10px] text-amber-700">
+            Applied {formatRelative(ext.coworkPatchAppliedAt)}
+          </p>
         </div>
       )}
 
@@ -876,6 +863,53 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/**
+ * Translate an internal patch target like `copy.tagline` or
+ * `content.services.priceFrom` into a plain-English label the
+ * customer can recognise from their own form. Falls back to the
+ * raw target string if a label isn't known — better to show
+ * something than nothing.
+ */
+function prettifyTarget(target: string): string {
+  const map: Record<string, string> = {
+    "copy.tagline": "Tagline",
+    "copy.aboutBlurb": "About blurb",
+    "content.aboutBullets": "About bullets",
+    "content.aboutBullets.add": "Added about bullet",
+    "content.aboutBullets.remove": "Removed about bullet",
+    "business.contactName": "Contact name",
+    "business.phoneDisplay": "Phone number",
+    "business.phoneTel": "Phone (dial)",
+    "business.publicEmail": "Email address",
+    "business.address": "Address",
+    "business.serviceArea": "Service area",
+    "business.openingHours": "Opening hours",
+    "content.trust.yearsExperience": "Years experience",
+    "content.trust.associations": "Associations",
+    "content.trust.awards": "Awards",
+    "content.services.description": "Service description",
+    "content.services.longDescription": "Service long description",
+    "content.services.pricingNotes": "Service pricing notes",
+    "content.services.priceFrom": "Service starting price",
+    "content.services.features": "Service features",
+    "content.services.add": "Added service",
+    "content.services.remove": "Removed service",
+    "content.faq.question": "FAQ question",
+    "content.faq.answer": "FAQ answer",
+    "content.faq.add": "Added FAQ",
+    "content.faq.remove": "Removed FAQ",
+    "content.testimonials.quote": "Testimonial quote",
+    "content.testimonials.location": "Testimonial location",
+    "content.testimonials.rating": "Testimonial rating",
+    "content.testimonials.add": "Added testimonial",
+    "content.testimonials.remove": "Removed testimonial",
+    "branding.brandColorPrimary": "Primary brand colour",
+    "branding.brandColorSecondary": "Secondary brand colour",
+    "content.offers.current": "Current offer",
+  };
+  return map[target] ?? target;
 }
 
 function formatRelative(iso: string): string {

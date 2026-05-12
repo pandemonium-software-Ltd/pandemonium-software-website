@@ -164,39 +164,96 @@ export default async function AdminDetailPage({
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* ---------- Pipeline state ---------- */}
-        <Section title="Pipeline">
-          <KV label="Status" value={prospect.status} />
-          <KV
-            label="Submitted (Phase 1)"
-            value={formatDate(prospect.phase1SubmittedAt)}
-          />
-          <KV
-            label="Submitted (Phase 2)"
-            value={formatDate(prospect.phase2SubmittedAt)}
-          />
-          <KV
-            label="Submitted (Phase 3)"
-            value={formatDate(prospect.phase3SubmittedAt)}
-          />
-          <KV
-            label="Compatibility result"
-            value={prospect.compatibilityResult ?? "—"}
-          />
-          {prospect.hardBlockerTriggered && (
-            <KV
-              label="Hard blocker"
-              value={prospect.hardBlockerTriggered}
-              tone="ember"
-            />
-          )}
-          {prospect.softBlockersTriggered.length > 0 && (
-            <KV
-              label="Soft blockers"
-              value={prospect.softBlockersTriggered.join(", ")}
-            />
-          )}
-        </Section>
+        {/* ---------- Pipeline state ----------
+         *  Custom layout so we can stamp a one-line legend explaining
+         *  the phase numbering (otherwise "Phase 1/2/3" is opaque to
+         *  anyone who doesn't have the playbook in their head) AND
+         *  surface a "view what they submitted" link next to each
+         *  phase row that has data. Links open the corresponding
+         *  form-snapshot page in /admin/[token]/submissions/[phase]. */}
+        <article className="rounded-2xl bg-white p-6 shadow-card">
+          <h2 className="font-serif text-lg font-semibold text-navy-900">
+            Pipeline
+          </h2>
+          <p className="mt-1 text-xs text-navy-600">
+            Phase 1 = public enquiry form · Phase 2 = qualification
+            (compatibility check) · Phase 3 = intake (full details +
+            modules + payment).
+          </p>
+          <dl className="mt-4 grid grid-cols-[auto_1fr_auto] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-navy-600">Status</dt>
+            <dd className="col-span-2 font-medium text-navy-900">
+              {prospect.status}
+            </dd>
+
+            <dt className="text-navy-600">Enquiry submitted</dt>
+            <dd className="font-medium text-navy-900">
+              {formatDate(prospect.phase1SubmittedAt)}
+            </dd>
+            <dd className="text-right">
+              {prospect.phase1SubmittedAt ? (
+                <Link
+                  href={`/admin/${token}/submissions/phase1`}
+                  className="text-xs text-amber-700 underline hover:text-amber-900"
+                >
+                  view answers ↗
+                </Link>
+              ) : null}
+            </dd>
+
+            <dt className="text-navy-600">Qualification submitted</dt>
+            <dd className="font-medium text-navy-900">
+              {formatDate(prospect.phase2SubmittedAt)}
+            </dd>
+            <dd className="text-right">
+              {prospect.phase2SubmittedAt ? (
+                <Link
+                  href={`/admin/${token}/submissions/phase2`}
+                  className="text-xs text-amber-700 underline hover:text-amber-900"
+                >
+                  view answers ↗
+                </Link>
+              ) : null}
+            </dd>
+
+            <dt className="text-navy-600">Intake submitted</dt>
+            <dd className="font-medium text-navy-900">
+              {formatDate(prospect.phase3SubmittedAt)}
+            </dd>
+            <dd className="text-right">
+              {prospect.phase3SubmittedAt ? (
+                <Link
+                  href={`/admin/${token}/submissions/phase3`}
+                  className="text-xs text-amber-700 underline hover:text-amber-900"
+                >
+                  view answers ↗
+                </Link>
+              ) : null}
+            </dd>
+
+            <dt className="text-navy-600">Compatibility result</dt>
+            <dd className="col-span-2 font-medium text-navy-900">
+              {prospect.compatibilityResult ?? "—"}
+            </dd>
+
+            {prospect.hardBlockerTriggered && (
+              <>
+                <dt className="text-navy-600">Hard blocker</dt>
+                <dd className="col-span-2 font-medium text-ember-700">
+                  {prospect.hardBlockerTriggered}
+                </dd>
+              </>
+            )}
+            {prospect.softBlockersTriggered.length > 0 && (
+              <>
+                <dt className="text-navy-600">Soft blockers</dt>
+                <dd className="col-span-2 font-medium text-navy-900">
+                  {prospect.softBlockersTriggered.join(", ")}
+                </dd>
+              </>
+            )}
+          </dl>
+        </article>
 
         {/* ---------- Subscription ---------- */}
         <Section title="Subscription">
@@ -230,15 +287,31 @@ export default async function AdminDetailPage({
           />
         </Section>
 
-        {/* ---------- Onboarding ---------- */}
-        <Section title="Onboarding Hub">
-          <div className="space-y-1.5 text-sm">
-            <p className="text-navy-600">Step progress (locked steps can be unlocked):</p>
-            <ul className="grid grid-cols-2 gap-1 md:grid-cols-3">
+        {/* ---------- Onboarding ----------
+         *  Custom Section markup (rather than using <Section>) so the
+         *  step-progress grid can occupy a full-width row above the
+         *  date table. Mixing the progress pills into a 2-col KV grid
+         *  put labels and dates in mismatched cells (Notion ticket
+         *  May 2026); this layout fixes it. */}
+        <article className="rounded-2xl bg-white p-6 shadow-card">
+          <h2 className="font-serif text-lg font-semibold text-navy-900">
+            Onboarding Hub
+          </h2>
+
+          {/* Step progress — own full-width block, never grid-aligned
+           *  with the date rows below. Pills given more breathing room
+           *  (one column on narrow, two columns wider) so labels like
+           *  "Cloudflare" / "Domain" / "Content" don't get truncated
+           *  to "Clo..." / "Do..." / "Con...". */}
+          <div className="mt-4 border-b border-navy-100 pb-5 text-sm">
+            <p className="text-navy-600">
+              Step progress (locked steps can be unlocked):
+            </p>
+            <ul className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
               {stepProgress.map((s) => (
                 <li
                   key={s.id}
-                  className="flex items-center gap-2 rounded-md border border-navy-100 bg-cream-50 px-2 py-1.5"
+                  className="flex items-center gap-2 rounded-md border border-navy-100 bg-cream-50 px-3 py-2"
                 >
                   <span
                     title={`Step ${s.num} (${s.id}) ${s.done ? "done" : "pending"}`}
@@ -251,7 +324,7 @@ export default async function AdminDetailPage({
                   >
                     {s.done ? "✓" : s.num}
                   </span>
-                  <span className="flex-1 truncate text-xs text-navy-900">
+                  <span className="flex-1 text-xs text-navy-900">
                     {s.label}
                   </span>
                   {s.done && (
@@ -265,19 +338,25 @@ export default async function AdminDetailPage({
               ))}
             </ul>
           </div>
-          <KV
-            label="Started at"
-            value={formatDate(prospect.onboardingStartedAt)}
-          />
-          <KV
-            label="Completed at"
-            value={formatDate(prospect.onboardingCompletedAt)}
-          />
-          <KV
-            label="Go-live target"
-            value={formatDate(prospect.goLiveDate)}
-          />
-        </Section>
+
+          {/* Date table — separate dl below the progress block so
+           *  labels and dates stay aligned regardless of how many
+           *  step pills the progress grid renders. */}
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            <KV
+              label="Started at"
+              value={formatDate(prospect.onboardingStartedAt)}
+            />
+            <KV
+              label="Completed at"
+              value={formatDate(prospect.onboardingCompletedAt)}
+            />
+            <KV
+              label="Go-live target"
+              value={formatDate(prospect.goLiveDate)}
+            />
+          </dl>
+        </article>
 
         {/* ---------- Captured config ---------- */}
         <Section title="Captured config">
