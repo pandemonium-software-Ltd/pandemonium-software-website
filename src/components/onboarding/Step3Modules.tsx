@@ -555,24 +555,83 @@ function ModuleCalcom({
         <li className="flex gap-3">
           <Bullet n={3} />
           <span>
-            <strong>Connect your calendar.</strong> Pick Google,
-            Outlook, or Apple — Cal.com pulls your busy times so it
-            never double-books you.
+            <strong>Connect your calendar.</strong> Click{" "}
+            <strong>Apps</strong> in the left sidebar, then{" "}
+            <strong>App store</strong>. Find the <strong>Calendar</strong>{" "}
+            category (in &ldquo;Featured categories&rdquo;) and pick the
+            calendar you actually use — most likely{" "}
+            <strong>Google Calendar</strong> (if you use Gmail) or{" "}
+            <strong>Outlook Calendar</strong> (if you use Microsoft /
+            Office 365). Click <strong>Install</strong>, then{" "}
+            <strong>Allow / Authorise</strong> on the pop-up. That&apos;s
+            it — Cal.com now pulls your busy times so it never
+            double-books you.
+            <span className="mt-2 block rounded-lg border border-navy-100 bg-cream-50 p-3 text-[0.85rem] text-navy-600">
+              <strong>Tip:</strong> Skip Google Meet, Conferencing,
+              Analytics, etc. — you don&apos;t need them unless you
+              run video consultations. You can always add them later.
+            </span>
           </span>
         </li>
         <li className="flex gap-3">
           <Bullet n={4} />
           <span>
-            <strong>Create your booking event.</strong> In the left
-            sidebar click <strong>Event Types</strong> →{" "}
-            <strong>+ New</strong>. Give it a clear customer-facing
-            name (e.g. &ldquo;30-minute consultation&rdquo;,
-            &ldquo;Free quote call&rdquo;, &ldquo;Garden visit&rdquo;).
-            Set the duration and any buffer you want between bookings.
+            <strong>Set your working hours.</strong> Click{" "}
+            <strong>Availability</strong> in the left sidebar. The
+            default is Mon-Fri 9am-5pm — adjust the days + times to
+            when you actually take bookings (e.g. Tue-Sat 10am-6pm).
+            Save. Every event you create uses this by default; you
+            can override per-event later if needed.
           </span>
         </li>
         <li className="flex gap-3">
           <Bullet n={5} />
+          <span>
+            <strong>Create your booking event.</strong> Click{" "}
+            <strong>Event Types</strong> in the left sidebar →{" "}
+            <strong>+ New</strong>. You&apos;ll see a sidebar with
+            several sections (Basics, Availability, Limits, Advanced,
+            etc.) — fill in only these three, ignore the rest:
+            <span className="mt-3 block space-y-2.5 text-[0.9rem]">
+              <span className="block rounded-lg border border-navy-100 bg-white p-3">
+                <strong className="text-navy-900">
+                  ✏️ Basics
+                </strong>
+                <span className="mt-1 block text-navy-700">
+                  Give it a clear customer-facing name (e.g.
+                  &ldquo;30-minute consultation&rdquo;, &ldquo;Free
+                  quote call&rdquo;, &ldquo;Garden visit&rdquo;).
+                  Pick a duration (30 or 60 mins is typical).
+                </span>
+              </span>
+              <span className="block rounded-lg border border-navy-100 bg-white p-3">
+                <strong className="text-navy-900">
+                  📅 Availability
+                </strong>
+                <span className="mt-1 block text-navy-700">
+                  Leave this on &ldquo;Working hours&rdquo; — uses the
+                  schedule you just set. Only change it if THIS event
+                  has different hours from your normal work (rare).
+                </span>
+              </span>
+              <span className="block rounded-lg border border-navy-100 bg-white p-3">
+                <strong className="text-navy-900">
+                  🕐 Limits
+                </strong>
+                <span className="mt-1 block text-navy-700">
+                  Recommended caps to stop your day getting hammered:
+                  set a <em>buffer time</em> of 15-30 min before AND
+                  after each booking (gives you travel + tidy-up
+                  time). Optionally cap bookings per day (e.g.{" "}
+                  <strong>max 4 bookings per day</strong>). Skip the
+                  rest.
+                </span>
+              </span>
+            </span>
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <Bullet n={6} />
           <span>
             <strong>Copy the link to that event</strong> — NOT your
             profile URL. On the Event Types page, hover the row for
@@ -586,10 +645,80 @@ function ModuleCalcom({
           </span>
         </li>
         <li className="flex gap-3">
-          <Bullet n={6} />
+          <Bullet n={7} />
           <span>Paste the event link into the box below.</span>
         </li>
       </ol>
+
+      {/* Collapsible optional-sections — keeps the main flow short
+          while letting the curious customer dig deeper. */}
+      <details className="mt-5 rounded-2xl border-2 border-navy-100 bg-white">
+        <summary className="cursor-pointer px-5 py-3 text-sm font-semibold text-navy-900 hover:bg-cream-50">
+          Optional: the other sidebar sections (Advanced, Apps,
+          Workflows, etc.)
+        </summary>
+        <div className="space-y-3 px-5 pb-5 text-[0.9rem] leading-relaxed text-navy-700">
+          <p>
+            When you open an event you&apos;ll see more options in the
+            sidebar. Here&apos;s what they do, in plain English:
+          </p>
+          <div className="rounded-lg bg-cream-50 p-3">
+            <p className="font-semibold text-navy-900">
+              ⚙️ Advanced
+            </p>
+            <p className="mt-1">
+              Where the booking happens (in-person, phone, Google
+              Meet etc.), and what extra questions customers answer
+              when they book. Useful additions: <em>phone number</em>{" "}
+              (so you can call if they no-show), <em>address</em> (if
+              you visit them). For most one-off bookings, the defaults
+              are fine.
+            </p>
+          </div>
+          <div className="rounded-lg bg-cream-50 p-3">
+            <p className="font-semibold text-navy-900">
+              🔌 Apps
+            </p>
+            <p className="mt-1">
+              Turn on extra integrations for THIS event. The two
+              you&apos;d normally use:
+              <em>Google Meet</em> (if it&apos;s a video call —
+              auto-creates the meeting link) or <em>Stripe</em> (if
+              you charge a booking deposit). Skip the rest.
+            </p>
+          </div>
+          <div className="rounded-lg bg-cream-50 p-3">
+            <p className="font-semibold text-navy-900">
+              ⚡ Workflows
+            </p>
+            <p className="mt-1">
+              Automated reminders + follow-ups. Worth adding ONE:
+              an SMS or email reminder 24 hours before the booking
+              cuts no-shows in half. Click <strong>+ Add workflow</strong>{" "}
+              → pick the &ldquo;Email reminder&rdquo; template → set
+              it to fire 24 hours before. Save. Don&apos;t worry about
+              the rest of the workflow options.
+            </p>
+          </div>
+          <div className="rounded-lg bg-navy-50 p-3">
+            <p className="font-semibold text-navy-900">
+              Sections you can ignore
+            </p>
+            <ul className="mt-1.5 list-disc pl-4 space-y-1">
+              <li>
+                <strong>Recurring</strong> — for sessions that repeat
+                weekly with the same person (e.g. a coach). Not
+                relevant for one-off bookings.
+              </li>
+              <li>
+                <strong>Webhooks</strong> — developer feature for
+                wiring Cal.com into another system. You won&apos;t
+                need this.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </details>
 
       <div className="mt-6 rounded-2xl bg-cream-50 p-5">
         <h4 className="font-serif text-base font-semibold text-navy-900">

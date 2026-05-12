@@ -6,7 +6,7 @@
 //   2. Multi-item detector: numbered/bulleted lists, "Also,",
 //      multiple "Please" — declined with 422 + "split into separate
 //      requests" message
-//   3. Monthly cap: MONTHLY_CHANGE_REQUEST_LIMIT (3) per calendar
+//   3. Monthly cap: MONTHLY_CHANGE_REQUEST_LIMIT (2) per calendar
 //      month; rejected requests don't count toward the cap (those
 //      are typically out-of-scope items quoted separately)
 //
@@ -39,11 +39,60 @@ import {
   looksLikeMultipleItems,
   MULTI_ITEM_DECLINE_MESSAGE,
 } from "@/lib/multi-item-detector";
+import {
+  OFFER_HEADLINE_MAX,
+  OFFER_BODY_MAX,
+  OFFER_CTA_LABEL_MAX,
+  OFFER_CTA_URL_MAX,
+} from "@/lib/offers/limits";
+import { applyChangeRequestPatches } from "@/lib/change-requests/apply-patch";
+import { dispatchRepositoryEvent, GithubApiError } from "@/lib/github";
+import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
 
 export const runtime = "nodejs";
 
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Optional structured offer payload — sent by the dashboard
+ *  OfferCard composer. When present, the server constructs a
+ *  pre-baked `coworkPatches` on the change-request targeting
+ *  `content.offers.current`. Cowork's classifier is bypassed
+ *  for these — the customer provided structured data via the
+ *  form, no ambiguity. */
+const offerPayloadSchema = z.object({
+  headline: z
+    .string()
+    .trim()
+    .min(1, "Add a headline.")
+    .max(
+      OFFER_HEADLINE_MAX,
+      `Keep the headline ≤ ${OFFER_HEADLINE_MAX} chars so it fits the strip.`,
+    ),
+  body: z
+    .string()
+    .trim()
+    .max(
+      OFFER_BODY_MAX,
+      `Keep the body ≤ ${OFFER_BODY_MAX} chars so it doesn't wrap badly.`,
+    )
+    .optional(),
+  ctaLabel: z
+    .string()
+    .trim()
+    .max(
+      OFFER_CTA_LABEL_MAX,
+      `Keep the button label ≤ ${OFFER_CTA_LABEL_MAX} chars so the pill stays compact.`,
+    )
+    .optional(),
+  ctaUrl: z.string().trim().max(OFFER_CTA_URL_MAX).optional(),
+  startsAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Start date must be YYYY-MM-DD"),
+  endsAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be YYYY-MM-DD"),
+});
 
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE, "Missing or invalid token."),
@@ -52,6 +101,13 @@ const requestSchema = z.object({
     .trim()
     .min(5, "Please describe the change in at least a few words.")
     .max(5000, "That's a lot for one message — please split it up."),
+  /** Optional discriminator — currently only "offer-update" is
+   *  recognised. Future kinds (e.g. "newsletter-draft") can plug
+   *  in the same way without touching the existing free-text path. */
+  kind: z.literal("offer-update").optional(),
+  /** Required when kind="offer-update". Server validates dates +
+   *  embeds the resulting OfferEntry on the change-request. */
+  offer: offerPayloadSchema.optional(),
 });
 
 const ELIGIBLE_STATUSES = new Set([
@@ -82,7 +138,32 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, message } = parsed.data;
+  const { token, message, kind, offer } = parsed.data;
+  // Offer-update sanity checks (server side) — offer must be
+  // present when kind=offer-update, end ≥ start.
+  if (kind === "offer-update") {
+    if (!offer) {
+      return NextResponse.json(
+        { error: "Missing offer details." },
+        { status: 400 },
+      );
+    }
+    if (offer.endsAt < offer.startsAt) {
+      return NextResponse.json(
+        { error: "End date can't be before start date." },
+        { status: 400 },
+      );
+    }
+    if (offer.ctaLabel && !offer.ctaUrl) {
+      return NextResponse.json(
+        {
+          error:
+            "If you set a button label, add a link too (or clear the label).",
+        },
+        { status: 400 },
+      );
+    }
+  }
 
   let prospect;
   try {
@@ -114,7 +195,9 @@ export async function POST(request: Request) {
   // Multi-item check: each request must be a single item. Detected
   // patterns get a polite "split into separate requests" reply.
   // Doesn't burn the cap — nothing's saved.
-  if (looksLikeMultipleItems(message)) {
+  // Skipped for offer-update: the message is a server-built summary,
+  // not free-form customer text, so the heuristic doesn't apply.
+  if (kind !== "offer-update" && looksLikeMultipleItems(message)) {
     return NextResponse.json(
       {
         error: MULTI_ITEM_DECLINE_MESSAGE,
@@ -142,11 +225,94 @@ export async function POST(request: Request) {
     );
   }
 
+  const requestId = crypto.randomUUID();
+  const isOfferUpdate = kind === "offer-update" && !!offer;
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://pandemonium-software-website.benpandher.workers.dev";
+
+  // ---- Auto-apply path for offer-update ----
+  // The customer's submitted structured form data via the dashboard
+  // composer. No ambiguity, no operator review needed — apply the
+  // patch to Notion right now, dispatch a live build, mark the CR
+  // resolved on creation. The length-capped form is the safety net
+  // (no free-form prose to misclassify).
+  //
+  // If the apply fails (Notion 500, schema mismatch), we abort
+  // BEFORE saving the CR so the customer's monthly slot isn't
+  // burned and they can retry.
+  let autoAppliedOffer:
+    | {
+        offerEntry: Record<string, unknown>;
+        previousOffer: unknown;
+      }
+    | null = null;
+  if (isOfferUpdate && offer) {
+    const offerEntry = {
+      id: crypto.randomUUID(),
+      headline: offer.headline,
+      body: offer.body,
+      ctaLabel: offer.ctaLabel,
+      ctaUrl: offer.ctaUrl,
+      startsAt: offer.startsAt,
+      endsAt: offer.endsAt,
+      createdAt: new Date().toISOString(),
+      status: "active",
+    };
+    const apply = await applyChangeRequestPatches({
+      prospect,
+      patches: [
+        {
+          target: "content.offers.current",
+          newValue: JSON.stringify(offerEntry),
+        },
+      ],
+    });
+    if (!apply.ok) {
+      // Apply failed before we saved anything — return error,
+      // monthly cap unchanged. Customer can fix + retry.
+      console.error(
+        `[api/account/change-request] offer auto-apply failed for ${prospect.token.slice(0, 8)}: ${apply.reason}`,
+      );
+      return NextResponse.json(
+        {
+          error: `Couldn't apply that offer: ${apply.reason}. Tweak it and try again.`,
+        },
+        { status: 400 },
+      );
+    }
+    autoAppliedOffer = {
+      offerEntry,
+      previousOffer: apply.applied[0]?.previousValue ?? null,
+    };
+  }
+
+  const nowIso = new Date().toISOString();
   const newRequest: ChangeRequest = {
-    id: crypto.randomUUID(),
-    submittedAt: new Date().toISOString(),
+    id: requestId,
+    submittedAt: nowIso,
     message,
-    status: "pending",
+    // Auto-applied offer updates are immediately resolved — no
+    // admin review needed; the patch is already on Notion.
+    status: isOfferUpdate ? "resolved" : "pending",
+    ...(isOfferUpdate && autoAppliedOffer
+      ? {
+          resolvedAt: nowIso,
+          reply: "Auto-applied via dashboard composer — live within a couple of minutes once the build completes.",
+          coworkClassification: "in_scope" as const,
+          coworkConfidence: 1.0,
+          coworkReasoning:
+            "Customer submitted structured offer via dashboard composer — auto-applied without admin review.",
+          coworkPatchAppliedAt: nowIso,
+          coworkPatches: [
+            {
+              target: "content.offers.current",
+              newValue: autoAppliedOffer.offerEntry,
+              previousValue: autoAppliedOffer.previousOffer,
+            },
+          ],
+        }
+      : {}),
   };
 
   try {
@@ -163,29 +329,101 @@ export async function POST(request: Request) {
     );
   }
 
+  // ---- Dispatch live build for offer auto-apply ----
+  // The patch landed in Notion above; now trigger a customer-site
+  // build (mode=live) so the new offer is visible on the site
+  // within ~2 minutes. Fail-soft — the patch is already in Notion
+  // even if the dispatch fails; we surface a warning and the
+  // operator can re-trigger manually.
+  let buildWarning: string | null = null;
+  if (isOfferUpdate && prospect.workerName && prospect.cloudflareAccountId) {
+    const env = getServerEnv();
+    if (env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO) {
+      try {
+        await dispatchRepositoryEvent({
+          token: env.GITHUB_TOKEN,
+          owner: env.GITHUB_OWNER,
+          repo: env.GITHUB_REPO,
+          eventType: "customer-site-build",
+          clientPayload: {
+            token,
+            prospectName: prospect.name,
+            businessName: prospect.business ?? "",
+            mode: "live",
+          },
+        });
+      } catch (e) {
+        const msg =
+          e instanceof GithubApiError
+            ? `${e.message} (HTTP ${e.status})`
+            : e instanceof Error
+              ? e.message
+              : String(e);
+        buildWarning = msg;
+        console.warn(
+          `[api/account/change-request] offer applied but build dispatch failed: ${msg}`,
+        );
+      }
+    } else {
+      buildWarning = "GitHub credentials not configured — site won't rebuild";
+    }
+  }
+
   // Internal notification to Ben — fail-soft, never blocks the
-  // user response. Deep-links to the admin detail page with a
-  // hash fragment so the request scrolls into view, plus the
-  // direct Notion URL as a fallback.
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "https://pandemonium-software-website.benpandher.workers.dev";
+  // user response. Two flavours:
+  //   - Offer auto-apply: FYI only ("no action needed, applied +
+  //     build dispatched"). Uses notifyAdmin so the inbox tag is
+  //     consistent with other auto-apply events (review-edit,
+  //     change-request preview).
+  //   - Regular CR: existing inbox notification flow — operator
+  //     reviews in /admin.
   const adminDeepLink = `${baseUrl}/admin/${token}#cr-${newRequest.id}`;
-  const notif: NotificationPayload = {
-    subject: `[CHANGE REQUEST] ${prospect.name}${prospect.business ? ` (${prospect.business})` : ""}`,
-    body:
-      `New change request from ${prospect.name}${prospect.business ? ` at ${prospect.business}` : ""}.\n\n` +
-      `--- Their request ---\n${message}\n--- End ---\n\n` +
-      `Reply with one click:\n${adminDeepLink}\n\n` +
-      `Status: ${prospect.status}\n` +
-      `Notion: ${prospect.notionUrl}\n\n` +
-      `— Cowork`,
-  };
-  const emailErr = await sendInternalNotification(notif);
-  if (emailErr) {
-    console.warn(
-      `[api/account/change-request] Notion saved but email failed: ${emailErr}`,
-    );
+  if (isOfferUpdate && offer) {
+    try {
+      const env = getServerEnv();
+      await notifyAdmin(env, {
+        category: "change-request",
+        subject: `Offer auto-applied — ${prospect.name}`,
+        body:
+          `${prospect.name}${prospect.business ? ` (${prospect.business})` : ""} submitted an offer update from the dashboard. Auto-applied + live build dispatched.\n\n` +
+          `Headline: "${offer.headline}"\n` +
+          (offer.body ? `Body: "${offer.body}"\n` : "") +
+          `Dates: ${offer.startsAt} → ${offer.endsAt}\n` +
+          (offer.ctaLabel
+            ? `Button: "${offer.ctaLabel}"${offer.ctaUrl ? ` → ${offer.ctaUrl}` : ""}\n`
+            : "") +
+          (buildWarning
+            ? `\n⚠️  Build dispatch FAILED: ${buildWarning}. Apply landed in Notion but the site won't rebuild — re-trigger manually.\n`
+            : `\nBuild should be live within ~2 minutes.\n`) +
+          `\n` +
+          adminFooter({
+            prospectName: prospect.name,
+            prospectToken: token,
+            anchor: `cr-${requestId.slice(0, 8)}`,
+          }),
+      });
+    } catch (e) {
+      console.warn(
+        `[api/account/change-request] admin FYI failed: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  } else {
+    const notif: NotificationPayload = {
+      subject: `[CHANGE REQUEST] ${prospect.name}${prospect.business ? ` (${prospect.business})` : ""}`,
+      body:
+        `New change request from ${prospect.name}${prospect.business ? ` at ${prospect.business}` : ""}.\n\n` +
+        `--- Their request ---\n${message}\n--- End ---\n\n` +
+        `Reply with one click:\n${adminDeepLink}\n\n` +
+        `Status: ${prospect.status}\n` +
+        `Notion: ${prospect.notionUrl}\n\n` +
+        `— Cowork`,
+    };
+    const emailErr = await sendInternalNotification(notif);
+    if (emailErr) {
+      console.warn(
+        `[api/account/change-request] Notion saved but email failed: ${emailErr}`,
+      );
+    }
   }
 
   // Customer receipt email (NEW Phase A). Confirms the submission
@@ -223,6 +461,11 @@ export async function POST(request: Request) {
     remaining: remainingAfter,
     customerReceiptSent: !receiptErr,
     receiptWarning: receiptErr,
+    /** When kind=offer-update + auto-apply succeeded: confirms
+     *  the patch is in Notion + signals to the dashboard composer
+     *  that the offer is live (modulo build time). */
+    autoApplied: isOfferUpdate,
+    buildWarning,
   });
 }
 

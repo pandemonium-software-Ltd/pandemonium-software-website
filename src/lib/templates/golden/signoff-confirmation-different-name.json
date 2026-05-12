@@ -7,7 +7,7 @@
     "accountUrl": "https://modu-forge.co.uk/account/xyz789"
   },
   "expected": {
-    "subject": "Signed off — your site goes live on 15 May 2026",
-    "body": "Hi Sam,\n\nThanks for the careful review. You're signed off and your site\nis going live on 15 May 2026.\n\nWhat happens between now and launch:\n\n  1. I'm building your site now. You'll get another email when\n     your preview is ready (typically 3-5 working days).\n  2. On launch day I switch the DNS over before 11am UK time and\n     your site is live.\n  3. Your subscription includes 3 change requests per month from\n     launch — one item per request. Use the \"Need a change?\"\n     form on your account dashboard for any updates after launch.\n\nThe button below opens your account dashboard. From now on,\nthat's your home for site status, subscription details, and\ncontent changes.\n\nIf anything's not right between now and launch, just hit reply.\n\n— Ben"
+    "subject": "All signed off — your site goes live on 15 May 2026",
+    "body": "Hi Sam,\n\nThanks for reviewing everything. You're all signed off and\nyour site will be live on 15 May 2026.\n\nHere's what happens next — you don't need to do anything:\n\n  1. I'll do the final tidy-up on your site over the next few\n     days.\n  2. On launch morning (before 11am), I'll switch your web\n     address over so visitors land on your new site.\n  3. Once your site is live, you can ask for up to 2 changes\n     a month from your dashboard — things like swapping a\n     photo, tweaking text, updating opening hours. I'll get\n     them done within 48 working hours.\n\nThe button below opens your dashboard — that's where you'll\nmanage everything from here.\n\nIf you spot anything you want changed before launch, just\nreply to this email and I'll sort it.\n\n— Ben"
   }
 }

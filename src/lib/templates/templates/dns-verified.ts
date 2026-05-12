@@ -7,19 +7,22 @@ export const dnsVerified: Template = {
   id: "dns-verified",
   riskTier: "low",
   required: ["customerName", "domain"],
-  subject: "Your domain {{domain}} is verified ✓",
+  subject: "Your web address {{domain}} is ready ✓",
   body: `Hi {{customerName}},
 
-Quick update — DNS for {{domain}} is now verified and pointed at
-your ModuForge site.
+Quick update — your web address {{domain}} is now hooked up
+and ready to go.
 
-What this means:
-  • Your site goes live on this domain on your chosen launch date
-  • Email forwarding (if you configured it) is active now
-  • TLS certificate is provisioned automatically — no action needed
-    from you
+In plain terms:
+  • On your launch date, anyone typing {{domain}} into a
+    browser will land on your new site.
+  • Your site will load securely (the green padlock
+    visitors expect to see).
+  • If you set up email forwarding on this address, that's
+    working now too.
 
-Next update from me: when the site goes live.
+Nothing to do from your end — I'll email you again the
+moment your site is live.
 
-— Cowork (your ModuForge ops assistant)`,
+— Ben`,
 };

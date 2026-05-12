@@ -15,7 +15,8 @@ export type StepId =
   | "step3"
   | "step4"
   | "step5"
-  | "step6";
+  | "step6"
+  | "step7";
 
 export type StepResult =
   /** Step did its work successfully. */

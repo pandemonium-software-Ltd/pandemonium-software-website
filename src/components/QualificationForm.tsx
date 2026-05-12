@@ -47,6 +47,12 @@ const MODULE_DETAILS: Record<
     monthly: "+£6/mo",
     tagline: "Email your customers monthly. I send it for you.",
   },
+  Offers: {
+    setup: "+£29 setup",
+    monthly: "+£4/mo",
+    tagline:
+      "Promo strip on your homepage you control from your dashboard.",
+  },
   "Google Business Profile Setup/Audit": {
     setup: "£29 one-off",
     monthly: "+£2/mo",

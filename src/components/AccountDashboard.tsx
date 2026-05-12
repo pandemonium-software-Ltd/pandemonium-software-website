@@ -11,15 +11,22 @@ import {
   countActiveChangeRequestsThisMonth,
   MONTHLY_CHANGE_REQUEST_LIMIT,
   type ChangeRequest,
+  type ProspectStatus,
 } from "@/lib/notion-prospects";
+import type { StepId } from "@/lib/onboarding";
 import RAGStatus from "@/components/RAGStatus";
+import ProgressTracker from "@/components/ProgressTracker";
+import OfferCard from "@/components/OfferCard";
+import NewsletterCard, {
+  type NewsletterSummary,
+} from "@/components/NewsletterCard";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
   token: string;
   name: string;
   business: string;
-  status: string;
+  status: ProspectStatus;
   /** Customer's domain if Step 2 captured one; empty string otherwise. */
   domain: string;
   modules: string[];
@@ -29,10 +36,60 @@ export type AccountDashboardProps = {
   onboardingCompletedAt: string | null;
   goLiveDate: string | null;
   changeRequests: ChangeRequest[];
+  /** Per-step done flags. Used to render green ticks + greyed-out
+   *  rows in the dashboard's Hub nav card. */
+  hubStepDone: Record<StepId, boolean>;
+  /** Step ids that actually apply to this prospect (depends on
+   *  their module selections). Steps not in this list are omitted
+   *  from the dashboard nav entirely. */
+  hubApplicableStepIds: StepId[];
+  /** Current offer if the customer has the Offers module + has
+   *  set one. Drives the "Your offers" card on the dashboard.
+   *  Null when no offer set; absent when module not bought. */
+  currentOffer?: {
+    headline: string;
+    body?: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    startsAt: string;
+    endsAt: string;
+  } | null;
+  /** Newsletter card data — subscriber count, recent history,
+   *  monthly send count. Driven by content.newsletter.* on the
+   *  prospect record. */
+  newsletterSummary?: NewsletterSummary;
 };
 
-// Friendly status labels + tones for the hero badge.
+// Stage groupings — used to gate which blocks render.
+const PRE_PAY_STATUSES = new Set<ProspectStatus>([
+  "Phase 2 Accepted",
+  "Phase 3 In Progress",
+  "Phase 3 Complete",
+]);
+const HUB_UNLOCKED_STATUSES = new Set<ProspectStatus>([
+  "Paid",
+  "Onboarding Started",
+  "Onboarding Complete",
+  "Build Started",
+  "Live",
+]);
+const SITE_LIVE_STATUSES = new Set<ProspectStatus>(["Live"]);
+
+// Friendly status labels + tones for the hero badge. Covers every
+// post-Phase-1 status (page.tsx gates earlier statuses out).
 const STATUS_LABEL: Record<string, { label: string; tone: string }> = {
+  "Phase 2 Accepted": {
+    label: "Quote in your inbox",
+    tone: "bg-amber-100 text-amber-900",
+  },
+  "Phase 3 In Progress": {
+    label: "Intake in progress",
+    tone: "bg-amber-100 text-amber-900",
+  },
+  "Phase 3 Complete": {
+    label: "Awaiting payment",
+    tone: "bg-amber-100 text-amber-900",
+  },
   Paid: {
     label: "Setup in progress",
     tone: "bg-blue-100 text-blue-800",
@@ -73,7 +130,13 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     onboardingCompletedAt,
     goLiveDate,
     changeRequests,
+    hubStepDone,
+    hubApplicableStepIds,
+    currentOffer,
+    newsletterSummary,
   } = props;
+  const hasOffersModule = modules.includes("Offers");
+  const hasNewsletterModule = modules.includes("Newsletter");
 
   const firstName = (name.split(/\s+/)[0] ?? name).trim();
   const statusBadge = STATUS_LABEL[status] ?? {
@@ -82,6 +145,9 @@ export default function AccountDashboard(props: AccountDashboardProps) {
   };
   const isLive = status === "Live";
   const isCancelled = status === "Cancelled";
+  const isPrePay = PRE_PAY_STATUSES.has(status);
+  const isHubUnlocked = HUB_UNLOCKED_STATUSES.has(status);
+  const isSiteLive = SITE_LIVE_STATUSES.has(status);
   const siteUrl = domain ? `https://${domain}` : "";
   const daysSinceLaunch = onboardingCompletedAt
     ? Math.max(
@@ -136,6 +202,24 @@ export default function AccountDashboard(props: AccountDashboardProps) {
 
       <section className="pb-24 pt-6">
         <div className="container-content max-w-5xl">
+          {/* ---------- Progress tracker ---------- */}
+          <div className="mb-6">
+            <ProgressTracker status={status} token={token} domain={domain} />
+          </div>
+
+          {/* ---------- Stage-aware "what's next" ---------- */}
+          {!isCancelled && (
+            <div className="mb-6">
+              <NextStepCard
+                status={status}
+                token={token}
+                siteUrl={siteUrl}
+                domain={domain}
+                setupFee={setupFee}
+              />
+            </div>
+          )}
+
           <div className="grid gap-6 md:grid-cols-2">
             {/* ---------- Your site ---------- */}
             <DashCard title="Your site">
@@ -175,7 +259,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                     </p>
                   )}
                 </>
-              ) : (
+              ) : isHubUnlocked ? (
                 <p className="text-sm text-navy-700">
                   Your domain hasn&apos;t been captured yet.{" "}
                   <Link
@@ -186,8 +270,13 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   </Link>{" "}
                   to add it.
                 </p>
+              ) : (
+                <p className="text-sm text-navy-700">
+                  Your site URL appears here once your Onboarding Hub
+                  unlocks (after you&apos;ve paid the setup fee).
+                </p>
               )}
-              {!isCancelled && (
+              {isHubUnlocked && (
                 <Link
                   href={`/onboarding/${token}`}
                   className="mt-4 inline-block text-sm font-semibold text-ember-600 transition-colors hover:text-ember-700"
@@ -197,51 +286,195 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               )}
             </DashCard>
 
-            {/* ---------- Subscription ---------- */}
-            <DashCard title="Your subscription">
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-navy-600">Setup fee (one-off)</dt>
-                <dd className="font-semibold text-navy-900">
-                  £{setupFee}
-                </dd>
-                <dt className="text-navy-600">Monthly fee</dt>
-                <dd className="font-semibold text-navy-900">
-                  £{monthlyFee}/mo
-                  {foundingMember && (
-                    <span className="ml-2 inline-block rounded-full bg-ember-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ember-700">
-                      Founding rate
-                    </span>
+            {/* ---------- Onboarding Hub navigation ---------- */}
+            {isHubUnlocked && !isCancelled && (
+              <DashCard title="Onboarding Hub">
+                <p className="text-sm text-navy-700">
+                  {(() => {
+                    const total = HUB_STEPS.filter((s) =>
+                      hubApplicableStepIds.includes(s.id as StepId),
+                    ).length;
+                    const done = HUB_STEPS.filter(
+                      (s) =>
+                        hubApplicableStepIds.includes(s.id as StepId) &&
+                        hubStepDone[s.id as StepId],
+                    ).length;
+                    if (total === 0)
+                      return "Open the Hub to start your setup steps.";
+                    if (done === 0)
+                      return `${total} steps to go. Each one saves as you finish it.`;
+                    if (done === total)
+                      return `All ${total} steps complete. Tap any to review (locked once done).`;
+                    return `${done} of ${total} done — keep going.`;
+                  })()}
+                </p>
+                <ul className="mt-3 space-y-1.5">
+                  {HUB_STEPS.filter((s) =>
+                    hubApplicableStepIds.includes(s.id as StepId),
+                  ).map((s) => {
+                    const isDone = hubStepDone[s.id as StepId];
+                    return (
+                      <li key={s.id}>
+                        <Link
+                          href={`/onboarding/${token}?step=${s.id}`}
+                          className={[
+                            "group flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition-colors",
+                            isDone
+                              ? "border-green-200 bg-green-50/60 hover:bg-green-50"
+                              : "border-navy-100 bg-cream-50 hover:border-navy-300 hover:bg-white",
+                          ].join(" ")}
+                        >
+                          <span className="flex items-center gap-2.5">
+                            {isDone ? (
+                              <span
+                                aria-label="Done"
+                                className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white"
+                              >
+                                <svg
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 16 16"
+                                  fill="none"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    d="M3 8l3 3 7-7"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                              </span>
+                            ) : (
+                              <span className="font-mono text-[10px] font-bold text-navy-500">
+                                {s.num}
+                              </span>
+                            )}
+                            <span
+                              className={[
+                                "font-medium",
+                                isDone
+                                  ? "text-navy-600 line-through decoration-navy-300 decoration-1"
+                                  : "text-navy-900",
+                              ].join(" ")}
+                            >
+                              {s.label}
+                            </span>
+                            {isDone && (
+                              <span className="ml-1 inline-block rounded-full bg-green-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-green-800">
+                                {/* Assets stays editable post-done so
+                                    customers can swap a logo/photo
+                                    and trigger a rebuild — show
+                                    "saved" rather than "locked" so
+                                    it's clear they can still change
+                                    it. Same for review (which has
+                                    its own revision flow). */}
+                                {s.id === "assets" || s.id === "review"
+                                  ? "saved"
+                                  : "locked"}
+                              </span>
+                            )}
+                          </span>
+                          <span
+                            aria-hidden="true"
+                            className={[
+                              "transition-transform group-hover:translate-x-0.5",
+                              isDone
+                                ? "text-navy-400 group-hover:text-navy-600"
+                                : "text-navy-400 group-hover:text-navy-700",
+                            ].join(" ")}
+                          >
+                            →
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </DashCard>
+            )}
+
+            {/* ---------- Modules (with self-serve change request) ---------- */}
+            {isHubUnlocked && !isCancelled && (
+              <DashCard title="Your modules">
+                <ul className="space-y-1 text-sm">
+                  <li className="flex items-center gap-2 text-navy-900">
+                    <CheckIcon /> Base website
+                  </li>
+                  {modules.length === 0 && (
+                    <li className="text-navy-500">
+                      No add-on modules yet.
+                    </li>
                   )}
-                </dd>
-                <dt className="text-navy-600">Modules</dt>
-                <dd className="text-navy-900">
-                  <ul className="list-disc pl-4">
-                    <li>Base website</li>
-                    {modules.map((m) => (
-                      <li key={m}>{m}</li>
-                    ))}
-                  </ul>
-                </dd>
-              </dl>
-              <p className="mt-4 text-xs text-navy-500">
-                Want to add or remove a module?{" "}
-                <a
-                  href={`mailto:${site.contactEmail}?subject=Module%20change%20-%20${encodeURIComponent(business || name)}`}
-                  className="link"
-                >
-                  Email me
-                </a>
-                {" "}and I&apos;ll sort it out.
-              </p>
-            </DashCard>
+                  {modules.map((m) => (
+                    <li key={m} className="flex items-center gap-2 text-navy-900">
+                      <CheckIcon /> {m}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-xs text-navy-600">
+                  Want to add or remove a module? Use the{" "}
+                  <Link
+                    href={`/onboarding/${token}?step=tools`}
+                    className="link"
+                  >
+                    Modules step
+                  </Link>{" "}
+                  in your Hub — I&apos;ll review + confirm pricing
+                  before anything changes on your bill.
+                </p>
+              </DashCard>
+            )}
+
+            {/* ---------- Offers (live customers with the module) ---------- */}
+            {isSiteLive && !isCancelled && hasOffersModule && (
+              <OfferCard
+                token={token}
+                current={currentOffer ?? null}
+                changeRequests={changeRequests}
+              />
+            )}
+
+            {/* ---------- Newsletter (live customers with the module) ---------- */}
+            {isSiteLive && !isCancelled && hasNewsletterModule && newsletterSummary && (
+              <NewsletterCard token={token} summary={newsletterSummary} />
+            )}
+
+            {/* ---------- Billing (placeholder for #6) ---------- */}
+            {isHubUnlocked && !isCancelled && (
+              <DashCard title="Billing">
+                <span className="inline-block rounded-full bg-cream-100 px-2.5 py-0.5 text-[11px] font-semibold text-navy-700 ring-1 ring-navy-200">
+                  Self-serve coming soon
+                </span>
+                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                  <dt className="text-navy-600">Setup fee</dt>
+                  <dd className="font-semibold text-navy-900">£{setupFee}</dd>
+                  <dt className="text-navy-600">Monthly</dt>
+                  <dd className="font-semibold text-navy-900">
+                    £{monthlyFee}/mo
+                    {foundingMember && (
+                      <span className="ml-2 inline-block rounded-full bg-ember-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ember-700">
+                        Founding rate
+                      </span>
+                    )}
+                  </dd>
+                </dl>
+                <p className="mt-3 text-xs text-navy-600">
+                  Card management, invoices and pause/cancel will live
+                  here once Stripe is wired up. For now reply to any
+                  email I&apos;ve sent.
+                </p>
+              </DashCard>
+            )}
 
             {/* ---------- This month ---------- */}
             <DashCard title="This month">
               <p className="text-sm text-navy-700">
-                {MONTHLY_CHANGE_REQUEST_LIMIT} change requests are
-                included every month — content edits, photo swaps,
-                price updates, anything in scope. One item per
-                request.
+                {MONTHLY_CHANGE_REQUEST_LIMIT} changes are included
+                every month — text edits, photo swaps, price updates,
+                anything in scope. You can bundle a few related
+                tweaks into one request.
               </p>
               <div className="mt-4 rounded-xl bg-cream-50 p-4">
                 <p className="text-xs uppercase tracking-wider text-navy-500">
@@ -307,8 +540,11 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             </DashCard>
           </div>
 
-          {/* ---------- Change requests (full width) ---------- */}
-          {!isCancelled && (
+          {/* ---------- Change requests (full width) ----------
+              Only relevant once the site is live AND the customer
+              has an actual site to request changes to. Pre-launch
+              edits use Hub Step 5 instead. */}
+          {!isCancelled && isSiteLive && (
             <div className="mt-8">
               <ChangeRequestsBlock
                 token={token}
@@ -348,6 +584,154 @@ function DashCard({
       </h2>
       <div className="mt-4">{children}</div>
     </article>
+  );
+}
+
+// ---------- Hub step nav metadata ----------
+//
+// Steps mirror what /onboarding/[token] renders. `id` matches the
+// internal StepId — the Hub reads `?step=<id>` and opens that one.
+// Display order mirrors the Hub's display order so labels stay in
+// sync.
+const HUB_STEPS: Array<{ num: string; id: string; label: string }> = [
+  { num: "01", id: "cloudflare", label: "Cloudflare account" },
+  { num: "02", id: "domain", label: "Domain & DNS" },
+  { num: "03", id: "tools", label: "Modules + tools" },
+  { num: "04", id: "content", label: "Site content" },
+  { num: "05", id: "assets", label: "Brand assets" },
+  { num: "06", id: "review", label: "Review & launch" },
+];
+
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0 text-green-600"
+    >
+      <path
+        d="M3 8l3 3 7-7"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// ---------- Stage-aware "what's next" card ----------
+//
+// Different prominent CTA for each pre-launch / launch state, so
+// the customer always knows the single most useful action they
+// can take from the dashboard. Designed to be visually distinct
+// (full-width, accent border) so it doesn't get lost among the
+// regular cards below.
+
+function NextStepCard({
+  status,
+  token,
+  siteUrl,
+  domain,
+  setupFee,
+}: {
+  status: ProspectStatus;
+  token: string;
+  siteUrl: string;
+  domain: string;
+  setupFee: number;
+}) {
+  // Each entry: title + body + CTA (label, href). When CTA is null,
+  // there's no actionable next step (e.g. "I'm building your site").
+  type NextStep = {
+    title: string;
+    body: string;
+    cta?: { label: string; href: string; external?: boolean };
+  };
+
+  let step: NextStep | null = null;
+  switch (status) {
+    case "Phase 2 Accepted":
+      step = {
+        title: "Your quote's in your inbox",
+        body: `We're a fit. Check your email for the quote (£${setupFee} setup + monthly). Once you're happy, hit the "Start onboarding intake" link in that email to fill in the details I need to set up your accounts.`,
+        cta: { label: "Re-send quote email", href: `mailto:${site.contactEmail}?subject=Resend%20my%20quote` },
+      };
+      break;
+    case "Phase 3 In Progress":
+      step = {
+        title: "Finish your intake",
+        body: "You started the intake form — pick up where you left off. Most people finish it in 5-10 minutes; you can save and resume.",
+        cta: { label: "Continue intake →", href: `/intake/${token}` },
+      };
+      break;
+    case "Phase 3 Complete":
+      step = {
+        title: "Awaiting payment",
+        body: `Intake's done — I just need the £${setupFee} setup fee to unlock your Onboarding Hub. The payment link's in your last email; reply if you can't find it and I'll re-send.`,
+        cta: { label: "Email about payment", href: `mailto:${site.contactEmail}?subject=Payment%20for%20setup` },
+      };
+      break;
+    case "Paid":
+    case "Onboarding Started":
+      step = {
+        title: "Open your Onboarding Hub",
+        body: "5 quick steps to wire up your Cloudflare account, your domain, your tools (Cal.com, Resend) and your site content. Each step saves as you go.",
+        cta: { label: "Open Onboarding Hub →", href: `/onboarding/${token}` },
+      };
+      break;
+    case "Onboarding Complete":
+      step = {
+        title: "Build queued",
+        body: "Onboarding's done — your build is in the queue. I'll email you when the preview is ready so you can review before going live.",
+      };
+      break;
+    case "Build Started":
+      step = {
+        title: "Building your site",
+        body: "Your site is being built right now. I'll email you the moment it's ready — you don't need to do anything.",
+      };
+      break;
+    case "Live":
+      step = {
+        title: "Your site is live 🎉",
+        body: domain
+          ? `${domain} is up and running. Use the change-request form below for any tweaks.`
+          : "Your site is live. Use the change-request form below for any tweaks.",
+        cta: siteUrl
+          ? { label: "Open your site ↗", href: siteUrl, external: true }
+          : undefined,
+      };
+      break;
+  }
+
+  if (!step) return null;
+
+  return (
+    <div className="rounded-2xl border-l-4 border-ember-500 bg-white p-6 shadow-card md:p-7">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-ember-700">
+        Next step
+      </p>
+      <h2 className="mt-1.5 font-serif text-xl font-semibold text-navy-900 md:text-2xl">
+        {step.title}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-navy-700 md:text-base">
+        {step.body}
+      </p>
+      {step.cta && (
+        <a
+          href={step.cta.href}
+          target={step.cta.external ? "_blank" : undefined}
+          rel={step.cta.external ? "noopener noreferrer" : undefined}
+          className="btn-primary mt-4"
+        >
+          {step.cta.label}
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -512,24 +896,28 @@ function ChangeRequestsBlock({
         Tell me what you&apos;d like updated — a phone number, a new
         photo, a price tweak, a fresh testimonial. You get{" "}
         <strong>
-          {MONTHLY_CHANGE_REQUEST_LIMIT} change requests included
-          every month
-        </strong>
-        , and each one needs to be a single item. I&apos;ll come back
-        within 48 working hours.
+          {MONTHLY_CHANGE_REQUEST_LIMIT} changes a month
+        </strong>{" "}
+        included. You can bundle a few related tweaks into one
+        request (&ldquo;update my phone AND email&rdquo; counts as
+        one). I&apos;ll come back within 48 working hours.
       </p>
 
-      {/* One-item rule callout */}
+      {/* Bundle rule callout — friendly take on the wishlist
+          guard. Genuinely list-shaped submissions (3+ numbered
+          items, multiple "additionally" paragraphs) still get
+          declined, but normal "and" requests are fine. */}
       <div className="mt-4 rounded-xl border-2 border-navy-100 bg-cream-50 p-4 text-xs leading-relaxed text-navy-700">
         <p className="font-semibold text-navy-900">
-          One item per request
+          Bundle related tweaks freely
         </p>
         <p className="mt-1">
-          If you need three things changed, send three separate
-          requests. It keeps each change clean to track and apply.
-          Multi-item submissions (numbered lists, &ldquo;Also,&rdquo;
-          paragraphs, etc.) are auto-declined and you&apos;ll be asked
-          to split them — that doesn&apos;t burn a request.
+          Two or three related changes in one request? Fine — Cowork
+          will apply them together. The exception is genuine
+          wishlists: numbered lists with 3+ separate items, or
+          paragraph-after-paragraph &ldquo;additionally&rdquo;
+          requests. Those get auto-declined with a note to split
+          them, and they don&apos;t burn a slot.
         </p>
       </div>
 

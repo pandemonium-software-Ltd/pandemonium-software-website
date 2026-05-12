@@ -56,8 +56,11 @@ import {
   classifyChangeRequest,
   type SafeTarget,
 } from "../../lib/haiku/classify-change-request";
-import { applyChangeRequestPatch } from "../../lib/change-requests/apply-patch";
+import { applyChangeRequestPatches } from "../../lib/change-requests/apply-patch";
+import { buildSiteSnapshot } from "../../lib/change-requests/site-snapshot";
 import { dispatchRepositoryEvent, GithubApiError } from "../../lib/github";
+import { notifyAdmin, adminFooter } from "../../lib/admin-notify";
+import { sendCustomerEmail } from "../notify";
 
 /** Auto-apply confidence threshold. Below this we escalate to
  *  Ben even if the model said in-scope. The customer-approval
@@ -178,17 +181,66 @@ export const step6ChangeRequests: Step = {
         /* best-effort */
       });
 
-      const isHighConfidenceInScopePatch =
+      // Two eligibility paths into the auto-action branch:
+      //   1. PATCH: classifier proposed structured patches we can
+      //      apply to Notion.
+      //   2. REBUILD-ONLY: customer's referencing an asset they've
+      //      already re-uploaded via Hub Step 4 — nothing to patch,
+      //      just dispatch a fresh build with whatever's currently
+      //      in their data.
+      const baseEligible = !!(
         classification &&
         classification.classification === "in_scope" &&
-        classification.confidence >= AUTO_APPLY_CONFIDENCE &&
-        classification.patch;
+        classification.confidence >= AUTO_APPLY_CONFIDENCE
+      );
+      const isHighConfidenceInScopePatches =
+        baseEligible &&
+        !!classification?.patches &&
+        classification.patches.length > 0;
+      const isRebuildOnly =
+        baseEligible && !!classification?.rebuildOnly;
 
-      if (!isHighConfidenceInScopePatch) {
+      if (!isHighConfidenceInScopePatches && !isRebuildOnly) {
+        // Brand-colour clarification: when Haiku flagged the request
+        // as needing a hex code from the customer, send them a
+        // friendly clarification email and escalate to Ben too (so
+        // he sees the customer is being asked for clarification and
+        // can chime in if needed).
+        const needsHex =
+          classification?.classification === "ambiguous" &&
+          classification.reasoning.startsWith("NEED_HEX_CODE:");
+        if (needsHex) {
+          try {
+            await sendCustomerEmail(env, prospect.email, "colour-clarification", {
+              customerName: firstName(prospect.name),
+              originalMessage:
+                item.kind === "post-commit"
+                  ? item.request.message
+                  : item.edit.message,
+              accountUrl: `${baseUrl}/account/${prospect.token}`,
+            });
+            summary.push(`${tag} colour-clarification emailed`);
+          } catch (e) {
+            console.warn(
+              `[step6] colour-clarification email failed: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }
+        const patchesPreview =
+          classification?.patches && classification.patches.length > 0
+            ? classification.patches
+                .map(
+                  (p) => `  - ${p.target} → "${p.newValue}"`,
+                )
+                .join("\n")
+            : null;
         const reason = classification
           ? `Cowork classified as ${classification.classification} (confidence ${classification.confidence.toFixed(2)}): ${classification.reasoning}` +
-            (classification.patch
-              ? `\nSuggested patch (NOT applied — confidence below ${AUTO_APPLY_CONFIDENCE} threshold):\n  Target: ${classification.patch.target}\n  New value: ${classification.patch.newValue}`
+            (patchesPreview
+              ? `\nSuggested patches (NOT applied — confidence below ${AUTO_APPLY_CONFIDENCE} threshold):\n${patchesPreview}`
+              : "") +
+            (needsHex
+              ? "\n\nCowork has already emailed the customer for a hex code. Reply when they respond OR if you want to set a specific hex yourself, use the Dictate-patch panel."
               : "")
           : "Cowork couldn't classify — please reply manually.";
         await escalateOnly({
@@ -203,19 +255,69 @@ export const step6ChangeRequests: Step = {
         continue;
       }
 
-      // High-confidence in-scope branch.
+      // High-confidence in-scope branch. patches + rebuildOnly are
+      // ADDITIVE — multi-intent requests ("change my tagline AND use
+      // my new logo") have BOTH a patches array AND rebuildOnly:true.
+      // We always apply patches if any, and the build dispatches
+      // unconditionally at the end of tryAutoApply. rebuildOnly is
+      // only used to know whether it's OK to proceed with ZERO
+      // patches (which it is, when the customer's signaling "just
+      // rebuild for the asset I uploaded").
+      const patchesToApply = classification.patches ?? [];
       const result = await tryAutoApply({
         prospect,
         item,
-        target: classification.patch!.target,
-        newValue: classification.patch!.newValue,
+        patches: patchesToApply,
         env,
         reasoning: classification.reasoning,
+        rebuildOnly: isRebuildOnly,
       });
       if (result.kind === "ok") {
-        summary.push(
-          `${tag} auto-applied (${classification.patch!.target})`,
-        );
+        const summaryDescriptor =
+          patchesToApply.length > 0 && isRebuildOnly
+            ? `auto-applied (${patchesToApply.map((p) => p.target).join(", ")}) + asset rebuild`
+            : isRebuildOnly
+              ? "auto-rebuild (asset refresh)"
+              : `auto-applied (${patchesToApply.map((p) => p.target).join(", ")})`;
+        summary.push(`${tag} ${summaryDescriptor}`);
+        // Tell Ben — Cowork just changed customer data + dispatched
+        // a build without his involvement. Even on the happy path
+        // he wants to know it happened so he can sanity-check.
+        const bodyHeader = isRebuildOnly
+          ? `Cowork auto-rebuilt for ${prospect.name} because they re-uploaded a brand asset (logo / photo / image).\n\n` +
+            `No data patches — the new asset is already saved in Notion, build dispatched to ship it.\n`
+          : `Cowork auto-applied a ${item.kind === "post-commit" ? "post-commit change request" : "pre-commit Hub Step 5 edit"} for ${prospect.name}.\n\n` +
+            `Patches (${classification.patches!.length}):\n${classification.patches!.map((p) => `  - ${p.target} → "${p.newValue}"`).join("\n")}\n\n`;
+        await notifyAdmin(env, {
+          category:
+            item.kind === "post-commit" ? "change-request" : "review-edit",
+          subject: isRebuildOnly
+            ? `Cowork auto-rebuilt (asset refresh) — ${prospect.name}`
+            : item.kind === "post-commit"
+              ? `Cowork auto-applied CR + built preview — ${prospect.name}`
+              : `Cowork auto-applied pre-commit edit — ${prospect.name}`,
+          body:
+            bodyHeader +
+            `Confidence: ${(classification.confidence * 100).toFixed(0)}%\n` +
+            `Cowork's reasoning:\n  ${classification.reasoning}\n\n` +
+            (item.kind === "post-commit"
+              ? `Customer's original request:\n  "${item.request.message}"\n\n` +
+                `→ A preview build is dispatching now. Customer will get an approve/reject email when it's ready.\n\n`
+              : `Customer's edit:\n  "${item.edit.message}"\n\n` +
+                `→ A live build is dispatching now (pre-commit, no customer-facing site to protect). Customer will get the "edit applied" email when the build callback fires.\n\n`) +
+            adminFooter({
+              prospectName: prospect.name,
+              prospectToken: prospect.token,
+              anchor:
+                item.kind === "post-commit"
+                  ? `cr-${item.request.id.slice(0, 8)}`
+                  : `re-${item.edit.id.slice(0, 8)}`,
+            }),
+        }).catch((e) => {
+          console.warn(
+            `[step6] admin notify (auto-apply) failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        });
       } else {
         failures.push(`${tag} ${result.reason}`);
         await escalateOnly({
@@ -249,25 +351,48 @@ type AutoApplyResult = { kind: "ok" } | { kind: "fail"; reason: string };
 async function tryAutoApply(args: {
   prospect: ProspectRecord;
   item: Actionable;
-  target: SafeTarget;
-  newValue: string;
+  patches: Array<{ target: SafeTarget; newValue: string }>;
   env: Parameters<Step["run"]>[1];
   reasoning: string;
+  /** Rebuild-only intent: customer re-uploaded an asset, no text
+   *  patch to apply. We skip applyChangeRequestPatches entirely
+   *  (saves the Notion write) and just dispatch the build. The
+   *  audit entry stamps coworkRebuildOnly:true so /admin shows
+   *  why nothing was patched. */
+  rebuildOnly?: boolean;
 }): Promise<AutoApplyResult> {
-  const apply = await applyChangeRequestPatch({
-    prospect: args.prospect,
-    target: args.target,
-    newValue: args.newValue,
-  });
-  if (!apply.ok) {
-    return { kind: "fail", reason: `apply failed: ${apply.reason}` };
-  }
+  // Apply patches if any. patches + rebuildOnly are additive:
+  // a multi-intent request can have both a text patch AND a
+  // rebuild-only signal. We apply patches whenever they exist,
+  // regardless of rebuildOnly. Skip the applier ONLY when there
+  // are zero patches (which can happen when rebuildOnly:true is
+  // the sole signal — pure asset refresh, no Notion changes).
+  let patchesPayload: Array<{
+    target: SafeTarget;
+    newValue: unknown;
+    previousValue: unknown;
+  }> = [];
 
-  const patchPayload = {
-    target: args.target,
-    newValue: args.newValue as unknown,
-    previousValue: apply.previousValue,
-  };
+  if (args.patches.length > 0) {
+    const apply = await applyChangeRequestPatches({
+      prospect: args.prospect,
+      patches: args.patches,
+    });
+    if (!apply.ok) {
+      return { kind: "fail", reason: `apply failed: ${apply.reason}` };
+    }
+    // Persist all patches in audit-log shape (each with its own
+    // previousValue so reject can revert in REVERSE order).
+    patchesPayload = apply.applied.map((p) => ({
+      target: p.target,
+      newValue: p.newValue as unknown,
+      previousValue: p.previousValue,
+    }));
+  }
+  // When rebuildOnly is set without patches, Notion data is
+  // unchanged; the build picks up the customer's most recent asset
+  // upload from the existing data. When both are set, patches land
+  // on Notion AND the build refreshes assets.
 
   // Generate per-build preview-access token (set as
   // PREVIEW_ACCESS_TOKEN var on the customer-site Worker version,
@@ -283,7 +408,14 @@ async function tryAutoApply(args: {
     const approvalToken = randomHex(32);
     await patchChangeRequest(args.prospect.pageId, args.item.request.id, {
       status: "in-progress",
-      coworkPatch: patchPayload,
+      // Stamp patches even when empty for rebuild-only — gives the
+      // operator a clear "0 patches" audit entry in /admin instead
+      // of an unstamped row.
+      coworkPatches: patchesPayload,
+      // Clear legacy single-patch field on write — keeps Notion
+      // tidy after migration so the reader-fallback never picks
+      // up stale single-patch data.
+      coworkPatch: undefined,
       coworkPatchAppliedAt: new Date().toISOString(),
       customerApprovalToken: approvalToken,
       previewAccessToken,
@@ -293,7 +425,8 @@ async function tryAutoApply(args: {
     // preview Worker directly.
     await patchReviewEdit(args.prospect.pageId, args.item.edit.id, {
       status: "applied",
-      coworkPatch: patchPayload,
+      coworkPatches: patchesPayload,
+      coworkPatch: undefined,
       coworkPatchAppliedAt: new Date().toISOString(),
     });
   }
@@ -526,47 +659,13 @@ function formatBreakdown(
   return `${prefix}:${item.id.slice(0, 8)}[${item.status},${ageMin}min,classified=${!!item.coworkClassification},escalated=${!!item.coworkEscalatedAt},applied=${!!item.coworkPatchAppliedAt}${"previewVersionId" in item ? `,preview=${!!item.previewVersionId}` : ""}]`;
 }
 
-/** Build the SiteSnapshot the classifier reads. Pulled from the
- *  same place the adapter reads — content step preferred, prospect
- *  record fallback. */
-function buildSiteSnapshot(prospect: ProspectRecord): {
-  business: {
-    name: string;
-    type: string;
-    location: string;
-    contactName?: string;
-    phoneDisplay?: string;
-    publicEmail?: string;
-    address?: string;
-    serviceArea?: string;
-  };
-  copy: { tagline?: string; aboutBlurb?: string };
-} {
-  const ob = (prospect.onboardingData ?? {}) as Record<string, unknown>;
-  const content = (ob.content ?? {}) as Record<string, unknown>;
-  const business = (content.business ?? {}) as Record<string, unknown>;
-  return {
-    business: {
-      name: prospect.business ?? "",
-      type: prospect.businessType ?? "",
-      location: prospect.location ?? "",
-      contactName: optionalString(business.contactName),
-      phoneDisplay: optionalString(business.phoneDisplay) ?? prospect.phone,
-      publicEmail: optionalString(business.publicEmail) ?? prospect.email,
-      address: optionalString(business.address),
-      serviceArea: optionalString(business.serviceArea),
-    },
-    copy: {
-      tagline: optionalString(content.tagline),
-      aboutBlurb: optionalString(content.aboutBlurb),
-    },
-  };
-}
-
-function optionalString(v: unknown): string | undefined {
-  if (typeof v !== "string") return undefined;
-  const t = v.trim();
-  return t.length > 0 ? t : undefined;
+/** "Alex Smith" → "Alex". Fallback to "there" on empty. Mirrors the
+ *  helper in the API routes so customer emails address them by
+ *  first name without duplicating logic. */
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0]!;
 }
 
 function randomHex(chars: number): string {

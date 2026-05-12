@@ -133,12 +133,39 @@ export type TrustSignals = {
 export type ModuleConfig = {
   /** Cal.com event link if booking module bought. */
   booking?: { calcomUrl: string };
-  /** Resend audience id + sender email if newsletter bought. */
-  newsletter?: { senderEmail: string };
+  /** Newsletter module — subscribe widget config + sender info.
+   *  When present, the customer-site footer renders the
+   *  SubscribeWidget. Submissions POST to the marketing-site
+   *  endpoint at `apiOrigin` with `customerToken`. */
+  newsletter?: {
+    customerToken: string;
+    widgetHeadline: string;
+    widgetBody: string;
+    widgetCta: string;
+    apiOrigin: string;
+    /** Resend sender email — used by the dashboard composer's
+     *  preview + the Phase 1B send pipeline. */
+    senderEmail?: string;
+  };
   /** Form-recipient email if enquiry form bought. */
   enquiry?: { recipientEmail: string };
   /** Public GBP listing URL if GBP audit bought. */
   gbp?: { listingUrl: string };
+  /** Active promotional offer — only present when the Offers
+   *  module was bought AND the customer has set an offer whose
+   *  date range straddles "now" (the build-time `now`, but the
+   *  rendered strip also checks at render time to handle stale
+   *  builds). All fields the customer wrote in Hub Step 4 are
+   *  passed through verbatim. */
+  offer?: {
+    headline: string;
+    body?: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    /** ISO date YYYY-MM-DD inclusive. */
+    startsAt: string;
+    endsAt: string;
+  };
 };
 
 export type BrandAssets = {

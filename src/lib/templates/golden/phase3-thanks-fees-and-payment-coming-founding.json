@@ -9,7 +9,7 @@
     "foundingMember": true
   },
   "expected": {
-    "subject": "Intake received — your fee summary",
-    "body": "Hi Pat,\n\nThanks for completing the intake form.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n\nPricing:\n  Setup (one-off):  £99\n  Monthly:          £15/mo\n\nYou qualified for Founding Member pricing — flat £99 setup +\n£15/month for everything, locked in for as long as you stay\nsubscribed.\n\nWhat happens next: in a moment you'll get a second email with\nyour onboarding hub link. The hub walks you through 4-5 short\nsteps (~30 minutes total) to set up your Cloudflare account,\nyour domain, your brand assets, and pick a launch date.\n\nI'll handle everything technical from there — DNS, hosting, TLS,\nsender domain setup, the lot. You'll get an email each time I\nmake progress.\n\n— Ben"
+    "subject": "Got your details — here's your quote",
+    "body": "Hi Pat,\n\nThanks for filling that in. Here's a quick summary.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n\nThe cost:\n  Setup (one-off):  £99\n  Monthly:          £15/mo\n\nYou qualified for our Founding Member rate — flat £99 setup\nplus £15/month, locked in for as long as you stay subscribed.\n\nWhat happens next: in a minute you'll get a second email with\na link to your onboarding hub. That's where we'll work through\na short checklist (~30 minutes total) — your web address, your\nphotos, your launch date.\n\nI'll handle all the behind-the-scenes work (hosting, secure\nconnection, your custom email setup, building the site\nitself). You'll get an email at every step so you always\nknow what's happening.\n\n— Ben"
   }
 }

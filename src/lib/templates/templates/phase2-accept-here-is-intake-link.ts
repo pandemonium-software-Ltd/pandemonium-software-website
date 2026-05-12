@@ -26,32 +26,31 @@ export const phase2AcceptHereIsIntakeLink: Template = {
   riskTier: "low",
   required: ["customerName", "intakeUrl", "password"],
   cta: { urlKey: "intakeUrl", label: "Start the intake form" },
-  subject: "Great fit — let's get the details, {{customerName}}",
+  subject: "We're a good match — let's get the details",
   body: `Hi {{customerName}},
 
-I've reviewed your qualification answers — looks like a great fit
-for what I do.
+Had a look at your answers — looks like a great fit. I'd be
+glad to build your site.
 
-Next step: a more detailed intake form. This is where we lock in
-the modules you want (online booking, enquiry form, newsletter,
-Google Business Profile setup), your brand colours and fonts,
-opening hours — everything I need to build your site exactly the
-way you want it.
+Next step is a slightly longer form where you tell me the
+specifics: which add-ons you want (online booking, enquiry
+form, newsletter, Google listing setup), your brand colours,
+opening hours, etc. Everything I need to build your site
+the way you want it.
 
-About 15-20 minutes; you can save a section and come back later.
-Use the button below to open the form.
+About 15-20 minutes. You can save and come back to it any time.
 
-You'll also need this password to sign in to all your screens
-(intake, onboarding hub, account dashboard later):
+You'll also need this password to sign in to your hub and
+dashboard:
 
   {{password}}
 
-Save this email — the password's only emailed once. If you ever
-lose it, every login page has a "Forgot password" link that'll
-email you a new one.
+Save this email — I only send the password once. If you ever
+lose it, there's a "Forgot password" link on every sign-in
+page that'll send you a new one.
 
-Once you submit the intake, I'll calculate your setup + monthly
-fees and walk you through what happens next.
+Once you've finished the form, I'll work out your fees and
+take it from there.
 
 — Ben`,
 };

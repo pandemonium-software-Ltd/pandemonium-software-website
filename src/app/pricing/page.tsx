@@ -149,12 +149,13 @@ export default function PricingPage() {
                   q: "What if I need changes later?",
                   a: (
                     <p>
-                      Your monthly fee includes 3 change requests per
+                      Your monthly fee includes 2 change requests per
                       month — a new phone number, a swapped photo, a
-                      fresh testimonial, a price update. One item per
-                      request keeps each change clean to track and apply.
-                      Bigger changes like new pages or redesigns I quote
-                      separately and fairly before any work starts.
+                      fresh testimonial, a price update. You can bundle
+                      a few related tweaks into one request (Cowork will
+                      apply them together). Bigger changes like new
+                      pages or redesigns I quote separately and fairly
+                      before any work starts.
                     </p>
                   ),
                 },
@@ -199,11 +200,10 @@ export default function PricingPage() {
                         <li>UK-based support from a real person</li>
                       </ul>
                       <p className="mt-4">
-                        Anything beyond your 3 monthly requests, or
-                        bigger than a single-item content edit — a new
-                        page, a section redesign, a custom feature — I
-                        quote for separately and fairly before any work
-                        starts.
+                        Anything beyond your 2 monthly changes, or
+                        bigger than a tweak — a new page, a section
+                        redesign, a custom feature — I quote for
+                        separately and fairly before any work starts.
                       </p>
                     </>
                   ),

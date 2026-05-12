@@ -339,10 +339,10 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
     const calcomUrl = optionalString(tools.calcomBookingUrl);
     if (calcomUrl) modules.booking = { calcomUrl };
   }
-  if (selected.has("Newsletter")) {
-    const senderEmail = optionalString(tools.resendSignupEmail);
-    if (senderEmail) modules.newsletter = { senderEmail };
-  }
+  // Newsletter sender email is set further below alongside the
+  // full newsletter widget config (single source of truth so the
+  // customer-site template gets a complete object).
+
   if (selected.has("Enquiry Form")) {
     // Enquiry form posts back to a per-customer endpoint (Phase 2C
     // C5.3 wires that). For now, default to the customer's contact
@@ -352,6 +352,93 @@ export function adaptProspect(prospect: ProspectRecord): SiteGeneratorInput {
   if (selected.has("Google Business Profile Setup/Audit")) {
     const listingUrl = optionalString(tools.gbpUrl);
     if (listingUrl) modules.gbp = { listingUrl };
+  }
+  // Newsletter — emit the subscribe widget config when the
+  // customer's bought the module. The widget renders in the
+  // footer regardless of whether subscribers exist; what gates
+  // it is the module being bought + the customer having a
+  // verified Resend sender domain (Step 3 Tools).
+  if (selected.has("Newsletter")) {
+    const newsletterCfg = (content.newsletter ?? {}) as {
+      config?: {
+        widgetHeadline?: unknown;
+        widgetBody?: unknown;
+        widgetCta?: unknown;
+        senderEmailLocal?: unknown;
+      };
+    };
+    const cfg = newsletterCfg.config ?? {};
+    // Build the sender email: customer's local-part + their
+    // domain. Fall back to whatever was captured in Step 3 Tools
+    // (resendSignupEmail) if newsletter setup hasn't been done.
+    const senderLocal = optionalString(cfg.senderEmailLocal);
+    const customerDomain =
+      ((prospect.onboardingData ?? {}) as {
+        domain?: { domain?: unknown };
+      }).domain?.domain;
+    const customerDomainStr =
+      typeof customerDomain === "string" ? customerDomain : null;
+    const senderEmail =
+      senderLocal && customerDomainStr
+        ? `${senderLocal}@${customerDomainStr}`
+        : optionalString(tools.resendSignupEmail);
+    modules.newsletter = {
+      customerToken: prospect.token,
+      // Adapter applies the same defaults as the Hub form preview
+      // so the customer-site template can render directly without
+      // a fallback layer.
+      widgetHeadline:
+        optionalString(cfg.widgetHeadline) ?? "Stay in the loop",
+      widgetBody:
+        optionalString(cfg.widgetBody) ??
+        "One short update a month — tips, offers, news. No spam.",
+      widgetCta: optionalString(cfg.widgetCta) ?? "Subscribe",
+      // Marketing site origin — submissions POST here. Built-time
+      // env so each Worker bundle ships with a known endpoint.
+      apiOrigin:
+        process.env.NEXT_PUBLIC_SITE_URL ??
+        "https://modu-forge.co.uk",
+      senderEmail,
+    };
+  }
+  // Offers — only emit when the customer has a current offer
+  // configured. The customer-site does an additional date-range
+  // check at render time, so a stale build won't show an expired
+  // strip indefinitely. We still skip emitting expired offers here
+  // (saves a render pass that'd do nothing).
+  if (selected.has("Offers")) {
+    const offersRaw = (content.offers ?? {}) as {
+      current?: {
+        headline?: unknown;
+        body?: unknown;
+        ctaLabel?: unknown;
+        ctaUrl?: unknown;
+        startsAt?: unknown;
+        endsAt?: unknown;
+      };
+    };
+    const cur = offersRaw.current;
+    if (
+      cur &&
+      typeof cur.headline === "string" &&
+      cur.headline.trim() &&
+      typeof cur.startsAt === "string" &&
+      typeof cur.endsAt === "string"
+    ) {
+      // Skip emit if the offer has already ended at build time —
+      // saves the site shipping a strip that's stale on day one.
+      const today = new Date().toISOString().slice(0, 10);
+      if (cur.endsAt >= today) {
+        modules.offer = {
+          headline: cur.headline.trim(),
+          body: optionalString(cur.body),
+          ctaLabel: optionalString(cur.ctaLabel),
+          ctaUrl: optionalString(cur.ctaUrl),
+          startsAt: cur.startsAt,
+          endsAt: cur.endsAt,
+        };
+      }
+    }
   }
 
   // --- Custom copy (all optional) ---

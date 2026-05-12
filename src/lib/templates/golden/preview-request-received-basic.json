@@ -6,7 +6,7 @@
     "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
   },
   "expected": {
-    "subject": "Got it — building your site preview",
-    "body": "Hi Alex,\n\nGot your preview request. I'm starting work on your site now.\n\nWhat happens next:\n  1. I build your site preview from the brand assets, modules and\n     review notes you've provided. Typically 3-5 working days.\n  2. You'll get another email with a link to view the preview.\n  3. From there you can request up to 3 rounds of pre-launch edits\n     and then commit to launch on your chosen go-live date.\n\nWhile you wait:\n  - Your hub is read-only-ish for the review step but you can still\n    edit Steps 1-4 if anything needs updating.\n  - If you remember anything else important, hit reply to this\n    email and I'll fold it into the preview before sending.\n\nThanks,\nBen (and the ModuForge ops assistant)"
+    "subject": "Got it — I'm building your site now",
+    "body": "Hi Alex,\n\nGot your request — I'm starting to build your site preview now.\n\nWhat happens next:\n  1. I'll put together a working preview from the photos, copy\n     and modules you've shared. Usually takes 3-5 working days.\n  2. You'll get another email with a link to view it.\n  3. After that you can request up to 3 free rounds of tweaks,\n     then sign off on your launch date.\n\nWhile you wait:\n  • You can still update earlier steps in your hub if you spot\n    something — just open the hub from the button below.\n  • Remembered something else important? Reply to this email\n    and I'll add it before the preview goes out.\n\n— Ben"
   }
 }

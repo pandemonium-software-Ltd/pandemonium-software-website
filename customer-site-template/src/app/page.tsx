@@ -13,9 +13,11 @@
 import Link from "next/link";
 import Image from "next/image";
 import { SITE_DATA } from "@/lib/site-data";
+import OfferStrip from "@/components/OfferStrip";
 
 export default function HomePage() {
-  const { business, services, copy, brandAssets } = SITE_DATA;
+  const { business, services, copy, brandAssets, modules } = SITE_DATA;
+  const offer = modules.offer;
   const tagline =
     copy.tagline ??
     `${business.name} — trusted local ${business.type.toLowerCase()}.`;
@@ -34,6 +36,22 @@ export default function HomePage() {
 
   return (
     <>
+      {/* ---------- Promotional offer strip (when active) ----------
+          Renders at the very top of the page (above the hero) when
+          the customer's Offers module has an active offer in date
+          range. Hides via client-side date check + sessionStorage
+          dismissal. */}
+      {offer && (
+        <OfferStrip
+          headline={offer.headline}
+          body={offer.body}
+          ctaLabel={offer.ctaLabel}
+          ctaUrl={offer.ctaUrl}
+          startsAt={offer.startsAt}
+          endsAt={offer.endsAt}
+        />
+      )}
+
       {/* ---------- Hero: full-width banner ---------- */}
       {/* The hero photo fills the section as a CSS background,
           with a dark overlay for text legibility. Header height

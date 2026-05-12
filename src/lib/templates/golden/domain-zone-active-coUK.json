@@ -6,7 +6,7 @@
     "domain": "alexsbakery.co.uk"
   },
   "expected": {
-    "subject": "alexsbakery.co.uk is verified — ready for launch ✓",
-    "body": "Hi Alex,\n\nYour domain alexsbakery.co.uk is now verified and connected to Cloudflare.\n\nNext up: I'll deploy your site to this domain when you give the\ngreen light on the final review step in your onboarding hub. You'll\nget one more email from me when the site goes live.\n\n— Cowork (your ModuForge ops assistant)"
+    "subject": "alexsbakery.co.uk is all set — ready for launch ✓",
+    "body": "Hi Alex,\n\nYour web address alexsbakery.co.uk is connected and ready.\n\nThe next step is yours: when you're happy with the site\npreview, sign off on the final step in your onboarding hub\nand I'll put it live on the date you've chosen.\n\n— Ben"
   }
 }

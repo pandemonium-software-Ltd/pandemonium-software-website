@@ -25,6 +25,7 @@ import { redirect } from "next/navigation";
 import { getProspectByToken, patchChangeRequest } from "@/lib/notion-prospects";
 import { dispatchRepositoryEvent, GithubApiError } from "@/lib/github";
 import { getServerEnv } from "@/lib/env";
+import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,21 @@ export default async function ApproveChangePage({
         : e instanceof Error
           ? e.message
           : String(e);
+    await notifyAdmin(env, {
+      category: "preview",
+      subject: `Customer approved CR but PROMOTE DISPATCH FAILED — ${prospect.name}`,
+      body:
+        `${prospect.name} clicked Approve on a change request preview, but the promote workflow dispatch failed.\n\n` +
+        `CR: ${crId.slice(0, 8)}…\n` +
+        `Original ask:\n  "${cr.message}"\n\n` +
+        `Dispatch error: ${msg}\n\n` +
+        `→ The customer's approval IS stamped in Notion. You need to re-trigger the promote workflow manually so their change goes live.\n\n` +
+        adminFooter({
+          prospectName: prospect.name,
+          prospectToken: token,
+          anchor: `cr-${crId.slice(0, 8)}`,
+        }),
+    }).catch(() => {});
     return (
       <Wrapper
         title="Couldn't promote yet"
@@ -181,6 +197,25 @@ export default async function ApproveChangePage({
       />
     );
   }
+
+  // Notify admin: customer approved, promote dispatched. The
+  // "promote-resolved" admin email comes later when the build
+  // callback fires; this is the up-front signal so Ben sees the
+  // full life-cycle.
+  await notifyAdmin(env, {
+    category: "preview",
+    subject: `Customer approved CR — ${prospect.name}`,
+    body:
+      `${prospect.name} clicked Approve on a change-request preview. Promote workflow dispatched; the live site will update in ~2 min.\n\n` +
+      `CR: ${crId.slice(0, 8)}…\n` +
+      `Original ask:\n  "${cr.message}"\n\n` +
+      `You'll get a follow-up "Promoted CR to live" email once the deploy completes.\n\n` +
+      adminFooter({
+        prospectName: prospect.name,
+        prospectToken: token,
+        anchor: `cr-${crId.slice(0, 8)}`,
+      }),
+  }).catch(() => {});
 
   // Redirect to a "promoting" page that polls for the final state.
   // Keeps the URL clean (no token in the address bar after click).

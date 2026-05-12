@@ -18,6 +18,25 @@
 
 import { z } from "zod";
 import type { ProspectRecord, ProspectStatus } from "./notion-prospects";
+import {
+  OFFER_HEADLINE_MAX,
+  OFFER_BODY_MAX,
+  OFFER_CTA_LABEL_MAX,
+  OFFER_CTA_URL_MAX,
+} from "./offers/limits";
+import {
+  NEWSLETTER_SENDER_NAME_MAX,
+  NEWSLETTER_SENDER_LOCAL_MAX,
+  NEWSLETTER_WIDGET_HEADLINE_MAX,
+  NEWSLETTER_WIDGET_BODY_MAX,
+  NEWSLETTER_WIDGET_CTA_MAX,
+  NEWSLETTER_SUBJECT_MAX,
+  NEWSLETTER_BODY_MAX,
+  NEWSLETTER_HISTORY_CAP,
+  SUBSCRIBER_CAP_PER_CUSTOMER,
+  SUBSCRIBER_EMAIL_MAX,
+  SUBSCRIBER_FIRST_NAME_MAX,
+} from "./newsletter/limits";
 
 // ---------- Step identity ----------
 
@@ -96,8 +115,8 @@ export function isOnboardingUnlocked(status: string): boolean {
 // Once the customer signs off Step 5 (status flips to Onboarding
 // Complete), the Hub becomes a read-only archive — any further
 // changes go through the customer dashboard's "Need a change?"
-// form and the post-launch monthly allowance (3 requests/month,
-// one item per request).
+// form and the post-launch monthly allowance (2 changes/month,
+// related tweaks can be bundled into one request).
 const ONBOARDING_MUTABLE_STATUSES = new Set<ProspectStatus>([
   "Paid",
   "Onboarding Started",
@@ -368,6 +387,177 @@ const step4AssetsSchema = z.object({
 // content post-payment, when the customer is committed and willing
 // to invest the time. Also the raw material for Haiku copy assist
 // (Stage 2C C5.5).
+/** Offers — promotional strip the customer manages from their
+ *  dashboard (post-launch) AND optionally pre-sets in the Hub's
+ *  Content step. Single active offer at a time; previous offers
+ *  archived to `history` so the customer can re-use copy.
+ *
+ *  Stored under `content.offers` so the existing Step 4 save
+ *  pipeline carries it without a new API surface.
+ *
+ *  Phase 1 (current): customer types it, site renders it when
+ *  date range is current. Phase 2: Cowork classification + admin
+ *  moderation + cron-scheduled activate/expire. */
+const offerEntrySchema = z.object({
+  id: z.string(),
+  headline: z.string().trim().min(1).max(OFFER_HEADLINE_MAX),
+  /** Short one-liner / two-liner under the headline. Keep it
+   *  punchy — long copy breaks the offer-strip layout. */
+  body: z.string().trim().max(OFFER_BODY_MAX).optional(),
+  ctaLabel: z.string().trim().max(OFFER_CTA_LABEL_MAX).optional(),
+  /** Internal path or external URL. Empty = no button. */
+  ctaUrl: z.string().trim().max(OFFER_CTA_URL_MAX).optional(),
+  /** ISO date string YYYY-MM-DD (no time). The site checks against
+   *  the visitor's local date — runs from 00:00 startsAt to 23:59
+   *  endsAt inclusive in the customer's site timezone. */
+  startsAt: z.string().trim().min(1),
+  endsAt: z.string().trim().min(1),
+  createdAt: z.string().optional(),
+  /** Phase 2 — moderation status. For Phase 1 every customer-
+   *  written offer is treated as "active" within its date range. */
+  status: z
+    .enum(["draft", "pending-review", "scheduled", "active", "expired", "rejected"])
+    .default("active"),
+  /** Cowork audit fields, parallel to change-requests / review-edits. */
+  coworkClassification: z.enum(["in_scope", "out_of_scope", "ambiguous"]).optional(),
+  coworkConfidence: z.number().min(0).max(1).optional(),
+  coworkReasoning: z.string().max(2000).optional(),
+  adminReply: z.string().max(2000).optional(),
+});
+
+export type OfferEntry = z.infer<typeof offerEntrySchema>;
+
+const offersSchema = z.object({
+  /** The single active or scheduled offer. Submitting a new one
+   *  while one is current replaces it (the old one moves to
+   *  history). */
+  current: offerEntrySchema.optional(),
+  /** Previous offers, newest first. Capped at 24 entries — keeps
+   *  the Notion blob under the chunked rich_text 200KB ceiling. */
+  history: z.array(offerEntrySchema).max(24).optional(),
+});
+
+/** Newsletter module data — embedded in content slice for the
+ *  same reason as offers: piggybacks on the existing Step 4
+ *  save pipeline. Three sub-blobs:
+ *    config      — customer-set sender + widget copy (Step 4)
+ *    subscribers — opt-in list, capped per customer (public
+ *                  subscribe endpoint writes here)
+ *    drafts      — newsletters being composed (dashboard, Phase 1B)
+ *    history     — sent newsletters, audit trail */
+const subscriberSchema = z.object({
+  id: z.string(),
+  email: z.string().trim().email().max(SUBSCRIBER_EMAIL_MAX),
+  firstName: z.string().trim().max(SUBSCRIBER_FIRST_NAME_MAX).optional(),
+  /** ISO. Stamped when the visitor submitted the form. */
+  subscribedAt: z.string(),
+  /** ISO. Stamped when the visitor clicked the confirmation link.
+   *  We DON'T send newsletters to subscribers without this. */
+  confirmedAt: z.string().optional(),
+  /** ISO. Stamped when the recipient unsubscribed. Kept (rather
+   *  than deleted) for audit + so the same email re-subscribing
+   *  re-uses the same row instead of creating a duplicate. */
+  unsubscribedAt: z.string().optional(),
+  /** Random tokens — used in confirm + unsubscribe URLs. Kept on
+   *  the record so revocation is trivial (rotate the token). */
+  confirmationToken: z.string(),
+  unsubscribeToken: z.string(),
+});
+
+export type Subscriber = z.infer<typeof subscriberSchema>;
+
+const newsletterDraftSchema = z.object({
+  id: z.string(),
+  /** UI status — sending happens immediately on submit, so this
+   *  goes from draft → sending → sent (or failed) within seconds. */
+  status: z.enum(["draft", "sending", "sent", "failed"]).default("draft"),
+  /** One of the four built-in templates. */
+  template: z.enum([
+    "announcement",
+    "monthly-update",
+    "promo",
+    "personal-note",
+  ]),
+  subject: z.string().trim().min(1).max(NEWSLETTER_SUBJECT_MAX),
+  body: z.string().trim().min(1).max(NEWSLETTER_BODY_MAX),
+  /** R2 key for an optional inline image. */
+  imageKey: z.string().optional(),
+  ctaLabel: z.string().trim().max(40).optional(),
+  ctaUrl: z.string().trim().max(500).optional(),
+  createdAt: z.string(),
+});
+
+export type NewsletterDraft = z.infer<typeof newsletterDraftSchema>;
+
+const newsletterHistoryEntrySchema = newsletterDraftSchema.extend({
+  sentAt: z.string(),
+  recipientCount: z.number().int().nonnegative(),
+  /** Resend's batch id — useful for tracking delivery via their
+   *  dashboard / API. */
+  resendBatchId: z.string().optional(),
+  /** Open + click counts come from Resend webhooks (Phase 2). */
+  openCount: z.number().int().nonnegative().optional(),
+  clickCount: z.number().int().nonnegative().optional(),
+});
+
+export type NewsletterHistoryEntry = z.infer<
+  typeof newsletterHistoryEntrySchema
+>;
+
+const newsletterSchema = z.object({
+  /** Sender + widget config — set in Hub Step 4 pre-launch. */
+  config: z
+    .object({
+      senderName: z
+        .string()
+        .trim()
+        .max(NEWSLETTER_SENDER_NAME_MAX)
+        .optional(),
+      /** Local-part only, e.g. "news" → news@<customerDomain>.
+       *  Domain comes from prospect.onboardingData.domain.domain.
+       *  Lowercase + RFC-friendly chars enforced at the form. */
+      senderEmailLocal: z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(/^[a-z0-9._-]+$/, "Letters, numbers, dot, dash, underscore only")
+        .max(NEWSLETTER_SENDER_LOCAL_MAX)
+        .optional(),
+      /** Subscribe widget copy — defaults applied at render time
+       *  if missing. */
+      widgetHeadline: z
+        .string()
+        .trim()
+        .max(NEWSLETTER_WIDGET_HEADLINE_MAX)
+        .optional(),
+      widgetBody: z
+        .string()
+        .trim()
+        .max(NEWSLETTER_WIDGET_BODY_MAX)
+        .optional(),
+      widgetCta: z
+        .string()
+        .trim()
+        .max(NEWSLETTER_WIDGET_CTA_MAX)
+        .optional(),
+    })
+    .optional(),
+  /** Subscribers — opt-in list. Cap enforced server-side before
+   *  appending. */
+  subscribers: z
+    .array(subscriberSchema)
+    .max(SUBSCRIBER_CAP_PER_CUSTOMER)
+    .optional(),
+  /** Drafts in progress (Phase 1B). Capped at 5 — composing more
+   *  than that is a code smell. */
+  drafts: z.array(newsletterDraftSchema).max(5).optional(),
+  /** Sent newsletter audit log, newest first. */
+  history: z
+    .array(newsletterHistoryEntrySchema)
+    .max(NEWSLETTER_HISTORY_CAP)
+    .optional(),
+});
+
 const step4ContentSchema = z.object({
   /** Optional override of the Phase 3 intake tagline; ≤200 chars. */
   tagline: z.string().trim().max(200).optional(),
@@ -477,6 +667,16 @@ const step4ContentSchema = z.object({
         .optional(),
     })
     .optional(),
+  /** Offers module — homepage promo strip. Only customers with
+   *  moduleOffers selected see the UI for this; the data is
+   *  optional everywhere so non-Offers customers carry an empty
+   *  field without complaint. */
+  offers: offersSchema.optional(),
+  /** Newsletter module — sender config + opt-in subscriber list
+   *  + sent history. Only customers with moduleNewsletter selected
+   *  see the UI for this; the data is optional throughout so
+   *  non-Newsletter customers carry an empty slice. */
+  newsletter: newsletterSchema.optional(),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -519,7 +719,24 @@ const reviewEditSchema = z.object({
   coworkClassification: z.enum(["in_scope", "out_of_scope", "ambiguous"]).optional(),
   coworkConfidence: z.number().min(0).max(1).optional(),
   coworkReasoning: z.string().max(2000).optional(),
-  /** Pre-commit patches use the same shape as post-commit. */
+  /** Pre-commit patches use the same shape as post-commit.
+   *  Multi-field requests produce an array > 1; reverts run in
+   *  REVERSE order. The legacy single-object `coworkPatch` field
+   *  is kept for back-compat reads only — readers should treat
+   *  `[coworkPatch]` as a 1-element array if `coworkPatches` is
+   *  absent. New writes use `coworkPatches` only. */
+  coworkPatches: z
+    .array(
+      z.object({
+        target: z.string(),
+        newValue: z.unknown(),
+        previousValue: z.unknown(),
+        serviceName: z.string().optional(),
+        faqQuestion: z.string().optional(),
+      }),
+    )
+    .optional(),
+  /** @deprecated — pre-multi-patch field. Read-only fallback. */
   coworkPatch: z
     .object({
       target: z.string(),
@@ -561,6 +778,27 @@ const step5ReviewSchema = z.object({
   notes: z.string().trim().max(2000).optional(),
 });
 
+/** Branding slice — customer-controlled overrides of the brand
+ *  colours derived from Phase 3 intake. The site-generator adapter
+ *  reads `ob.branding.brandColorPrimary` / `brandColorSecondary`
+ *  in preference to Phase 3 values. Introduced when we let Cowork
+ *  auto-apply colour changes via change-request patches; the slice
+ *  has no dedicated Hub step (overrides are operator- or
+ *  classifier-driven). */
+const HEX_RE_ZOD = /^#[0-9a-fA-F]{6}$/;
+const brandingSchema = z.object({
+  brandColorPrimary: z
+    .string()
+    .regex(HEX_RE_ZOD, "Must be a 6-digit hex like #1a2b3c")
+    .optional(),
+  brandColorSecondary: z
+    .string()
+    .regex(HEX_RE_ZOD, "Must be a 6-digit hex like #1a2b3c")
+    .optional(),
+  /** Optional Vibe override — same enum the adapter accepts. */
+  vibe: z.string().optional(),
+});
+
 export const onboardingDataSchema = z.object({
   cloudflare: step1CloudflareSchema.optional(),
   domain: step2DomainSchema.optional(),
@@ -568,6 +806,10 @@ export const onboardingDataSchema = z.object({
   content: step4ContentSchema.optional(),
   assets: step4AssetsSchema.optional(),
   review: step5ReviewSchema.optional(),
+  /** Branding overrides. Not surfaced as a Hub step — populated
+   *  via Cowork patches (e.g. customer says "change my primary
+   *  colour to #ff5500"). */
+  branding: brandingSchema.optional(),
 });
 
 export type OnboardingData = z.infer<typeof onboardingDataSchema>;

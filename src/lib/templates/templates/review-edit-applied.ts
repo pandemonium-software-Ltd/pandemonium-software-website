@@ -27,24 +27,22 @@ export const reviewEditApplied: Template = {
   riskTier: "low",
   required: ["customerName", "hubUrl"],
   cta: { urlKey: "hubUrl", label: "Open your onboarding" },
-  subject: "Your edit is on the preview ✓",
+  subject: "Your change is on the preview ✓",
   body: `Hi {{customerName}},
 
-Your edit is applied — your preview's been updated.
+Your edit is done — the preview now shows the change you
+asked for.
 
-Open your onboarding to view it:
+Tap the button below to open your hub and take a look. The
+preview sits inside the Review step. If you want to view it
+bigger, hit the full-screen button on the top-right.
 
-  {{hubUrl}}
+If something still isn't right, just submit another edit on
+the Review step — you've got up to 3 free rounds before
+launch.
 
-The preview only loads inside your dashboard (no shareable
-link, by design). Tap the full-screen button on the top-right
-of the preview window to view it big.
+Once everything looks the way you want, hit "Submit and
+commit site" on that same step to lock in your launch.
 
-If anything's not right, request another edit from Step 6
-Review — you've got 3 edits in total before launch.
-
-Once you're happy with everything, hit Commit on the Hub and
-we'll go live with the final version.
-
-— Ben (via Cowork)`,
+— Ben`,
 };

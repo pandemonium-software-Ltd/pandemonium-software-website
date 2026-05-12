@@ -17,8 +17,10 @@
 // "coming soon" placeholder so the prospect sees the whole journey
 // even though the contents will land in H2-H5.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
+  STEP_IDS,
   STEP_NUMBER,
   type OnboardingData,
   type StepDef,
@@ -99,6 +101,32 @@ export default function OnboardingHub(props: OnboardingHubProps) {
   } = props;
 
   const [currentStepId, setCurrentStepId] = useState<StepId>(initialStepId);
+
+  // Honour `?step=<id>` query param so dashboard deep-links open
+  // straight on the requested step. Wrapped in useEffect to avoid
+  // hydration mismatch (useSearchParams returns null during SSR).
+  // Falls back silently if the param is missing or invalid — the
+  // server-side `initialStepId` still wins for direct hub visits.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const requested = searchParams?.get("step");
+    if (
+      requested &&
+      (STEP_IDS as readonly string[]).includes(requested) &&
+      requested !== currentStepId
+    ) {
+      // Only respect deep-link IF the requested step is in the
+      // applicable set — non-applicable steps (e.g. "tools" without
+      // a relevant module) shouldn't be deep-linkable.
+      const isApplicable = props.steps.some(
+        (s) => s.id === requested && s.applicable,
+      );
+      if (isApplicable) setCurrentStepId(requested as StepId);
+    }
+    // Only fire when the searchParams change; intentionally NOT
+    // depending on currentStepId so manual nav doesn't re-trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [data, setData] = useState<OnboardingData>(initialData);
   const [doneFlags, setDoneFlags] = useState<Record<StepId, boolean>>(
     props.doneFlags,
@@ -196,6 +224,26 @@ export default function OnboardingHub(props: OnboardingHubProps) {
     <>
       <section className="bg-cream-100/60 pb-6 pt-12 md:pb-8 md:pt-16">
         <div className="container-content max-w-5xl">
+          {/* Always-visible dashboard escape hatch. Customers
+              navigate to the Hub via the dashboard's quick-link
+              card — this gives them a one-click way back without
+              relying on browser history. Placed BEFORE the eyebrow
+              so it reads like a breadcrumb. */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <a
+              href={`/account/${token}`}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy-500 transition-colors hover:text-navy-900"
+            >
+              <span aria-hidden="true">←</span>
+              Back to your dashboard
+            </a>
+            <a
+              href={`/account/${token}/submissions`}
+              className="text-xs font-medium text-navy-500 underline decoration-dotted underline-offset-2 transition-colors hover:text-navy-900"
+            >
+              View what you&apos;ve submitted
+            </a>
+          </div>
           <span className="eyebrow">Onboarding Hub</span>
           <h1 className="heading-1 mt-2">
             Welcome, {greetingFirstName} — let&apos;s get you live.
@@ -287,6 +335,60 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     locked={locked}
                     goToStep={goToStep}
                   />
+                  {/* Per-step lock banner — shown when the customer
+                      has marked THIS step done but the hub overall
+                      is still mutable. Hub-wide lock (post Step 5
+                      submission) has its own messaging in the
+                      individual step components, so we suppress
+                      this banner in that case.
+                      Exempt steps (no banner, no lock):
+                        - "review" — pre-launch revisions inbox
+                        - "assets" — brand assets stay editable so
+                          customers can swap a logo/photo any time
+                          and trigger a rebuild via a Step 5 edit. */}
+                  {!locked &&
+                    doneFlags[currentStepId] &&
+                    currentStepId !== "review" &&
+                    currentStepId !== "assets" && (
+                    <div className="mb-5 rounded-2xl border-l-4 border-green-400 bg-green-50 p-4">
+                      <p className="flex items-center gap-2 font-semibold text-green-900">
+                        <span
+                          aria-hidden="true"
+                          className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-white"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                          >
+                            <path
+                              d="M3 8l3 3 7-7"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        Step complete — locked
+                      </p>
+                      <p className="mt-1.5 text-sm text-green-900">
+                        Your answers are saved and this step is now
+                        read-only. Need to change something? Email me
+                        at{" "}
+                        <a
+                          href={`mailto:${benEmail}?subject=${encodeURIComponent(
+                            `Unlock onboarding step: ${currentStep.title}`,
+                          )}`}
+                          className="underline decoration-green-700 underline-offset-2 hover:text-green-700"
+                        >
+                          {benEmail}
+                        </a>{" "}
+                        and I&apos;ll unlock it so you can edit.
+                      </p>
+                    </div>
+                  )}
                   <StepRenderer
                     step={currentStep}
                     data={data}
@@ -296,7 +398,20 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     r2PublicUrlBase={r2PublicUrlBase}
                     modules={props.modules}
                     foundingMember={props.foundingMember}
-                    readOnly={locked}
+                    // Step is read-only when EITHER the hub is locked
+                    // (post Step 5 submission) OR this individual
+                    // step is marked done — UNLESS the step is one
+                    // of the lock-exempt ones ("review" handles its
+                    // own gating via /api/onboarding/review-edit;
+                    // "assets" stays editable so customers can swap
+                    // a logo/photo and trigger a rebuild via a
+                    // Step 5 review-edit).
+                    readOnly={
+                      locked ||
+                      (doneFlags[currentStepId] &&
+                        currentStepId !== "review" &&
+                        currentStepId !== "assets")
+                    }
                     savePartial={savePartial}
                     markDone={markDone}
                     customerConfirmedNameserversAt={
@@ -403,7 +518,13 @@ function StepRenderer({
           markDone={(patch) => markDone("tools", patch)}
         />
       );
-    case "content":
+    case "content": {
+      // Pull the customer's domain so the newsletter section can
+      // render a live "From line" preview ("news@yourdomain"). The
+      // domain slice is populated by Step 2 — empty string is fine
+      // (the form shows a placeholder).
+      const customerDomain =
+        (data.domain as { domain?: string } | undefined)?.domain ?? "";
       return (
         <Step4Content
           data={slice}
@@ -411,10 +532,13 @@ function StepRenderer({
           readOnly={readOnly}
           services={phase3Services}
           phase3Seeds={phase3Seeds}
+          modules={modules}
+          customerDomain={customerDomain}
           savePartial={(patch) => savePartial("content", patch)}
           markDone={(patch) => markDone("content", patch)}
         />
       );
+    }
     case "assets": {
       // Canonical service list for the D. Service photos slot grid:
       // prefer the customer's Site Content edits (renames, deletes,

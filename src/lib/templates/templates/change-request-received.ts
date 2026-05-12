@@ -30,20 +30,20 @@ export const changeRequestReceived: Template = {
   subject: "Got it — change request received",
   body: `Hi {{customerName}},
 
-Your change request landed safely:
+Got your change request:
 
-  {{message}}
+  "{{message}}"
 
 What happens next:
-  • If it's a straight-forward edit (text, hours, services etc.)
-    the system applies it automatically and your site updates
-    within minutes.
-  • If it needs my eye (anything design-y, structural, or
-    out-of-scope) I'll review and reply on your dashboard.
+  • Straightforward edits (text, opening hours, services, your
+    phone number, photos etc.) get applied automatically and
+    your site usually updates within a few minutes.
+  • Anything bigger or design-related I'll look at personally
+    and reply on your dashboard.
 
-You'll get another email when the change is done or if I need
-anything from you. The request is listed on your account
-dashboard so you can check status any time.
+I'll email you when it's done, or if I need anything from you
+to finish it off. You can check status any time on your
+dashboard.
 
 — Ben`,
 };

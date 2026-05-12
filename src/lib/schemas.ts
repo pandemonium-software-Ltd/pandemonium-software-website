@@ -96,6 +96,7 @@ export const MODULE_OPTIONS = [
   "Online Booking",
   "Enquiry Form",
   "Newsletter",
+  "Offers",
   "Google Business Profile Setup/Audit",
 ] as const;
 
@@ -239,6 +240,7 @@ const moduleSelectionSchema = z.object({
   moduleBooking: z.boolean().default(false),
   moduleEnquiry: z.boolean().default(false),
   moduleNewsletter: z.boolean().default(false),
+  moduleOffers: z.boolean().default(false),
   gbpAddon: z.boolean().default(false),
 });
 

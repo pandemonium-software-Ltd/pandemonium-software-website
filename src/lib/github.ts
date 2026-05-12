@@ -49,6 +49,15 @@ export async function dispatchRepositoryEvent(args: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
+        // GitHub REQUIRES a User-Agent on every API call — without
+        // it, all responses are 403 "Request forbidden by
+        // administrative rules". Cloudflare Workers' default fetch
+        // sends no UA, so we set one explicitly. curl sends one
+        // automatically, which is why the same token works from
+        // the terminal but not from the Worker. GitHub asks you
+        // to identify the integration; project name is fine.
+        // https://docs.github.com/en/rest/overview/resources-in-the-rest-api#user-agent-required
+        "User-Agent": "pandemonium-software-website-worker",
       },
       body: JSON.stringify({
         event_type: args.eventType,
@@ -57,12 +66,30 @@ export async function dispatchRepositoryEvent(args: {
       signal: controller.signal,
     });
     if (!res.ok) {
-      let message = res.statusText;
-      try {
-        const err = (await res.json()) as { message?: string };
-        if (err?.message) message = err.message;
-      } catch {
-        /* keep statusText */
+      // Try JSON first (GitHub usually returns `{message, documentation_url}`),
+      // fall back to raw text (covers proxy / WAF responses), final
+      // fallback statusText. Surfacing the body is what makes a 403
+      // actionable — "Resource not accessible by personal access
+      // token" vs "Bad credentials" vs scope-missing all read very
+      // differently.
+      let message = res.statusText || "(no body)";
+      const bodyText = await res.text().catch(() => "");
+      if (bodyText) {
+        try {
+          const parsed = JSON.parse(bodyText) as {
+            message?: string;
+            documentation_url?: string;
+          };
+          if (parsed?.message) {
+            message = parsed.documentation_url
+              ? `${parsed.message} (see ${parsed.documentation_url})`
+              : parsed.message;
+          } else {
+            message = bodyText.slice(0, 200);
+          }
+        } catch {
+          message = bodyText.slice(0, 200);
+        }
       }
       throw new GithubApiError(res.status, message);
     }

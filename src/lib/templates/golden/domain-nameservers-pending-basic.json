@@ -9,7 +9,7 @@
     "confirmUrl": "https://modu-forge.co.uk/api/onboarding/dns-confirm/abc123-def456"
   },
   "expected": {
-    "subject": "Action needed: point alexsbakery.co.uk at Cloudflare",
-    "body": "Hi Alex,\n\nTo set up secure hosting for alexsbakery.co.uk, I need it pointed at\nCloudflare's nameservers.\n\nIn your domain registrar's dashboard, find the section called\n\"Nameservers\" or \"DNS\" and replace whatever's there with these\ntwo:\n\n  aron.ns.cloudflare.com\n  nina.ns.cloudflare.com\n\nOnce you've done that, click the button below to let me know —\nI'll check Cloudflare sooner. Otherwise it'll detect the change\nautomatically (usually within 1-2 hours, sometimes up to 48).\n\nEither way, I'll email you again as soon as your domain is\nverified and ready for launch.\n\nIf anything's confusing, reply to this email with a screenshot of\nwhere you've got stuck and I'll walk you through it.\n\n— Ben"
+    "subject": "One quick thing — connect alexsbakery.co.uk to your site",
+    "body": "Hi Alex,\n\nTo set up your new site at alexsbakery.co.uk, I need you to do one\nsmall change with whoever you bought the domain from (GoDaddy,\n123-reg, Names.co.uk, etc.).\n\nLog into your account with them, find a section called\n\"Nameservers\" (or sometimes \"DNS settings\"), and replace\nwhatever's listed with these two lines:\n\n  aron.ns.cloudflare.com\n  nina.ns.cloudflare.com\n\nSave the change. That's it from your end.\n\nOnce you've done it, tap the button below to let me know.\n(If you forget, no stress — it'll sort itself out automatically\nwithin a day or so anyway.)\n\nIf you can't find the right setting, reply with a screenshot\nof the page you're looking at and I'll point you to the right\nspot.\n\n— Ben"
   }
 }

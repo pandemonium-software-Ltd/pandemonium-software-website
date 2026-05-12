@@ -26,30 +26,30 @@ export const phase3ThanksFeesAndPaymentComing: Template = {
   riskTier: "low",
   required: ["customerName", "setupFee", "monthlyFee", "moduleList"],
   optional: ["foundingMember"],
-  subject: "Intake received — your fee summary",
+  subject: "Got your details — here's your quote",
   body: `Hi {{customerName}},
 
-Thanks for completing the intake form.
+Thanks for filling that in. Here's a quick summary.
 
 What you'll get:
 {{moduleList}}
 
-Pricing:
+The cost:
   Setup (one-off):  £{{setupFee}}
   Monthly:          £{{monthlyFee}}/mo{{#if foundingMember}}
 
-You qualified for Founding Member pricing — flat £99 setup +
-£15/month for everything, locked in for as long as you stay
-subscribed.{{/if}}
+You qualified for our Founding Member rate — flat £99 setup
+plus £15/month, locked in for as long as you stay subscribed.{{/if}}
 
-What happens next: in a moment you'll get a second email with
-your onboarding hub link. The hub walks you through 4-5 short
-steps (~30 minutes total) to set up your Cloudflare account,
-your domain, your brand assets, and pick a launch date.
+What happens next: in a minute you'll get a second email with
+a link to your onboarding hub. That's where we'll work through
+a short checklist (~30 minutes total) — your web address, your
+photos, your launch date.
 
-I'll handle everything technical from there — DNS, hosting, TLS,
-sender domain setup, the lot. You'll get an email each time I
-make progress.
+I'll handle all the behind-the-scenes work (hosting, secure
+connection, your custom email setup, building the site
+itself). You'll get an email at every step so you always
+know what's happening.
 
 — Ben`,
 };

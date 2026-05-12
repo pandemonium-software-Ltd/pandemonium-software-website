@@ -28,29 +28,30 @@ export const changeRequestPreviewReady: Template = {
     "accountUrl",
   ],
   cta: { urlKey: "previewUrl", label: "Open the preview" },
-  subject: "Preview ready for your change ✓",
+  subject: "Have a look — your change is ready to approve",
   body: `Hi {{customerName}},
 
-I've built a preview of the change you asked for:
+I've made a preview of the change you asked for:
 
-  {{originalMessage}}
+  "{{originalMessage}}"
 
-Have a look at the preview — your live site is unchanged until
+Your live site hasn't changed yet — it only goes live once
 you approve.
 
 Preview: {{previewUrl}}
 
-If it looks right, hit approve and the change will go live in a
-few seconds:
+If it looks right, click here and it'll be live in a few
+seconds:
 
   Approve & publish:  {{approveUrl}}
 
-If it's not what you wanted, reject and I'll have another look:
+If it's not what you had in mind, reject and I'll take another
+look:
 
-  Reject:             {{rejectUrl}}
+  Reject:  {{rejectUrl}}
 
-You can also see status + history any time on your account
-dashboard: {{accountUrl}}
+You can check status any time on your dashboard:
+{{accountUrl}}
 
-— Ben (via Cowork)`,
+— Ben`,
 };

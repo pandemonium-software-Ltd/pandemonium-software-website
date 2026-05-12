@@ -34,6 +34,11 @@ import { moduleChangeConfirmed } from "./templates/module-change-confirmed";
 import { paymentMethodUpdateNeeded } from "./templates/payment-method-update-needed";
 import { previewRequestReceived } from "./templates/preview-request-received";
 import { previewReady } from "./templates/preview-ready";
+import { colourClarification } from "./templates/colour-clarification";
+import { siteLive } from "./templates/site-live";
+import { newsletterConfirmSubscribe } from "./templates/newsletter-confirm-subscribe";
+import { newsletterWelcome } from "./templates/newsletter-welcome";
+import { newsletterUnsubscribed } from "./templates/newsletter-unsubscribed";
 
 export type {
   Template,
@@ -64,6 +69,11 @@ const TEMPLATES = new Map<string, Template>([
   [paymentMethodUpdateNeeded.id, paymentMethodUpdateNeeded],
   [previewRequestReceived.id, previewRequestReceived],
   [previewReady.id, previewReady],
+  [colourClarification.id, colourClarification],
+  [siteLive.id, siteLive],
+  [newsletterConfirmSubscribe.id, newsletterConfirmSubscribe],
+  [newsletterWelcome.id, newsletterWelcome],
+  [newsletterUnsubscribed.id, newsletterUnsubscribed],
 ]);
 
 export function getTemplate(id: string): Template {

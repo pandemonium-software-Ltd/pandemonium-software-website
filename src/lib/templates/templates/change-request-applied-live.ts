@@ -24,19 +24,17 @@ export const changeRequestAppliedLive: Template = {
   subject: "Your change is live ✓",
   body: `Hi {{customerName}},
 
-Approved + live. Your site now reflects:
+That's done. Your site now shows:
 
   {{originalMessage}}
 
-Take a look: {{siteUrl}}
+Have a look: {{siteUrl}}
 
-If anything's not quite right, hit reply on this email or open
-your dashboard and submit a follow-up. Same change-request
-allowance applies.
+If something looks off, just reply to this email — I can put
+the old version back in seconds if needed.
 
-— Ben (via Cowork)
+For anything else, head to your dashboard. You get 2 changes
+a month included with your subscription.
 
-P.S. — If you spot any issue in the next hour or so, your
-previous version is still in Cloudflare's history; let me know
-and I can roll back instantly.`,
+— Ben`,
 };

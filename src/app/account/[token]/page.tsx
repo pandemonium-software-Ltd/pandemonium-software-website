@@ -20,7 +20,11 @@
 // for now — Stage 2D Part 2 will add a self-serve cancel flow.
 
 import type { Metadata } from "next";
-import { getProspectByToken } from "@/lib/notion-prospects";
+import {
+  getProspectByToken,
+  type ProspectStatus,
+} from "@/lib/notion-prospects";
+import { deriveStepList, getDoneFlags } from "@/lib/onboarding";
 import AccountDashboard from "@/components/AccountDashboard";
 import { site } from "@/lib/site";
 
@@ -36,7 +40,20 @@ export const dynamic = "force-dynamic";
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const ACCOUNT_ACCESSIBLE_STATUSES = new Set([
+// Dashboard opens at "Phase 2 Accepted" — i.e. once the customer's
+// passed qualification + has a quote pending. Pre-qualify statuses
+// (Phase 1 + Phase 2 unresolved) still hit the "not active yet"
+// page because there's nothing meaningful to show beyond "we got
+// your enquiry / we're checking compatibility" — and customers can
+// just check email for that.
+//
+// Post-qualify the dashboard turns into a hub that adapts to where
+// they are: quote awaiting payment → intake link, paid → Hub
+// shortcut, live → site URL + change requests + newsletter.
+const ACCOUNT_ACCESSIBLE_STATUSES = new Set<ProspectStatus>([
+  "Phase 2 Accepted",
+  "Phase 3 In Progress",
+  "Phase 3 Complete",
   "Paid",
   "Onboarding Started",
   "Onboarding Complete",
@@ -61,30 +78,132 @@ export default async function AccountPage({
     return <ErrorWrapper title="Account not found." />;
   }
 
-  if (!ACCOUNT_ACCESSIBLE_STATUSES.has(prospect.status)) {
+  // Narrow the defensively-widened `ProspectStatus | string` to
+  // ProspectStatus by checking membership of our allow-list. Anything
+  // not in the set falls through to the "not active yet" page.
+  if (
+    !ACCOUNT_ACCESSIBLE_STATUSES.has(prospect.status as ProspectStatus)
+  ) {
     return (
       <ErrorWrapper
         title="Your account isn't active yet."
-        body="Once payment is recorded, this dashboard unlocks. If you've just paid, give it a minute and refresh."
+        body="Your dashboard unlocks once we've confirmed your qualification. If you've just submitted a Phase 2 form, give me a few hours to review and you'll get an email with a link the moment it's ready."
       />
     );
   }
+  const narrowedStatus = prospect.status as ProspectStatus;
 
   // Derive a single useful URL for the customer's site:
   //   - Live / Build Started / Onboarding Complete: their domain (if
   //     captured during Hub Step 2) — falls back to a placeholder
   //   - Earlier: no site URL yet, link to onboarding hub instead
-  type OnboardingDomainSlice = { domain?: string };
-  type OnboardingShape = { domain?: OnboardingDomainSlice };
+  type OnboardingShape = {
+    domain?: { domain?: string };
+    content?: {
+      offers?: {
+        current?: {
+          headline?: string;
+          body?: string;
+          ctaLabel?: string;
+          ctaUrl?: string;
+          startsAt?: string;
+          endsAt?: string;
+        };
+      };
+      newsletter?: {
+        subscribers?: Array<{
+          confirmedAt?: string;
+          unsubscribedAt?: string;
+        }>;
+        history?: Array<{
+          id?: string;
+          subject?: string;
+          sentAt?: string;
+          recipientCount?: number;
+          status?: "draft" | "sending" | "sent" | "failed";
+        }>;
+      };
+    };
+  };
   const onboardingShape = (prospect.onboardingData ?? {}) as OnboardingShape;
   const customerDomain = onboardingShape.domain?.domain ?? "";
+  // Pull the live offer through to the dashboard. Only render in
+  // OfferCard if we have a headline + dates (the schema guarantees
+  // these when the customer has saved one). null = no offer.
+  const offerRaw = onboardingShape.content?.offers?.current;
+  const currentOffer =
+    offerRaw &&
+    typeof offerRaw.headline === "string" &&
+    typeof offerRaw.startsAt === "string" &&
+    typeof offerRaw.endsAt === "string"
+      ? {
+          headline: offerRaw.headline,
+          body: offerRaw.body,
+          ctaLabel: offerRaw.ctaLabel,
+          ctaUrl: offerRaw.ctaUrl,
+          startsAt: offerRaw.startsAt,
+          endsAt: offerRaw.endsAt,
+        }
+      : null;
+
+  // Newsletter summary for the dashboard NewsletterCard. Confirmed
+  // + non-unsubscribed subscribers are the count that matters
+  // (those are who'd actually receive a send).
+  const newsletterRaw = onboardingShape.content?.newsletter;
+  const subscriberCount = (newsletterRaw?.subscribers ?? []).filter(
+    (s) => s.confirmedAt && !s.unsubscribedAt,
+  ).length;
+  const historyAll = newsletterRaw?.history ?? [];
+  const currentYearMonth = (() => {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  })();
+  const sentThisMonth = historyAll.filter(
+    (h) =>
+      typeof h.sentAt === "string" &&
+      h.sentAt.startsWith(currentYearMonth) &&
+      h.status !== "failed",
+  ).length;
+  const lastSentAt = historyAll
+    .filter((h) => typeof h.sentAt === "string" && h.status !== "failed")
+    .sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? ""))[0]
+    ?.sentAt;
+  const newsletterSummary = {
+    subscriberCount,
+    lastSentAt,
+    sentThisMonth,
+    history: historyAll
+      .filter(
+        (h): h is {
+          id: string;
+          subject: string;
+          sentAt: string;
+          recipientCount: number;
+          status: "draft" | "sending" | "sent" | "failed";
+        } =>
+          typeof h.id === "string" &&
+          typeof h.subject === "string" &&
+          typeof h.sentAt === "string" &&
+          typeof h.recipientCount === "number" &&
+          typeof h.status === "string",
+      )
+      .slice(0, 5),
+  };
+
+  // Compute per-step done state for the dashboard's Hub nav card
+  // (drives the green ticks + greyed style). Same helpers the Hub
+  // page itself uses so dashboard and Hub never disagree on which
+  // steps are complete.
+  const hubSteps = deriveStepList(prospect);
+  const doneFlags = getDoneFlags(prospect);
+  const applicableStepIds = hubSteps.filter((s) => s.applicable).map((s) => s.id);
 
   return (
     <AccountDashboard
       token={token}
       name={prospect.name}
       business={prospect.business ?? ""}
-      status={prospect.status}
+      status={narrowedStatus}
       domain={customerDomain}
       modules={prospect.moduleSelections}
       setupFee={prospect.setupFeeCalculated ?? 0}
@@ -93,6 +212,10 @@ export default async function AccountPage({
       onboardingCompletedAt={prospect.onboardingCompletedAt ?? null}
       goLiveDate={prospect.goLiveDate ?? null}
       changeRequests={prospect.changeRequests}
+      hubStepDone={doneFlags}
+      hubApplicableStepIds={applicableStepIds}
+      currentOffer={currentOffer}
+      newsletterSummary={newsletterSummary}
     />
   );
 }

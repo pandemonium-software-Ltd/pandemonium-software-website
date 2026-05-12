@@ -19,28 +19,29 @@ export const domainNameserversPending: Template = {
   riskTier: "low",
   required: ["customerName", "domain", "ns1", "ns2", "confirmUrl"],
   cta: { urlKey: "confirmUrl", label: "I've updated my nameservers" },
-  subject: "Action needed: point {{domain}} at Cloudflare",
+  subject: "One quick thing — connect {{domain}} to your site",
   body: `Hi {{customerName}},
 
-To set up secure hosting for {{domain}}, I need it pointed at
-Cloudflare's nameservers.
+To set up your new site at {{domain}}, I need you to do one
+small change with whoever you bought the domain from (GoDaddy,
+123-reg, Names.co.uk, etc.).
 
-In your domain registrar's dashboard, find the section called
-"Nameservers" or "DNS" and replace whatever's there with these
-two:
+Log into your account with them, find a section called
+"Nameservers" (or sometimes "DNS settings"), and replace
+whatever's listed with these two lines:
 
   {{ns1}}
   {{ns2}}
 
-Once you've done that, click the button below to let me know —
-I'll check Cloudflare sooner. Otherwise it'll detect the change
-automatically (usually within 1-2 hours, sometimes up to 48).
+Save the change. That's it from your end.
 
-Either way, I'll email you again as soon as your domain is
-verified and ready for launch.
+Once you've done it, tap the button below to let me know.
+(If you forget, no stress — it'll sort itself out automatically
+within a day or so anyway.)
 
-If anything's confusing, reply to this email with a screenshot of
-where you've got stuck and I'll walk you through it.
+If you can't find the right setting, reply with a screenshot
+of the page you're looking at and I'll point you to the right
+spot.
 
 — Ben`,
 };

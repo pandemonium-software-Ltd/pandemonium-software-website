@@ -7,7 +7,7 @@
     "hubUrl": "https://modu-forge.co.uk/onboarding/abc123-def456"
   },
   "expected": {
-    "subject": "Your site preview is ready ✓",
-    "body": "Hi Alex,\n\nYour site preview is ready to view.\n\nOpen your hub and head to Step 5 — the preview is embedded inline so\nyou can scroll through the whole site without bouncing tabs:\n\n  https://modu-forge.co.uk/onboarding/abc123-def456\n\n(If you'd rather open the preview directly, here's the standalone\nlink: https://abc123-preview.modu-forge.co.uk)\n\nWhat to do next:\n  1. Click through every page — header, services, contact, any\n     module pages (booking / newsletter / enquiry form / GBP).\n  2. Check it on your phone too — the embed shrinks to fit.\n  3. If you want changes, use the \"Request edits\" section in\n     Step 5. You get up to 3 rounds of pre-launch edits.\n  4. When you're happy, scroll down to the commit section and\n     hit \"Submit and commit site\" — that locks in your launch.\n\nReply to this email if anything's not loading or feels off.\n\nThanks,\nBen (and the ModuForge ops assistant)"
+    "subject": "Your site preview is ready to view ✓",
+    "body": "Hi Alex,\n\nGood news — your site preview is ready.\n\nTap the button below to open your hub and scroll down to the\nlast step (\"Review\"). You'll see your site embedded right\nthere — click around like a real visitor would.\n\nWhat to do:\n  1. Look at every page — homepage, about, services, contact,\n     plus anything extra (booking, newsletter, enquiry form).\n  2. Try it on your phone too.\n  3. If anything needs changing, use the \"Request edits\"\n     section to tell me — you get up to 3 free rounds of\n     tweaks before launch. I usually turn each round around\n     within a working day.\n  4. When you're happy, hit the big \"Submit and commit site\"\n     button to lock in your launch date.\n\nReply to this email if anything looks broken or you're not\nsure what you're looking at.\n\n— Ben"
   }
 }

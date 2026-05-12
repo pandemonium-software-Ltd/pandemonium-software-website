@@ -23,21 +23,21 @@ export const changeRequestRejected: Template = {
   subject: "About your change request",
   body: `Hi {{customerName}},
 
-Your change request:
+About this one:
 
-  {{originalMessage}}
+  "{{originalMessage}}"
 
 My reply:
 
 {{reply}}
 
-This one's outside what's covered by your monthly allowance, so
-it doesn't count against your 3 requests this month. If you'd
-like to discuss the bigger piece, just hit reply — happy to
-quote separately.
+This was outside what's covered by your monthly allowance, so
+it doesn't count against your 2 changes for the month. If
+you'd like to chat about doing it as a separate piece of work,
+just reply — happy to quote.
 
-You can see the full history (and submit other requests) on your
-account dashboard.
+You can see your other requests + submit new ones from your
+dashboard any time.
 
 — Ben`,
 };

@@ -141,6 +141,14 @@ export type ProspectRecord = {
    *  build completes (success OR failure), so the next preview
    *  request can trigger a fresh build immediately. NEW C5.4. */
   previewBuildTriggeredAt?: string;
+  /** ISO-8601 — set by step7-go-live when the GO-LIVE build is
+   *  dispatched on (or after) the customer's chosen `goLiveDate`.
+   *  Cleared by build-callback on success. Acts as a 20-minute
+   *  anti-spam latch so we don't re-dispatch every cron tick while
+   *  the Action is still running. Distinct from
+   *  `previewBuildTriggeredAt` so the two pipelines can be
+   *  diagnosed independently in /admin. */
+  finalLaunchTriggeredAt?: string;
   /** ISO-8601, set by /api/internal/build-callback when a customer-
    *  site build fails. Cleared on next successful build. Useful
    *  for surfacing "last build failed" in /admin. NEW C5.4. */
@@ -358,9 +366,16 @@ export type ChangeRequest = {
   /** Free-text reasoning Cowork emits — useful for debugging mis-
    *  classifications + shown to Ben in the escalation email. */
   coworkReasoning?: string;
-  /** Structured patch Cowork applied (or proposed). Shape mirrors
-   *  the targets whitelist in the docs (see C5.7 design doc). */
-  coworkPatch?: {
+  /** Structured patches Cowork applied (or proposed). Multi-field
+   *  requests produce multiple entries here; reverts run in REVERSE
+   *  order so each previousValue puts back what was there before
+   *  *its* patch.
+   *
+   *  Migration: legacy data may have a single `coworkPatch` instead
+   *  of `coworkPatches`. Readers should fall back to wrapping
+   *  `coworkPatch` in a 1-element array when `coworkPatches` is
+   *  absent. New writes use `coworkPatches` only. */
+  coworkPatches?: Array<{
     target: string;
     /** New value being written; type depends on target. */
     newValue: unknown;
@@ -369,12 +384,48 @@ export type ChangeRequest = {
     /** For service / faq targets, identifies the entry. */
     serviceName?: string;
     faqQuestion?: string;
+  }>;
+  /** @deprecated — use `coworkPatches`. Kept on the type for
+   *  backward-compat reads of pre-migration data. */
+  coworkPatch?: {
+    target: string;
+    newValue: unknown;
+    previousValue: unknown;
+    serviceName?: string;
+    faqQuestion?: string;
   };
-  /** ISO-8601 — when step6 successfully applied coworkPatch to
+  /** ISO-8601 — when step6 successfully applied coworkPatches to
    *  Notion. Distinct from customerApprovedAt: applied → preview
    *  goes live only when customer approves. */
   coworkPatchAppliedAt?: string;
 };
+
+/**
+ * Normalise legacy `coworkPatch` (single) and new `coworkPatches`
+ * (array) into a single array. Always use this when reading patches
+ * to apply / display / revert — never read the raw fields directly,
+ * or you'll miss data on either side of the migration.
+ *
+ * Returns `[]` when neither field is set.
+ */
+export function readCoworkPatches(
+  source:
+    | Pick<ChangeRequest, "coworkPatch" | "coworkPatches">
+    | { coworkPatch?: unknown; coworkPatches?: unknown },
+): NonNullable<ChangeRequest["coworkPatches"]> {
+  // New shape wins; legacy shape only used when the new field is
+  // absent (so a record migrated by writing both fields shows
+  // multi-patch on read).
+  const patches = (source as { coworkPatches?: unknown }).coworkPatches;
+  if (Array.isArray(patches) && patches.length > 0) {
+    return patches as NonNullable<ChangeRequest["coworkPatches"]>;
+  }
+  const single = (source as { coworkPatch?: unknown }).coworkPatch;
+  if (single && typeof single === "object") {
+    return [single as NonNullable<ChangeRequest["coworkPatches"]>[number]];
+  }
+  return [];
+}
 
 // --- Property helpers ---
 
@@ -832,6 +883,7 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     siteLiveAt: readDate(p["Site Live At"]),
     previewBuildTriggeredAt: readDate(p["Preview Build Triggered At"]),
     previewBuildFailedAt: readDate(p["Preview Build Failed At"]),
+    finalLaunchTriggeredAt: readDate(p["Final Launch Triggered At"]),
     haikuCache: (() => {
       const raw = readRichText(p["Haiku Cache"]);
       if (!raw) return undefined;
@@ -1116,6 +1168,45 @@ export async function clearPreviewBuildTriggered(
         "Preview Build Failed At": args.failure
           ? { date: { start: new Date().toISOString() } }
           : { date: null },
+      },
+    },
+  });
+}
+
+/**
+ * Stamp Final Launch Triggered At — anti-spam latch set by
+ * step7-go-live when the GO-LIVE build is dispatched. Same pattern
+ * as Preview Build Triggered At but for the launch-day build that
+ * flips status to "Live". Cleared by build-callback once the build
+ * completes (success or failure).
+ */
+export async function markFinalLaunchTriggered(
+  pageId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Final Launch Triggered At": {
+          date: { start: new Date().toISOString() },
+        },
+      },
+    },
+  });
+}
+
+/** Clear Final Launch Triggered At — called by build-callback on
+ *  any outcome of a finalLaunch build. Pair with `markSiteLive` +
+ *  `updateProspectOnboarding({ statusFlip: "Live" })` for the
+ *  full success-side stamping. */
+export async function clearFinalLaunchTriggered(
+  pageId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Final Launch Triggered At": { date: null },
       },
     },
   });

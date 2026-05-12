@@ -21,19 +21,19 @@ export const changeRequestResolved: Template = {
     "accountUrl",
   ],
   cta: { urlKey: "accountUrl", label: "Open your account dashboard" },
-  subject: "Your change request is done ✓",
+  subject: "Your change is done ✓",
   body: `Hi {{customerName}},
 
-Your change request:
+About this one:
 
-  {{originalMessage}}
+  "{{originalMessage}}"
 
 My reply:
 
 {{reply}}
 
-You can see the full history (and submit anything else) on your
-account dashboard.
+You can see your other requests + submit new ones from your
+dashboard any time.
 
 — Ben`,
 };

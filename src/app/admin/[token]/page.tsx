@@ -19,6 +19,7 @@ import ChangeRequestEditor from "@/components/admin/ChangeRequestEditor";
 import ReviewEditEditor from "@/components/admin/ReviewEditEditor";
 import ModuleChangeEditor from "@/components/admin/ModuleChangeEditor";
 import PreviewUrlEditor from "@/components/admin/PreviewUrlEditor";
+import UnlockStepButton from "@/components/admin/UnlockStepButton";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -76,13 +77,18 @@ export default async function AdminDetailPage({
     );
   }
 
-  // Onboarding step progress dots (5 fixed slots).
-  const stepDoneFlags = [
-    prospect.onboardingStep1Done,
-    prospect.onboardingStep2Done,
-    prospect.onboardingStep3Done,
-    prospect.onboardingStep4Done,
-    prospect.onboardingStep5Done,
+  // Per-step done snapshot for the step-progress panel below. Each
+  // entry shows the dot AND, when done, an "unlock" link that lets
+  // Ben flip the flag back to false in one click (responding to a
+  // customer "I need to change my CF account ID" email). StepId
+  // keys map to the same constants the Hub uses.
+  const stepProgress: Array<{ id: string; num: number; label: string; done: boolean }> = [
+    { id: "cloudflare", num: 1, label: "Cloudflare", done: prospect.onboardingStep1Done },
+    { id: "domain", num: 2, label: "Domain", done: prospect.onboardingStep2Done },
+    { id: "tools", num: 3, label: "Tools", done: prospect.onboardingStep3Done },
+    { id: "content", num: 4, label: "Content", done: prospect.onboardingContentDone },
+    { id: "assets", num: 5, label: "Assets", done: prospect.onboardingStep4Done },
+    { id: "review", num: 6, label: "Review", done: prospect.onboardingStep5Done },
   ];
 
   return (
@@ -226,22 +232,38 @@ export default async function AdminDetailPage({
 
         {/* ---------- Onboarding ---------- */}
         <Section title="Onboarding Hub">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-navy-600">Step progress:</span>
-            {stepDoneFlags.map((done, i) => (
-              <span
-                key={i}
-                title={`Step ${i + 1} ${done ? "done" : "pending"}`}
-                className={[
-                  "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold",
-                  done
-                    ? "bg-green-600 text-white"
-                    : "bg-cream-100 text-navy-700 ring-2 ring-navy-200",
-                ].join(" ")}
-              >
-                {done ? "✓" : i + 1}
-              </span>
-            ))}
+          <div className="space-y-1.5 text-sm">
+            <p className="text-navy-600">Step progress (locked steps can be unlocked):</p>
+            <ul className="grid grid-cols-2 gap-1 md:grid-cols-3">
+              {stepProgress.map((s) => (
+                <li
+                  key={s.id}
+                  className="flex items-center gap-2 rounded-md border border-navy-100 bg-cream-50 px-2 py-1.5"
+                >
+                  <span
+                    title={`Step ${s.num} (${s.id}) ${s.done ? "done" : "pending"}`}
+                    className={[
+                      "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+                      s.done
+                        ? "bg-green-600 text-white"
+                        : "bg-white text-navy-700 ring-2 ring-navy-200",
+                    ].join(" ")}
+                  >
+                    {s.done ? "✓" : s.num}
+                  </span>
+                  <span className="flex-1 truncate text-xs text-navy-900">
+                    {s.label}
+                  </span>
+                  {s.done && (
+                    <UnlockStepButton
+                      token={token}
+                      stepId={s.id}
+                      stepLabel={s.label}
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
           <KV
             label="Started at"

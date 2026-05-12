@@ -157,6 +157,35 @@ export async function POST(request: Request) {
     );
   }
 
+  // Per-step lock gate: once a step has been marked done, it's
+  // read-only until Ben unlocks it from /admin. This mirrors the
+  // dashboard's green-tick + greyed-out UI — the API enforces the
+  // same so a direct API call can't bypass the customer-facing lock.
+  // (Hub-wide lock above already handles the post-signoff case.)
+  //
+  // Exemptions (always editable, even when marked done):
+  //   - "review" — the pre-launch revisions inbox lives here and is
+  //     a separate route (/api/onboarding/review-edit) with its own
+  //     gating.
+  //   - "assets" — brand assets (logo, photos) are deliberately
+  //     re-editable any time pre-launch. A customer who realises
+  //     they uploaded the wrong logo can swap it without emailing.
+  //     A Step 5 review-edit referencing the new asset triggers a
+  //     rebuild via Cowork's `rebuildOnly` classification path.
+  const currentDoneFlags = getDoneFlags(prospect);
+  const STEP_LOCK_EXEMPT: ReadonlySet<StepId> = new Set(["review", "assets"]);
+  if (currentDoneFlags[stepId] && !STEP_LOCK_EXEMPT.has(stepId)) {
+    return NextResponse.json(
+      {
+        error:
+          "This step is complete and locked. Email me at " +
+          (process.env.BEN_OPS_EMAIL ?? "pandamoniumsoftwareltd@gmail.com") +
+          " if you need to change something — I can unlock it.",
+      },
+      { status: 403 },
+    );
+  }
+
   // Merge patch into existing onboarding data blob. Tolerate any
   // shape on read — the schema-validated patch wins on every key.
   const existingData = onboardingDataSchema.safeParse(

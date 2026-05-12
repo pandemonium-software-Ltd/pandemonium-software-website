@@ -10,7 +10,7 @@
     "accountUrl": "https://modu-forge.co.uk/account/4935d93e"
   },
   "expected": {
-    "subject": "Preview ready for your change ✓",
-    "body": "Hi Lucas,\n\nI've built a preview of the change you asked for:\n\n  Please change my tagline to 'Award-winning gardens in Oxfordshire'\n\nHave a look at the preview — your live site is unchanged until\nyou approve.\n\nPreview: https://abc123-customer-bobbuilders.benpandher.workers.dev\n\nIf it looks right, hit approve and the change will go live in a\nfew seconds:\n\n  Approve & publish:  https://modu-forge.co.uk/account/4935d93e/approve-change/req-1?t=tk-1\n\nIf it's not what you wanted, reject and I'll have another look:\n\n  Reject:             https://modu-forge.co.uk/account/4935d93e/reject-change/req-1?t=tk-1\n\nYou can also see status + history any time on your account\ndashboard: https://modu-forge.co.uk/account/4935d93e\n\n— Ben (via Cowork)"
+    "subject": "Have a look — your change is ready to approve",
+    "body": "Hi Lucas,\n\nI've made a preview of the change you asked for:\n\n  \"Please change my tagline to 'Award-winning gardens in Oxfordshire'\"\n\nYour live site hasn't changed yet — it only goes live once\nyou approve.\n\nPreview: https://abc123-customer-bobbuilders.benpandher.workers.dev\n\nIf it looks right, click here and it'll be live in a few\nseconds:\n\n  Approve & publish:  https://modu-forge.co.uk/account/4935d93e/approve-change/req-1?t=tk-1\n\nIf it's not what you had in mind, reject and I'll take another\nlook:\n\n  Reject:  https://modu-forge.co.uk/account/4935d93e/reject-change/req-1?t=tk-1\n\nYou can check status any time on your dashboard:\nhttps://modu-forge.co.uk/account/4935d93e\n\n— Ben"
   }
 }

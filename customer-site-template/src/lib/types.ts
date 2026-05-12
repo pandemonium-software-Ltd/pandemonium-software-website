@@ -82,9 +82,32 @@ export type TrustSignals = {
 
 export type ModuleConfig = {
   booking?: { calcomUrl: string };
-  newsletter?: { senderEmail: string };
+  /** Newsletter module — subscribe widget config when the module
+   *  is bought. Footer renders a signup form pointing at the
+   *  marketing-site subscribe endpoint. */
+  newsletter?: {
+    customerToken: string;
+    widgetHeadline: string;
+    widgetBody: string;
+    widgetCta: string;
+    apiOrigin: string;
+    senderEmail?: string;
+  };
   enquiry?: { recipientEmail: string };
   gbp?: { listingUrl: string };
+  /** Promotional offer strip rendered at the top of the homepage
+   *  when populated AND the visitor's local date falls between
+   *  `startsAt` and `endsAt` (inclusive). Set by the customer in
+   *  Hub Step 4 (pre-launch) or via the dashboard composer
+   *  (post-launch). All copy is verbatim from the customer. */
+  offer?: {
+    headline: string;
+    body?: string;
+    ctaLabel?: string;
+    ctaUrl?: string;
+    startsAt: string; // YYYY-MM-DD
+    endsAt: string; // YYYY-MM-DD
+  };
 };
 
 export type BrandAssets = {

@@ -29,6 +29,8 @@ import {
   getProspectByToken,
   updateProspectOnboarding,
   clearPreviewBuildTriggered,
+  clearFinalLaunchTriggered,
+  markSiteLive,
   patchChangeRequest,
   patchReviewEdit,
   updateChangeRequest,
@@ -41,6 +43,7 @@ import {
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import { site } from "@/lib/site";
+import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
 
 export const runtime = "nodejs";
 
@@ -57,6 +60,14 @@ const TOKEN_RE =
 // protect), the workflow's clientPayload threads the edit id
 // through here so we can email the customer "your edit is
 // applied" + stamp the right entry.
+// `finalLaunch` arrives as a string from jq in the workflow:
+// either "true" or "" (empty). A reusable coercion lifts it to
+// boolean so the rest of the handler can branch cleanly.
+const finalLaunchString = z
+  .string()
+  .optional()
+  .transform((v) => v === "true");
+
 const requestSchema = z.discriminatedUnion("status", [
   z.object({
     token: z.string().regex(TOKEN_RE),
@@ -71,6 +82,10 @@ const requestSchema = z.discriminatedUnion("status", [
     promotedVersionId: z.string().trim().max(100).optional(),
     changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
     reviewEditId: z.string().trim().max(50).optional().or(z.literal("")),
+    /** Flagged by step7-go-live when the launch-day build is
+     *  dispatched. Tells the callback to flip status to "Live" +
+     *  stamp Site Live At + send the celebratory email. */
+    finalLaunch: finalLaunchString,
   }),
   z.object({
     token: z.string().regex(TOKEN_RE),
@@ -79,6 +94,7 @@ const requestSchema = z.discriminatedUnion("status", [
     errorMessage: z.string().trim().max(2000),
     changeRequestId: z.string().trim().max(50).optional().or(z.literal("")),
     reviewEditId: z.string().trim().max(50).optional().or(z.literal("")),
+    finalLaunch: finalLaunchString,
   }),
 ]);
 
@@ -134,8 +150,16 @@ export async function POST(request: Request) {
   // --- Failure: log + clear latches per mode -------------------------------
   if (parsed.data.status === "failure") {
     if (parsed.data.mode === "live") {
+      const isFinalLaunchFailure = parsed.data.finalLaunch === true;
       try {
         await clearPreviewBuildTriggered(prospect.pageId, { failure: true });
+        // Also clear the finalLaunch latch on failure so the cron
+        // can re-dispatch on the next tick (after the operator has
+        // looked at the error). Status stays "Onboarding Complete"
+        // — we don't flip to "Live" on a failed build.
+        if (isFinalLaunchFailure) {
+          await clearFinalLaunchTriggered(prospect.pageId);
+        }
       } catch (e) {
         console.error(
           `[build-callback] couldn't clear build latches: ${e instanceof Error ? e.message : String(e)}`,
@@ -158,8 +182,33 @@ export async function POST(request: Request) {
         });
       }
       console.error(
-        `[build-callback] LIVE build FAILED for ${parsed.data.token}: ${parsed.data.errorMessage}`,
+        `[build-callback] LIVE build FAILED for ${parsed.data.token}${isFinalLaunchFailure ? " (LAUNCH DAY)" : ""}: ${parsed.data.errorMessage}`,
       );
+      await notifyAdmin(env, {
+        category: "build",
+        subject: isFinalLaunchFailure
+          ? `🚨 LAUNCH-DAY BUILD FAILED — ${prospect.name}`
+          : `LIVE build FAILED — ${prospect.name}`,
+        body:
+          (isFinalLaunchFailure
+            ? `URGENT — ${prospect.name}'s scheduled launch-day build failed. They are NOT live yet. Status stays "Onboarding Complete"; cron will re-try on the next tick once the latch is cleared.\n\n`
+            : `A live build failed for ${prospect.name}.\n\n`) +
+          `Error:\n  ${parsed.data.errorMessage}\n\n` +
+          (parsed.data.reviewEditId
+            ? `Review edit: ${parsed.data.reviewEditId.slice(0, 8)}…\n\n`
+            : "") +
+          adminFooter({
+            prospectName: prospect.name,
+            prospectToken: parsed.data.token,
+            anchor: parsed.data.reviewEditId
+              ? `re-${parsed.data.reviewEditId.slice(0, 8)}`
+              : undefined,
+          }),
+      }).catch((e) => {
+        console.warn(
+          `[build-callback] admin notify failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      });
     } else if (parsed.data.mode === "preview" && parsed.data.changeRequestId) {
       // Preview build failed — leave the request open so Cowork
       // re-tries on the next tick OR Ben gets the escalation email
@@ -181,6 +230,19 @@ export async function POST(request: Request) {
       console.error(
         `[build-callback] PREVIEW build FAILED for ${parsed.data.token} cr=${parsed.data.changeRequestId}: ${parsed.data.errorMessage}`,
       );
+      await notifyAdmin(env, {
+        category: "build",
+        subject: `PREVIEW build FAILED — ${prospect.name}`,
+        body:
+          `Preview build failed for ${prospect.name}.\n\n` +
+          `CR: ${parsed.data.changeRequestId.slice(0, 8)}…\n` +
+          `Error:\n  ${parsed.data.errorMessage}\n\n` +
+          adminFooter({
+            prospectName: prospect.name,
+            prospectToken: parsed.data.token,
+            anchor: `cr-${parsed.data.changeRequestId.slice(0, 8)}`,
+          }),
+      }).catch(() => {});
     } else if (parsed.data.mode === "promote" && parsed.data.changeRequestId) {
       // Promote failed — the customer has already approved, so
       // they're expecting it live. Don't flip status yet (Ben needs
@@ -195,6 +257,20 @@ export async function POST(request: Request) {
       console.error(
         `[build-callback] PROMOTE FAILED for ${parsed.data.token} cr=${parsed.data.changeRequestId}: ${parsed.data.errorMessage}`,
       );
+      await notifyAdmin(env, {
+        category: "build",
+        subject: `PROMOTE FAILED — ${prospect.name} (customer is waiting)`,
+        body:
+          `Customer already approved — promote failed. They're expecting it live.\n\n` +
+          `CR: ${parsed.data.changeRequestId.slice(0, 8)}…\n` +
+          `Error:\n  ${parsed.data.errorMessage}\n\n` +
+          `→ Investigate and either re-trigger the promote or message the customer.\n\n` +
+          adminFooter({
+            prospectName: prospect.name,
+            prospectToken: parsed.data.token,
+            anchor: `cr-${parsed.data.changeRequestId.slice(0, 8)}`,
+          }),
+      }).catch(() => {});
     }
     return NextResponse.json({
       success: true,
@@ -225,6 +301,12 @@ export async function POST(request: Request) {
     // Detect sub-case (b): step6 auto-apply for a review edit.
     const isReviewEditApply =
       parsed.data.reviewEditId && parsed.data.reviewEditId.length > 0;
+
+    // Detect sub-case (c): launch-day build dispatched by step7.
+    // Takes precedence over (a) and (b) because it's a terminal
+    // transition — flip status to "Live", stamp Site Live At,
+    // clear the final-launch latch, send the celebratory email.
+    const isFinalLaunch = parsed.data.finalLaunch === true;
 
     const existing = onboardingDataSchema.safeParse(
       prospect.onboardingData ?? {},
@@ -257,6 +339,75 @@ export async function POST(request: Request) {
     }
 
     let emailWarning: string | null = null;
+
+    // ---- Sub-case (c): launch-day terminal transition ----
+    if (isFinalLaunch) {
+      // Flip status → "Live", stamp Site Live At, clear the
+      // final-launch latch. updateProspectOnboarding handles the
+      // status flip; markSiteLive sets the dedicated date column;
+      // clearFinalLaunchTriggered removes the in-flight latch so
+      // a future manual re-launch can re-dispatch cleanly.
+      try {
+        await updateProspectOnboarding(prospect.pageId, {
+          statusFlip: "Live" as const,
+        });
+        await markSiteLive(prospect.pageId);
+        await clearFinalLaunchTriggered(prospect.pageId);
+      } catch (e) {
+        console.error(
+          `[build-callback] finalLaunch state flips failed: ${e instanceof Error ? e.message : String(e)}`,
+        );
+        // Continue — the customer's site is built + live (DNS + Worker
+        // route were already in place). The status flip can be fixed
+        // manually from /admin.
+      }
+      // Email customer the "you're live" announcement.
+      const siteUrl =
+        ((prospect.onboardingData ?? {}) as {
+          domain?: { domain?: string };
+        }).domain?.domain
+          ? `https://${
+              ((prospect.onboardingData ?? {}) as {
+                domain?: { domain?: string };
+              }).domain!.domain
+            }/`
+          : parsed.data.previewUrl;
+      try {
+        await sendCustomerEmail(env, prospect.email, "site-live", {
+          customerName: firstName(prospect.name),
+          siteUrl,
+          accountUrl: `${baseUrl}/account/${parsed.data.token}`,
+        });
+      } catch (e) {
+        emailWarning = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[build-callback] site-live email failed: ${emailWarning}`,
+        );
+      }
+      // Admin notify — operator wants to know launch day fired.
+      await notifyAdmin(env, {
+        category: "build",
+        subject: `🎉 LAUNCHED — ${prospect.name} is live`,
+        body:
+          `${prospect.name}'s site has gone live on its launch date.\n\n` +
+          `Live URL: ${siteUrl}\n` +
+          (emailWarning
+            ? `Customer email FAILED: ${emailWarning}\n\n`
+            : `Customer emailed (site-live).\n\n`) +
+          adminFooter({
+            prospectName: prospect.name,
+            prospectToken: parsed.data.token,
+          }),
+      }).catch(() => {});
+      return NextResponse.json({
+        success: true,
+        action: "launched",
+        mode: "live",
+        customerNotified: !emailWarning,
+        emailWarning,
+      });
+    }
+
     if (isReviewEditApply) {
       // Sub-case (b): pre-commit auto-apply finished. Customer
       // gets a different email — the live site (their preview
@@ -278,6 +429,22 @@ export async function POST(request: Request) {
           `[build-callback] review-edit-applied email failed: ${emailWarning}`,
         );
       }
+      await notifyAdmin(env, {
+        category: "build",
+        subject: `LIVE rebuild OK (review-edit) — ${prospect.name}`,
+        body:
+          `Live build for ${prospect.name} succeeded.\n\n` +
+          `Review edit: ${parsed.data.reviewEditId?.slice(0, 8)}…\n` +
+          `Live URL: ${parsed.data.previewUrl}\n` +
+          (emailWarning
+            ? `Customer email FAILED: ${emailWarning}\n\n`
+            : `Customer emailed (review-edit-applied).\n\n`) +
+          adminFooter({
+            prospectName: prospect.name,
+            prospectToken: parsed.data.token,
+            anchor: `re-${(parsed.data.reviewEditId ?? "").slice(0, 8)}`,
+          }),
+      }).catch(() => {});
       return NextResponse.json({
         success: true,
         action: "review-edit-applied",
@@ -302,6 +469,20 @@ export async function POST(request: Request) {
         `[build-callback] preview-ready email failed: ${emailWarning}`,
       );
     }
+    await notifyAdmin(env, {
+      category: "build",
+      subject: `LIVE preview ready — ${prospect.name}`,
+      body:
+        `Customer pre-launch preview built for ${prospect.name}.\n\n` +
+        `Preview URL: ${parsed.data.previewUrl}\n` +
+        (emailWarning
+          ? `Customer email FAILED: ${emailWarning}\n\n`
+          : `Customer emailed (preview-ready).\n\n`) +
+        adminFooter({
+          prospectName: prospect.name,
+          prospectToken: parsed.data.token,
+        }),
+    }).catch(() => {});
     return NextResponse.json({
       success: true,
       action: "previewUrl-stamped",
@@ -380,6 +561,23 @@ export async function POST(request: Request) {
         `[build-callback] preview-ready email failed: ${emailWarning}`,
       );
     }
+    await notifyAdmin(env, {
+      category: "preview",
+      subject: `Cowork built CR preview — ${prospect.name}`,
+      body:
+        `Cowork built a change-request preview for ${prospect.name}.\n\n` +
+        `CR: ${parsed.data.changeRequestId.slice(0, 8)}…\n` +
+        `Original ask:\n  "${merged.message}"\n\n` +
+        `Preview URL (auth-gated): ${baseUrl}/account/${parsed.data.token}/preview/${merged.id}\n` +
+        (emailWarning
+          ? `Customer email FAILED: ${emailWarning}\n\n`
+          : `Customer emailed (change-request-preview-ready) with approve/reject CTAs.\n\n`) +
+        adminFooter({
+          prospectName: prospect.name,
+          prospectToken: parsed.data.token,
+          anchor: `cr-${parsed.data.changeRequestId.slice(0, 8)}`,
+        }),
+    }).catch(() => {});
     return NextResponse.json({
       success: true,
       action: "preview-stamped",
@@ -444,6 +642,22 @@ export async function POST(request: Request) {
         `[build-callback] applied-live email failed: ${emailWarning}`,
       );
     }
+    await notifyAdmin(env, {
+      category: "build",
+      subject: `Promoted CR to live — ${prospect.name}`,
+      body:
+        `Customer-approved change is now live on ${prospect.name}'s site.\n\n` +
+        `CR: ${parsed.data.changeRequestId.slice(0, 8)}…\n` +
+        `Original ask:\n  "${updated.message}"\n\n` +
+        (emailWarning
+          ? `"Applied live" customer email FAILED: ${emailWarning}\n\n`
+          : `Customer emailed (change-request-applied-live).\n\n`) +
+        adminFooter({
+          prospectName: prospect.name,
+          prospectToken: parsed.data.token,
+          anchor: `cr-${parsed.data.changeRequestId.slice(0, 8)}`,
+        }),
+    }).catch(() => {});
     return NextResponse.json({
       success: true,
       action: "promote-resolved",

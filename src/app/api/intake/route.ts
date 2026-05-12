@@ -198,6 +198,7 @@ export async function POST(request: Request) {
       moduleBooking: phase3.modules.moduleBooking,
       moduleEnquiry: phase3.modules.moduleEnquiry,
       moduleNewsletter: phase3.modules.moduleNewsletter,
+      moduleOffers: phase3.modules.moduleOffers,
       gbpAddon: phase3.modules.gbpAddon,
     },
     prospect.foundingMember,
@@ -238,6 +239,7 @@ export async function POST(request: Request) {
     moduleBooking: phase3.modules.moduleBooking,
     moduleEnquiry: phase3.modules.moduleEnquiry,
     moduleNewsletter: phase3.modules.moduleNewsletter,
+    moduleOffers: phase3.modules.moduleOffers,
     gbpAddon: phase3.modules.gbpAddon,
   };
   const moduleList = buildModuleListMarkdown(moduleSelection);

@@ -30,14 +30,15 @@ import {
 } from "../fees";
 import type { ProspectRecord } from "../notion-prospects";
 
-// The four module flags map to canonical multi_select option strings.
+// Module flags map to canonical multi_select option strings.
 // Centralised here so policy + UI + Notion writers all agree on the
 // vocabulary. If you add a new module, add it here AND in fees.ts AND
-// in lib/onboarding.ts deriveStepList().
+// in lib/onboarding.ts deriveStepList() AND schemas.ts MODULE_OPTIONS.
 export const MODULE_OPTIONS = [
   "Online Booking",
   "Enquiry Form",
   "Newsletter",
+  "Offers",
   "Google Business Profile Setup/Audit",
 ] as const;
 
@@ -51,6 +52,7 @@ export function modulesToSelection(modules: string[]): ModuleSelection {
     moduleBooking: modules.includes("Online Booking"),
     moduleEnquiry: modules.includes("Enquiry Form"),
     moduleNewsletter: modules.includes("Newsletter"),
+    moduleOffers: modules.includes("Offers"),
     gbpAddon: modules.includes("Google Business Profile Setup/Audit"),
   };
 }

@@ -22,6 +22,7 @@ import { site } from "@/lib/site";
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import { dispatchRepositoryEvent, GithubApiError } from "@/lib/github";
+import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
 
 /** Anti-spam latch — same window step5-review uses. If a build
  *  was triggered in the last 15 minutes, skip rather than queue
@@ -151,6 +152,54 @@ export async function PATCH(request: Request) {
     | null = null;
   if (status === "resolved" && updateResult.transitionedToTerminal) {
     rebuildStatus = await maybeDispatchRebuild(prospect);
+  }
+
+  // Always notify admin of the action — paper trail in inbox.
+  try {
+    const env = getServerEnv();
+    const lines: string[] = [];
+    lines.push(`Action: status → ${status.toUpperCase()}`);
+    lines.push(`Change request: ${changeRequestId.slice(0, 8)}…`);
+    lines.push(`Customer: ${prospect.name} <${prospect.email}>`);
+    lines.push(`Original message:\n  "${updateResult.updated.message}"`);
+    if (reply) lines.push(`Your reply:\n  "${reply}"`);
+    if (status === "resolved") {
+      if (rebuildStatus?.dispatched) {
+        lines.push(`Rebuild: dispatched (${rebuildStatus.via}).`);
+      } else if (rebuildStatus && !rebuildStatus.dispatched) {
+        lines.push(`Rebuild SKIPPED: ${rebuildStatus.reason}`);
+      }
+      if (updateResult.transitionedToTerminal && reply) {
+        lines.push(
+          emailErr
+            ? `Customer email FAILED: ${emailErr}`
+            : `Customer emailed (change-request-resolved template).`,
+        );
+      }
+    } else if (status === "rejected") {
+      if (updateResult.transitionedToTerminal && reply) {
+        lines.push(
+          emailErr
+            ? `Customer email FAILED: ${emailErr}`
+            : `Customer emailed (change-request-rejected template).`,
+        );
+      }
+    }
+    lines.push("");
+    lines.push(adminFooter({
+      prospectName: prospect.name,
+      prospectToken: token,
+      anchor: `cr-${changeRequestId.slice(0, 8)}`,
+    }));
+    await notifyAdmin(env, {
+      subject: `${status === "resolved" ? "Resolved" : status === "rejected" ? "Rejected" : "Updated"} change request — ${prospect.name}`,
+      body: lines.join("\n"),
+      category: "change-request",
+    });
+  } catch (e) {
+    console.warn(
+      `[api/admin/change-request] admin notify failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   return NextResponse.json({

@@ -9,6 +9,6 @@
   },
   "expected": {
     "subject": "About your change request",
-    "body": "Hi Pat,\n\nYour change request:\n\n  Redesign the whole homepage from scratch\n\nMy reply:\n\nA full redesign is outside the monthly allowance — I'd treat this as a new build. Let me know if you'd like a fresh quote.\n\nThis one's outside what's covered by your monthly allowance, so\nit doesn't count against your 3 requests this month. If you'd\nlike to discuss the bigger piece, just hit reply — happy to\nquote separately.\n\nYou can see the full history (and submit other requests) on your\naccount dashboard.\n\n— Ben"
+    "body": "Hi Pat,\n\nAbout this one:\n\n  \"Redesign the whole homepage from scratch\"\n\nMy reply:\n\nA full redesign is outside the monthly allowance — I'd treat this as a new build. Let me know if you'd like a fresh quote.\n\nThis was outside what's covered by your monthly allowance, so\nit doesn't count against your 2 changes for the month. If\nyou'd like to chat about doing it as a separate piece of work,\njust reply — happy to quote.\n\nYou can see your other requests + submit new ones from your\ndashboard any time.\n\n— Ben"
   }
 }

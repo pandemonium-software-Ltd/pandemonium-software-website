@@ -18,26 +18,29 @@ export const phase4OnboardingHubReady: Template = {
   riskTier: "low",
   required: ["customerName", "onboardingUrl"],
   cta: { urlKey: "onboardingUrl", label: "Open your onboarding hub" },
-  subject: "You're all set — open your onboarding hub",
+  subject: "You're all set — let's build your site",
   body: `Hi {{customerName}},
 
-Your account is ready and your onboarding hub is set up.
+You're all set. Your onboarding hub is ready and waiting for
+you.
 
-In the hub, you'll work through 4-5 short steps (~30 minutes
-total). You can save your progress in any step and come back
-later — nothing's lost.
+The hub walks you through a short checklist — about 30 minutes
+in total. You can stop at any point and come back; nothing
+gets lost.
 
-  1. Cloudflare — sign up (free) and invite me as a member
-  2. Domain — tell me your domain and where it's registered
-  3. Modules — connect Cal.com / claim your Google listing
-     (only shown for the modules you bought)
-  4. Brand assets — upload your logo and any photos
-  5. Review & launch — pick a go-live date and sign off
+What you'll do:
+  1. Set up a free hosting account (Cloudflare — I'll send
+     instructions in the hub).
+  2. Tell me your web address.
+  3. Connect a couple of tools (booking calendar, Google
+     listing, etc. — only if you bought those bits).
+  4. Upload your logo and any photos you want on the site.
+  5. Pick a launch date and sign off.
 
-Each time you mark a step done, I get an email and pick up the
-technical work — DNS records, TLS certificates, sender domain
-setup, your site build. You'll get an update from me at every
-milestone.
+Each time you finish a step, I get a ping and pick up the
+behind-the-scenes work — connecting your web address, setting
+up secure hosting, building your site. You'll get an email
+each time something happens.
 
 — Ben`,
 };

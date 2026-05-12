@@ -22,6 +22,7 @@ import { step3Tools } from "./steps/step3-tools";
 import { step4Assets } from "./steps/step4-assets";
 import { step5Review } from "./steps/step5-review";
 import { step6ChangeRequests } from "./steps/step6-change-requests";
+import { step7GoLive } from "./steps/step7-go-live";
 
 /**
  * Registered steps in execution order. Steps are independent —
@@ -34,6 +35,11 @@ import { step6ChangeRequests } from "./steps/step6-change-requests";
  * customer requests rather than onboarding state. Placing it last
  * also means a noisy escalation cron doesn't push Hub steps
  * lower in the audit log.
+ *
+ * Step 7 (go-live) runs at the very end — it's the final transition
+ * from "Onboarding Complete" → "Live". Placed after step6 so any
+ * pending change-requests are processed first, then the launch
+ * dispatches the final clean build.
  */
 export const STEPS: readonly Step[] = [
   step1Cloudflare,
@@ -42,6 +48,7 @@ export const STEPS: readonly Step[] = [
   step4Assets,
   step5Review,
   step6ChangeRequests,
+  step7GoLive,
 ];
 
 /**

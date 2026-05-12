@@ -57,6 +57,8 @@ import {
   MODULE_ENQUIRY_MONTHLY_GBP,
   MODULE_NEWSLETTER_SETUP_GBP,
   MODULE_NEWSLETTER_MONTHLY_GBP,
+  MODULE_OFFERS_SETUP_GBP,
+  MODULE_OFFERS_MONTHLY_GBP,
   GBP_ADDON_ONE_OFF_GBP,
   GBP_ADDON_MONTHLY_GBP,
   calculateFees,
@@ -133,6 +135,7 @@ type IntakeDefaults = {
     moduleBooking?: boolean;
     moduleEnquiry?: boolean;
     moduleNewsletter?: boolean;
+    moduleOffers?: boolean;
     gbpAddon?: boolean;
   };
 };
@@ -184,6 +187,7 @@ function buildDefaultValues(
       moduleBooking: saved.modules?.moduleBooking ?? seed.modules?.moduleBooking ?? false,
       moduleEnquiry: saved.modules?.moduleEnquiry ?? seed.modules?.moduleEnquiry ?? false,
       moduleNewsletter: saved.modules?.moduleNewsletter ?? seed.modules?.moduleNewsletter ?? false,
+      moduleOffers: saved.modules?.moduleOffers ?? seed.modules?.moduleOffers ?? false,
       gbpAddon: saved.modules?.gbpAddon ?? seed.modules?.gbpAddon ?? false,
     },
     socialProof: {
@@ -920,12 +924,14 @@ function ModulesSection({
   const moduleBooking = watch("modules.moduleBooking");
   const moduleEnquiry = watch("modules.moduleEnquiry");
   const moduleNewsletter = watch("modules.moduleNewsletter");
+  const moduleOffers = watch("modules.moduleOffers");
   const gbpAddon = watch("modules.gbpAddon");
 
   const fees = calculateFees({
     moduleBooking: !!moduleBooking,
     moduleEnquiry: !!moduleEnquiry,
     moduleNewsletter: !!moduleNewsletter,
+    moduleOffers: !!moduleOffers,
     gbpAddon: !!gbpAddon,
   });
 
@@ -966,6 +972,13 @@ function ModulesSection({
           setup={`+£${MODULE_NEWSLETTER_SETUP_GBP}`}
           monthly={`+£${MODULE_NEWSLETTER_MONTHLY_GBP}/mo`}
           register={register("modules.moduleNewsletter")}
+        />
+        <ModuleRow
+          label="Offers"
+          tagline="A promo strip on your homepage you control from your dashboard — set a headline, dates and CTA. I'll moderate each before it goes live."
+          setup={`+£${MODULE_OFFERS_SETUP_GBP}`}
+          monthly={`+£${MODULE_OFFERS_MONTHLY_GBP}/mo`}
+          register={register("modules.moduleOffers")}
         />
         <ModuleRow
           label="Google Business Profile + live reviews"

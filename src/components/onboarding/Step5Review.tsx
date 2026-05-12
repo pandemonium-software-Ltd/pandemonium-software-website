@@ -320,11 +320,10 @@ export default function Step5Review({
         </div>
         <p className="mt-2 text-sm text-navy-700">
           You get up to <strong>{MAX_REVIEW_EDITS} rounds</strong> of
-          revisions before launch. After that, post-launch tweaks
-          go through your monthly allowance (3 change requests
-          included, one item per request) or get quoted separately
-          if they&apos;re bigger. The cap keeps us both honest about
-          scope.
+          revisions before launch. After launch, you can ask for up
+          to 2 changes a month from your dashboard (bundle a few
+          related tweaks into one if you like). Bigger jobs I quote
+          separately. The cap keeps us both honest about scope.
         </p>
 
         {/* Scope guardrails */}
@@ -394,10 +393,10 @@ export default function Step5Review({
             </p>
             <p className="mt-2">
               Anything else from here goes into your post-launch
-              monthly allowance (3 change requests included, one
-              item per request) or gets quoted separately if it&apos;s
-              bigger. Email me from your{" "}
-              <a href="#" className="link">
+              monthly allowance (2 changes a month included) or gets
+              quoted separately if it&apos;s bigger. Email me from
+              your{" "}
+              <a href={`/account/${token}`} className="link">
                 Account dashboard
               </a>{" "}
               once you&apos;re live and we&apos;ll work through it.
@@ -405,34 +404,29 @@ export default function Step5Review({
           </div>
         )}
 
-        {/* History list */}
+        {/* History list — gated to showEditsAndCommit because in
+            phase 1 there CAN'T be any edits (the form is hidden).
+            The richer panel below this section renders the same
+            history independently so it stays visible after the
+            hub locks. */}
         {edits.length > 0 && (
-          <div className="mt-7 border-t border-navy-100 pt-6">
-            <h4 className="font-serif text-base font-semibold text-navy-900">
-              Your edits so far
-            </h4>
-            <ul className="mt-3 space-y-3">
-              {edits.map((e, i) => (
-                <li
-                  key={e.id}
-                  className="rounded-xl border border-navy-100 bg-cream-50 p-4"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs uppercase tracking-wider text-navy-500">
-                      Edit {i + 1} ·{" "}
-                      {formatRelative(e.submittedAt)}
-                    </span>
-                    <EditStatusPill status={e.status} />
-                  </div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm text-navy-800">
-                    {e.message}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <EditHistoryList edits={edits} />
         )}
       </section>
+      )}
+
+      {/* ---------- Edit history (full, always-visible when any
+           edits exist) ---------- */}
+      {!showEditsAndCommit && edits.length > 0 && (
+        <section className="mt-9">
+          <h3 className="font-serif text-lg font-semibold text-navy-900">
+            Your edit history
+          </h3>
+          <p className="mt-2 text-sm text-navy-700">
+            Every revision you&apos;ve submitted so far.
+          </p>
+          <EditHistoryList edits={edits} />
+        </section>
       )}
 
       {/* ---------- C. Go-live + sign-off (only after preview requested) ---------- */}
@@ -545,8 +539,8 @@ export default function Step5Review({
               Your account dashboard is your home for everything from
               now on — site status, subscription details, and the
               &ldquo;Need a change?&rdquo; form for any post-launch
-              tweaks (3 change requests/month included, one item per
-              request).
+              tweaks (2 changes a month included; bundle a few
+              related tweaks into one request if you like).
             </p>
           </div>
         ) : (
@@ -704,6 +698,144 @@ function FeedbackTemplate() {
         feedback, not on individual changes.
       </p>
     </div>
+  );
+}
+
+// ---------- Edit history list (full detail) ----------
+
+/**
+ * Renders the full pre-launch edit history with:
+ *   - submission timestamp + status pill
+ *   - original message
+ *   - Cowork's classification + reasoning (when present)
+ *   - patches Cowork applied (when present)
+ *   - admin reply (when present)
+ *   - resolution timestamp (when resolved)
+ *
+ * Shown on Step 5 so customers can always see what happened to
+ * each request — submitted, classified, applied, rejected. Stays
+ * visible even after the hub locks (signed-off), so customers
+ * keep their paper trail.
+ */
+function EditHistoryList({ edits }: { edits: ReviewEdit[] }) {
+  return (
+    <div className="mt-7 border-t border-navy-100 pt-6">
+      <h4 className="font-serif text-base font-semibold text-navy-900">
+        Your edits so far ({edits.length})
+      </h4>
+      <ul className="mt-3 space-y-3">
+        {edits.map((e, i) => (
+          <EditHistoryItem key={e.id} edit={e} index={i + 1} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function EditHistoryItem({
+  edit,
+  index,
+}: {
+  edit: ReviewEdit;
+  index: number;
+}) {
+  // Narrow Cowork fields off the schema-typed ReviewEdit. They're
+  // all optional — old edits won't have them. Tolerate either the
+  // legacy single `coworkPatch` or the new `coworkPatches` array.
+  const ext = edit as ReviewEdit & {
+    coworkClassification?: "in_scope" | "out_of_scope" | "ambiguous";
+    coworkConfidence?: number;
+    coworkReasoning?: string;
+    coworkPatches?: Array<{
+      target: string;
+      newValue?: unknown;
+      previousValue?: unknown;
+    }>;
+    coworkPatch?: {
+      target: string;
+      newValue?: unknown;
+      previousValue?: unknown;
+    };
+    coworkPatchAppliedAt?: string;
+    adminReply?: string;
+    resolvedAt?: string;
+  };
+  const patches =
+    ext.coworkPatches && ext.coworkPatches.length > 0
+      ? ext.coworkPatches
+      : ext.coworkPatch
+        ? [ext.coworkPatch]
+        : [];
+
+  return (
+    <li className="rounded-xl border border-navy-100 bg-cream-50 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs uppercase tracking-wider text-navy-500">
+          Edit {index} · {formatRelative(edit.submittedAt)}
+        </span>
+        <EditStatusPill status={edit.status} />
+      </div>
+      <p className="mt-2 whitespace-pre-wrap text-sm text-navy-800">
+        {edit.message}
+      </p>
+
+      {/* Cowork classification panel (when present) */}
+      {ext.coworkClassification && (
+        <div className="mt-3 rounded-lg border-l-2 border-amber-300 bg-white p-3 text-xs">
+          <p className="font-semibold uppercase tracking-wider text-amber-900">
+            What I (Cowork) did
+            {ext.coworkConfidence !== undefined && (
+              <span className="ml-2 font-mono text-[10px] text-amber-700">
+                ({ext.coworkClassification},{" "}
+                {(ext.coworkConfidence * 100).toFixed(0)}% confidence)
+              </span>
+            )}
+          </p>
+          {ext.coworkReasoning && (
+            <p className="mt-1 text-amber-900">{ext.coworkReasoning}</p>
+          )}
+          {patches.length > 0 && (
+            <div className="mt-2 space-y-1">
+              <p className="font-semibold text-amber-900">
+                {patches.length === 1 ? "Change applied:" : "Changes applied:"}
+              </p>
+              <ul className="ml-3 list-disc space-y-0.5 text-navy-800">
+                {patches.map((p, i) => (
+                  <li key={i}>
+                    <span className="font-mono text-[11px]">{p.target}</span>
+                    {": "}
+                    <span className="break-all">{String(p.newValue)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {ext.coworkPatchAppliedAt && (
+            <p className="mt-1.5 text-[10px] text-amber-700">
+              Applied {formatRelative(ext.coworkPatchAppliedAt)}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Admin reply (when present) */}
+      {ext.adminReply && (
+        <div className="mt-3 rounded-lg border-l-2 border-green-500 bg-white p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">
+            Reply from ModuForge
+            {ext.resolvedAt && (
+              <>
+                {" · "}
+                {formatRelative(ext.resolvedAt)}
+              </>
+            )}
+          </p>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm text-navy-800">
+            {ext.adminReply}
+          </p>
+        </div>
+      )}
+    </li>
   );
 }
 

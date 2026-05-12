@@ -402,18 +402,17 @@ export function buildOnboardingCompleteEmail(args: {
   const greeting = (args.customerName.split(/\s+/)[0] ?? "there").trim();
   const goLivePretty = formatGoLive(args.goLiveDate);
   return {
-    subject: `Signed off — your site goes live on ${goLivePretty}`,
+    subject: `All signed off — your site goes live on ${goLivePretty}`,
     body:
       `Hi ${greeting},\n\n` +
-      `Thanks for the careful review. You're signed off and your site is going live on ${goLivePretty}.\n\n` +
-      `What happens next:\n` +
-      `1. I'm building your site now. You'll get another email when your preview is ready (typically 3-5 working days).\n` +
-      `2. After your site is live, your account dashboard is your home for everything — site status, subscription details, content change requests, the lot:\n` +
-      `   ${args.accountUrl}\n` +
-      `3. Your monthly subscription includes 3 change requests per month from launch — one item per request. Use the "Need a change?" form on the dashboard for anything you'd like updated.\n\n` +
-      `If anything's not right between now and launch, just reply.\n\n` +
-      `Thanks,\n` +
-      `Ben (and the ModuForge ops assistant)`,
+      `Thanks for reviewing everything. You're all signed off and your site will be live on ${goLivePretty}.\n\n` +
+      `Here's what happens next — you don't need to do anything:\n` +
+      `1. I'll do the final tidy-up on your site over the next few days.\n` +
+      `2. On launch morning (before 11am), I'll switch your web address over so visitors land on your new site.\n` +
+      `3. Once your site is live, you can ask for up to 2 changes a month from your dashboard — things like swapping a photo, tweaking text, updating opening hours. I'll get them done within 48 working hours:\n` +
+      `   ${args.accountUrl}\n\n` +
+      `If you spot anything you want changed before launch, just reply to this email and I'll sort it.\n\n` +
+      `— Ben`,
   };
 }
 

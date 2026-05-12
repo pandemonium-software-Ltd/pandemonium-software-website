@@ -25,19 +25,71 @@ import { callHaiku } from "./client";
 /** Whitelist of patch targets the applier knows how to write. The
  *  classifier's prompt restricts proposals to this list — anything
  *  else gets reframed as out_of_scope. The applier rejects any
- *  target outside this list as a defence in depth. */
+ *  target outside this list as a defence in depth.
+ *
+ *  Some targets require a LOCATOR field on the patch:
+ *    - "content.services.*"     → `serviceName`
+ *    - "content.faq.*"          → `faqQuestion`
+ *    - "content.testimonials.*" → `testimonialName`
+ *
+ *  Some targets accept non-string values via JSON-encoded
+ *  newValue:
+ *    - "content.aboutBullets"               → JSON array of strings
+ *    - "content.services.features"          → JSON array of strings
+ *    - "content.services.priceFrom"         → numeric string
+ *    - "content.trust.yearsExperience"      → numeric string
+ *    - "business.openingHours"              → JSON object (day → {open,from,to})
+ *
+ *  Brand colours validate as 6-digit hex via the applier — Haiku is
+ *  instructed to ask the customer for a code if they didn't supply one. */
 export const SAFE_PATCH_TARGETS = [
-  // Site Content step copy fields
+  // ----- Site Content step copy fields -----
   "copy.tagline",
   "copy.aboutBlurb",
-  // Business details fields
+  "content.aboutBullets", // JSON array (full replace)
+  "content.aboutBullets.add", // newValue: plain string to append
+  "content.aboutBullets.remove", // newValue: exact string to find + remove
+  // ----- Business details -----
   "business.contactName",
   "business.phoneDisplay",
+  "business.phoneTel",
   "business.publicEmail",
   "business.address",
   "business.serviceArea",
-  // Future v2: service description / faq answer / opening hours
-  // (need locator-aware patch + revert; punted for v2)
+  "business.openingHours", // JSON object (full per-day record)
+  // ----- Trust signals -----
+  "content.trust.yearsExperience", // numeric string
+  "content.trust.associations",
+  "content.trust.awards",
+  // ----- Per-service (requires `serviceName` locator) -----
+  "content.services.description",
+  "content.services.longDescription",
+  "content.services.pricingNotes",
+  "content.services.priceFrom", // numeric string
+  "content.services.features", // JSON array
+  // ----- Service add/remove (max 10 services) -----
+  "content.services.add", // newValue: JSON of new service object
+  "content.services.remove", // requires serviceName locator
+  // ----- Per-FAQ (requires `faqQuestion` locator) -----
+  "content.faq.answer",
+  "content.faq.question",
+  // ----- FAQ add/remove (max 10 entries) -----
+  "content.faq.add", // newValue: JSON {question, answer}
+  "content.faq.remove", // requires faqQuestion locator
+  // ----- Per-testimonial (requires `testimonialName` locator) -----
+  "content.testimonials.quote",
+  "content.testimonials.location",
+  "content.testimonials.rating", // numeric string 1-5
+  // ----- Testimonial add/remove (max 5) -----
+  "content.testimonials.add", // newValue: JSON {name, quote, location?, rating?}
+  "content.testimonials.remove", // requires testimonialName locator
+  // ----- Brand colours (validated as #rrggbb hex) -----
+  "branding.brandColorPrimary",
+  "branding.brandColorSecondary",
+  // ----- Offers module (the active promotional strip on
+  //       the homepage). newValue is a JSON-encoded OfferEntry
+  //       object — Haiku gets the whole offer in one patch. -----
+  "content.offers.current",
 ] as const;
 
 export type SafeTarget = (typeof SAFE_PATCH_TARGETS)[number];
@@ -52,14 +104,43 @@ export type ClassificationResult = {
    *  escalation email + admin audit log so Ben can spot
    *  misclassifications. */
   reasoning: string;
-  /** Structured patch the applier will write. Only present when
-   *  classification is in_scope AND the target is in
-   *  SAFE_PATCH_TARGETS. */
-  patch?: {
+  /** Structured patches the applier will write. Multi-field
+   *  requests produce an array of length > 1 (e.g. "change phone
+   *  AND email" → 2 patches). All patches must target a SafeTarget;
+   *  mixed-scope requests (one patchable + one not) classify as
+   *  ambiguous with `patches` left undefined. Empty array is not a
+   *  valid value — we use undefined to mean "no patches". */
+  patches?: Array<{
     target: SafeTarget;
-    /** New value being written. String for all current targets. */
+    /** New value being written. Always a string from Haiku — for
+     *  non-string targets (numbers, arrays, JSON blobs) the applier
+     *  parses the encoding. See SAFE_PATCH_TARGETS docstring for
+     *  per-target encoding rules. */
     newValue: string;
-  };
+    /** Locator for `content.services.*` targets. Matches against
+     *  the current `content.services[i].serviceName` to find the
+     *  right entry. Required for services targets; ignored
+     *  otherwise. */
+    serviceName?: string;
+    /** Locator for `content.faq.*` targets. Matches against the
+     *  current `content.faq[i].question`. Required for FAQ targets. */
+    faqQuestion?: string;
+    /** Locator for `content.testimonials.*` targets. Matches the
+     *  testimonial's `name` field. Required for testimonials. */
+    testimonialName?: string;
+  }>;
+  /** When true, the change has ALREADY been applied to the
+   *  customer's data outside of Cowork's patch path — for instance
+   *  they re-uploaded a logo via Hub Step 4 (Brand assets) and
+   *  the new asset is already in their onboardingData. Cowork
+   *  has nothing to patch; it just needs to dispatch a fresh
+   *  build to ship what's already saved.
+   *
+   *  Mutually exclusive with `patches`: if Haiku proposes patches
+   *  AND rebuildOnly, the validator drops rebuildOnly because the
+   *  patches path is more specific. Currently triggered by asset/
+   *  photo/logo references where the customer has just re-uploaded. */
+  rebuildOnly?: boolean;
 };
 
 /**
@@ -78,13 +159,61 @@ export type SiteSnapshot = {
     location: string;
     contactName?: string;
     phoneDisplay?: string;
+    phoneTel?: string;
     publicEmail?: string;
     address?: string;
     serviceArea?: string;
+    openingHours?: Record<
+      string,
+      { open: boolean; from?: string; to?: string }
+    >;
   };
   copy: {
     tagline?: string;
     aboutBlurb?: string;
+    aboutBullets?: string[];
+  };
+  trust?: {
+    yearsExperience?: number;
+    associations?: string;
+    awards?: string;
+  };
+  /** Current brand colours — Haiku reads these to confirm an
+   *  existing colour vs. a fresh one. Hex 6-digit format. */
+  branding?: {
+    primary?: string;
+    secondary?: string;
+  };
+  /** Per-service names — Haiku uses these as the canonical locator
+   *  for `content.services.*` patches. Match by trimmed lowercase. */
+  services?: Array<{
+    name: string;
+    description?: string;
+    priceFrom?: number;
+    longDescription?: string;
+    features?: string[];
+    pricingNotes?: string;
+  }>;
+  /** FAQ questions — same locator pattern. */
+  faq?: Array<{ question: string; answer?: string }>;
+  /** Testimonial names — same locator pattern. */
+  testimonials?: Array<{ name: string; quote?: string; rating?: number }>;
+  /** Summary of the customer's brand assets — count + most recent
+   *  upload per slot. Lets Haiku validate "I re-uploaded my logo"
+   *  claims: if the customer says they uploaded a new logo but
+   *  `assets.logo.uploadedAt` is months old, escalate rather than
+   *  triggering a rebuild. Optional so old test fixtures still
+   *  pass; classifier degrades gracefully when missing. */
+  assets?: {
+    logo?: { filename: string; uploadedAt: string } | null;
+    hero?: { filename: string; uploadedAt: string } | null;
+    about?: { filename: string; uploadedAt: string } | null;
+    galleryCount?: number;
+    servicePhotoCount?: number;
+    /** ISO timestamp of the most-recent asset upload across ALL
+     *  slots. Used as the primary "recency" signal for
+     *  rebuildOnly classification. */
+    lastUploadedAt?: string;
   };
 };
 
@@ -119,36 +248,181 @@ export async function classifyChangeRequest(args: {
     `  "classification": "in_scope" | "out_of_scope" | "ambiguous",\n` +
     `  "confidence": <number between 0 and 1>,\n` +
     `  "reasoning": "<1-2 sentences>",\n` +
-    `  "patch": null OR { "target": "<one of the targets below>", "newValue": "<string>" }\n` +
+    `  "patches": null OR [ { "target": "<target>", "newValue": "<string>", ` +
+    `"serviceName"?: "<exact service name>", "faqQuestion"?: "<exact question>", ` +
+    `"testimonialName"?: "<exact testimonial name>" }, ... ],\n` +
+    `  "rebuildOnly": true OR false\n` +
     `}\n\n` +
     `In-scope targets you can patch (any other change is out_of_scope):\n` +
     `${targetsList}\n\n` +
+    `Value-encoding rules (newValue is ALWAYS a string — encode as below):\n` +
+    `  - String targets: just the text.\n` +
+    `  - "content.aboutBullets" → JSON array of strings, e.g. ` +
+    `'["Free quotes","2-year guarantee"]'.\n` +
+    `  - "content.services.features" → JSON array of strings.\n` +
+    `  - "content.services.priceFrom" → numeric string, e.g. "15000".\n` +
+    `  - "content.trust.yearsExperience" → numeric string, e.g. "12".\n` +
+    `  - "content.testimonials.rating" → numeric string 1-5.\n` +
+    `  - "business.openingHours" → JSON object keyed by day abbreviation ` +
+    `("Mon","Tue","Wed","Thu","Fri","Sat","Sun"). Each entry: ` +
+    `{"open":bool,"from"?:"HH:MM","to"?:"HH:MM"}. Example: ` +
+    `'{"Mon":{"open":true,"from":"09:00","to":"17:00"},"Sat":{"open":false}}'. ` +
+    `Include EVERY day in the object — overwrites the whole record.\n` +
+    `  - "branding.brandColorPrimary" / "branding.brandColorSecondary" → ` +
+    `6-digit hex with leading hash, e.g. "#1a2b3c". Only patch if the ` +
+    `customer supplied a hex code OR a named colour you can map to a ` +
+    `specific hex with high confidence (basic colours like "red"=#dc2626, ` +
+    `"navy"=#1e3a8a). If the customer gave a vague reference like ` +
+    `"more blue" / "darker red" — ambiguous, ask for a hex code.\n` +
+    `  - "*.add" operations (services / faq / testimonials / aboutBullets) → ` +
+    `newValue is a JSON-encoded object describing the new entry:\n` +
+    `      • content.services.add → {"serviceName":"...","description"?,"longDescription"?,"priceFrom"?,"features"?,"pricingNotes"?}\n` +
+    `      • content.faq.add → {"question":"...","answer":"..."}\n` +
+    `      • content.testimonials.add → {"name":"...","quote":"...","location"?,"rating"?}\n` +
+    `      • content.aboutBullets.add → just the plain bullet text\n` +
+    `    .add operations DO NOT need a locator. Adding multiple in one ` +
+    `request → multiple patches with the same target are allowed.\n` +
+    `  - "*.remove" operations → newValue is any non-empty marker ` +
+    `(e.g. "remove" or the locator text); the locator field is what ` +
+    `identifies what gets removed:\n` +
+    `      • content.services.remove → serviceName locator\n` +
+    `      • content.faq.remove → faqQuestion locator\n` +
+    `      • content.testimonials.remove → testimonialName locator\n` +
+    `      • content.aboutBullets.remove → newValue is the exact bullet ` +
+    `text to remove (no locator field).\n\n` +
+    `Locator rules — patches that target a specific entry in an array:\n` +
+    `  - "content.services.*" targets REQUIRE "serviceName" set to the ` +
+    `EXACT name from the snapshot's services array. If the customer ` +
+    `says "the lawn care service" and the snapshot has ` +
+    `services=[{name:"Lawn Care For You"}], use "serviceName":"Lawn Care For You".\n` +
+    `  - "content.faq.*" targets REQUIRE "faqQuestion" set to the EXACT ` +
+    `question from the snapshot's faq array.\n` +
+    `  - "content.testimonials.*" targets REQUIRE "testimonialName" set ` +
+    `to the EXACT name from the snapshot's testimonials array.\n` +
+    `  - If the customer references something that doesn't appear in the ` +
+    `snapshot (e.g. "the FAQ about pricing" but no matching question ` +
+    `exists), classify as "ambiguous" — don't guess the locator.\n\n` +
     `Rules:\n` +
-    `1. Only set "patch" when classification is "in_scope" AND the ` +
-    `customer asked for a change to ONE of the targets above.\n` +
+    `1. Only set "patches" when classification is "in_scope" AND the ` +
+    `customer asked for a change to ONE OR MORE of the targets above. ` +
+    `Single-field requests produce a 1-element array; multi-field ` +
+    `produce N elements.\n` +
     `2. Image / layout / design / structural / new-page changes are ` +
-    `always "out_of_scope".\n` +
-    `3. If the customer's request is vague (e.g. "make it look better") ` +
-    `mark "ambiguous" and don't propose a patch.\n` +
-    `4. If patching, "newValue" is the FULL replacement value, not a diff.\n` +
+    `always "out_of_scope". Layout/styling beyond the brand-colour ` +
+    `swap is out_of_scope.\n` +
+    `3. If the customer's request is vague (e.g. "make it look better", ` +
+    `"freshen up the copy") mark "ambiguous" and set patches to null.\n` +
+    `4. "newValue" is the FULL replacement value, not a diff.\n` +
     `5. Confidence below 0.7 means the request is risky — Cowork will ` +
     `escalate to a human regardless of classification, so be honest about ` +
     `your uncertainty.\n` +
-    `6. NEVER use "patch" with a target outside the list above.\n` +
-    `7. MULTI-FIELD requests: if the customer asks to change MORE THAN ` +
-    `ONE distinct field in this single request (e.g. "change email AND ` +
-    `phone", "update tagline and address", "change my hours and contact ` +
-    `name"), ALWAYS classify as "ambiguous" and DO NOT propose a patch. ` +
-    `The reasoning should mention "multi-field — please split into ` +
-    `separate requests" so the operator knows to ask the customer to ` +
-    `re-submit. Single fields with multiple data points (e.g. "update ` +
-    `address to X, Y, postcode Z") are still ONE field and may be ` +
-    `patched normally.`;
+    `6. NEVER include a patch with a target outside the list above. If ` +
+    `even one requested change isn't in the list (mixed scope, e.g. ` +
+    `"change phone AND add a new page"), classify as "ambiguous" with ` +
+    `patches=null and explain in reasoning which part you couldn't handle.\n` +
+    `7. MULTI-FIELD: customers commonly bundle related changes ` +
+    `("change phone AND email", "update tagline and address", ` +
+    `"update Garden Pods price and description"). When ALL the requested ` +
+    `fields are in the safe-target list, return ALL of them as patches in ` +
+    `the array — DON'T escalate. Only escalate when the request is ` +
+    `mixed-scope (rule 6) OR vague (rule 3). Single fields with multiple ` +
+    `data points (e.g. "update address to X, Y, postcode Z") are still ` +
+    `ONE patch.\n` +
+    `8. Each (target, locator) combination in the patches array MUST be ` +
+    `unique — never patch the same target+locator twice. Same target ` +
+    `with different locators (e.g. priceFrom on two different services) ` +
+    `is fine.\n` +
+    `8b. BRAND COLOURS clarification: when the customer asks to change ` +
+    `a colour but doesn't give a hex code or unambiguous named colour ` +
+    `("make my primary more blue", "I want a green tone"), classify as ` +
+    `"ambiguous" with patches=null and reasoning starting with ` +
+    `"NEED_HEX_CODE:" so Cowork can email them to ask. Example: ` +
+    `"NEED_HEX_CODE: Customer wants a darker primary but didn't supply ` +
+    `a hex — please reply with the code (e.g. #2c5e9f) and I'll apply it."\n` +
+    `9. ASSET / PHOTO / LOGO refresh — IMPORTANT. The customer's Hub ` +
+    `has a "Brand Assets" step (Step 4) where they upload their logo, ` +
+    `hero image, about photo, service photos and gallery photos. When ` +
+    `they re-upload a new version of an asset there, the new file is ` +
+    `ALREADY in their data and you have NOTHING to patch — Cowork just ` +
+    `needs to dispatch a fresh build to ship it. This is called ` +
+    `"rebuildOnly" intent.\n` +
+    `Set "classification":"in_scope", "patches":null, "rebuildOnly":true ` +
+    `when:\n` +
+    `   (a) the customer's request mentions a visual asset — any of: ` +
+    `logo, photo, image, picture, header, banner, hero, gallery, photos, ` +
+    `headshot, profile photo, team photo, service photo; AND\n` +
+    `   (b) the snapshot's "assets" object shows an "uploadedAt" ` +
+    `timestamp (any slot — logo, hero, about, gallery, services) ` +
+    `within the last 7 DAYS of the current date. The customer is ` +
+    `referring to an upload they just did — this is the signal.\n\n` +
+    `EXAMPLES:\n` +
+    `  - Message: "Update the website logo from the brand asset update." ` +
+    `Snapshot shows assets.logo.uploadedAt = today. → in_scope, ` +
+    `rebuildOnly:true, patches:null. (Customer says "logo" + recent ` +
+    `upload exists → rebuild.)\n` +
+    `  - Message: "Please use my new hero photo I just uploaded." ` +
+    `Snapshot assets.hero.uploadedAt = 2 days ago. → in_scope, ` +
+    `rebuildOnly:true, patches:null.\n` +
+    `  - Message: "Change the logo on my site." Snapshot has no recent ` +
+    `upload (assets.lastUploadedAt > 7 days ago, or absent). → ` +
+    `ambiguous, patches:null, rebuildOnly:false. Reasoning should say ` +
+    `"No recent upload found in Brand Assets — please upload via ` +
+    `Step 4 of the Hub first."\n` +
+    `  - Message: "I uploaded a new logo, please use it. Also change my ` +
+    `phone to 0123." Snapshot has logo uploaded today. → in_scope, ` +
+    `patches:[{target:"business.phoneDisplay",newValue:"0123"}], ` +
+    `rebuildOnly:true. (Combined: text patch + rebuild for asset.)\n\n` +
+    `Do NOT classify asset requests as "out_of_scope" when a recent ` +
+    `upload exists — that's exactly the rebuildOnly case.\n` +
+    `10. rebuildOnly defaults to false. Only set it true when rule 9 ` +
+    `applies. NEVER set rebuildOnly:true for text-only changes — those ` +
+    `use the patches array.\n` +
+    `11. ADD operations for new services / FAQs / testimonials / about ` +
+    `bullets are IN SCOPE. Customers commonly want to extend their site ` +
+    `without changing what's there. Examples:\n\n` +
+    `  - "Add a new service: Tree Felling, £200 starting price, 2-day ` +
+    `turnaround, weekend visits available." → patches: ` +
+    `[{"target":"content.services.add","newValue":"{\\"serviceName\\":\\"Tree Felling\\",` +
+    `\\"priceFrom\\":200,\\"description\\":\\"2-day turnaround. Weekend visits available.\\"}"}]\n` +
+    `  - "Add an FAQ: Q: Do you do emergencies? A: Yes, evenings + weekends ` +
+    `at a 50% surcharge." → patches: [{"target":"content.faq.add","newValue":"{\\"question\\":\\"Do you do emergencies?\\",\\"answer\\":\\"Yes, evenings and weekends at a 50% surcharge.\\"}"}]\n` +
+    `  - "Add a testimonial from Sarah in Oxford: 'Great service, on time' ` +
+    `5 stars." → patches: [{"target":"content.testimonials.add","newValue":"{\\"name\\":\\"Sarah\\",\\"location\\":\\"Oxford\\",\\"quote\\":\\"Great service, on time\\",\\"rating\\":5}"}]\n` +
+    `  - "Add a bullet about our 24-hour callout." → patches: ` +
+    `[{"target":"content.aboutBullets.add","newValue":"24-hour callout service"}]\n` +
+    `  - "Add two services: Mowing £20/visit, and Hedge trimming £60." → ` +
+    `TWO patches both with target "content.services.add" and different ` +
+    `newValue JSON. Same target appearing twice with different newValue ` +
+    `is fine for .add.\n\n` +
+    `12. REMOVE operations are similarly in scope. The customer names ` +
+    `the thing to remove; you put it in the locator field, and newValue ` +
+    `can be any non-empty marker. Examples:\n\n` +
+    `  - "Remove the Garden Pods service." → patches: ` +
+    `[{"target":"content.services.remove","newValue":"remove","serviceName":"Garden Pods"}]\n` +
+    `  - "Drop the FAQ about pricing turnaround time." (snapshot has that ` +
+    `question) → patches: [{"target":"content.faq.remove","newValue":"remove","faqQuestion":"How long do you take to respond?"}]\n` +
+    `  - "Take down John's testimonial." → patches: ` +
+    `[{"target":"content.testimonials.remove","newValue":"remove","testimonialName":"John"}]\n` +
+    `  - "Remove the 'Free quotes' bullet." → patches: ` +
+    `[{"target":"content.aboutBullets.remove","newValue":"Free quotes"}]\n\n` +
+    `13. CONSTRAINTS — the applier rejects .add operations that would ` +
+    `exceed max counts: services 10, faq 10, testimonials 5, ` +
+    `aboutBullets 8. Look at the snapshot's count; if you're at the ` +
+    `cap, classify as ambiguous explaining the customer should remove ` +
+    `something first.\n` +
+    `14. RENAMES of services/FAQs/testimonials (e.g. "rename Lawn Care ` +
+    `to Lawn & Garden Care") are NOT yet supported — classify as ` +
+    `ambiguous with reasoning explaining that rename isn't on the ` +
+    `whitelist; suggest the customer remove the old entry and add a ` +
+    `new one if they want.`;
 
   const out = await callHaiku({
     system,
     prompt,
-    maxTokens: 600,
+    // Bumped from 600 → 1000 to accommodate multi-patch responses
+    // with locator fields (services / faq / testimonials) and the
+    // long opening-hours JSON blob.
+    maxTokens: 1000,
   });
   if (!out) return null;
 
@@ -200,42 +474,161 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
   if (typeof reasoning !== "string" || reasoning.trim().length === 0) {
     return null;
   }
-  let patch: ClassificationResult["patch"] | undefined;
-  if (obj.patch !== null && obj.patch !== undefined) {
-    if (typeof obj.patch !== "object") return null;
-    const p = obj.patch as Record<string, unknown>;
-    const target = p.target;
-    const newValue = p.newValue;
-    if (typeof target !== "string") return null;
-    // Whitelist enforcement — Haiku said target=X but X isn't safe.
-    if (!(SAFE_PATCH_TARGETS as readonly string[]).includes(target)) {
-      console.warn(
-        `[classify-change-request] Haiku proposed unsafe target '${target}' — discarding patch + downgrading to ambiguous`,
-      );
-      return {
-        classification: "ambiguous",
-        confidence: Math.min(confidence, 0.5),
-        reasoning: `${reasoning} (Note: Cowork rejected the model's proposed patch because it targeted an unsupported field.)`,
-      };
+  // Backward-compat: accept legacy single `patch` field too. Haiku
+  // can drift back to that shape when the prompt is long; normalise
+  // either form into an array.
+  const rawPatches: unknown =
+    obj.patches !== undefined && obj.patches !== null
+      ? obj.patches
+      : obj.patch !== undefined && obj.patch !== null
+        ? [obj.patch]
+        : undefined;
+
+  let patches: ClassificationResult["patches"] | undefined;
+  if (rawPatches !== undefined) {
+    if (!Array.isArray(rawPatches)) return null;
+    if (rawPatches.length === 0) {
+      // Empty array means "no patches" — same as undefined.
+      patches = undefined;
+    } else {
+      const normalised: NonNullable<ClassificationResult["patches"]> = [];
+      const seenTargets = new Set<string>();
+      for (const p of rawPatches) {
+        if (!p || typeof p !== "object") return null;
+        const pp = p as Record<string, unknown>;
+        const target = pp.target;
+        const newValue = pp.newValue;
+        if (typeof target !== "string") return null;
+        // Whitelist enforcement — even one unsafe target invalidates
+        // the entire patch set (we don't apply partial; mixed scope
+        // requires operator review).
+        if (!(SAFE_PATCH_TARGETS as readonly string[]).includes(target)) {
+          console.warn(
+            `[classify-change-request] Haiku proposed unsafe target '${target}' — discarding ALL patches + downgrading to ambiguous`,
+          );
+          return {
+            classification: "ambiguous",
+            confidence: Math.min(confidence, 0.5),
+            reasoning: `${reasoning} (Note: Cowork rejected the model's proposed patches because one targeted an unsupported field: ${target}.)`,
+          };
+        }
+        if (typeof newValue !== "string" || newValue.length === 0) {
+          // Patches with non-string newValue not yet supported. Drop
+          // the entire patch set — partial apply isn't safe — and
+          // escalate.
+          console.warn(
+            `[classify-change-request] Haiku patch had empty/non-string newValue for target '${target}' — discarding patch set`,
+          );
+          return {
+            classification:
+              classification as ClassificationResult["classification"],
+            confidence,
+            reasoning,
+          };
+        }
+        // Locator enforcement — service / faq / testimonial targets
+        // need their corresponding locator field. Missing locator =
+        // we can't safely identify which entry to patch.
+        const serviceName =
+          typeof pp.serviceName === "string"
+            ? pp.serviceName.trim()
+            : undefined;
+        const faqQuestion =
+          typeof pp.faqQuestion === "string"
+            ? pp.faqQuestion.trim()
+            : undefined;
+        const testimonialName =
+          typeof pp.testimonialName === "string"
+            ? pp.testimonialName.trim()
+            : undefined;
+        // `.add` operations create a new entry, so they don't need
+        // a locator. Everything else under content.services/faq/
+        // testimonials (UPDATE existing field, .remove) MUST have
+        // the matching locator.
+        const needsServiceLocator =
+          target.startsWith("content.services.") &&
+          target !== "content.services.add";
+        const needsFaqLocator =
+          target.startsWith("content.faq.") && target !== "content.faq.add";
+        const needsTestimonialLocator =
+          target.startsWith("content.testimonials.") &&
+          target !== "content.testimonials.add";
+        if (needsServiceLocator && !serviceName) {
+          return {
+            classification: "ambiguous",
+            confidence: Math.min(confidence, 0.5),
+            reasoning: `${reasoning} (Note: Cowork rejected a services patch because no service name was specified.)`,
+          };
+        }
+        if (needsFaqLocator && !faqQuestion) {
+          return {
+            classification: "ambiguous",
+            confidence: Math.min(confidence, 0.5),
+            reasoning: `${reasoning} (Note: Cowork rejected a FAQ patch because no question was specified.)`,
+          };
+        }
+        if (needsTestimonialLocator && !testimonialName) {
+          return {
+            classification: "ambiguous",
+            confidence: Math.min(confidence, 0.5),
+            reasoning: `${reasoning} (Note: Cowork rejected a testimonial patch because no testimonial name was specified.)`,
+          };
+        }
+        // Reject duplicate-target requests (Haiku violating rule #8).
+        // Last-write-wins would be ambiguous; safer to escalate.
+        // For locator-aware targets, uniqueness is target+locator —
+        // same target with different services is fine.
+        // EXCEPTION: `.add` targets are intentionally append-only
+        // and a customer might want to add multiple entries in one
+        // request ("Add two new FAQs..."). Include newValue in the
+        // dedupe key for those so they don't collide.
+        const isAddOp = target.endsWith(".add");
+        const dedupeKey = isAddOp
+          ? `${target}|${newValue}`
+          : serviceName || faqQuestion || testimonialName
+            ? `${target}|${serviceName ?? ""}|${faqQuestion ?? ""}|${testimonialName ?? ""}`
+            : target;
+        if (seenTargets.has(dedupeKey)) {
+          return {
+            classification: "ambiguous",
+            confidence: Math.min(confidence, 0.5),
+            reasoning: `${reasoning} (Note: Cowork rejected the model's patches because a duplicate appeared: ${target}.)`,
+          };
+        }
+        seenTargets.add(dedupeKey);
+        normalised.push({
+          target: target as SafeTarget,
+          newValue,
+          serviceName,
+          faqQuestion,
+          testimonialName,
+        });
+      }
+      patches = normalised;
     }
-    if (typeof newValue !== "string" || newValue.length === 0) {
-      // Patches with non-string newValue not yet supported by the
-      // applier (v2 will add hours / numbers); drop the patch but
-      // keep the classification.
-      return {
-        classification: classification as ClassificationResult["classification"],
-        confidence,
-        reasoning,
-      };
-    }
-    patch = { target: target as SafeTarget, newValue };
   }
-  // In-scope without a patch is still useful — Cowork will
-  // escalate, but Ben sees the model's reasoning. Don't filter it.
+  // rebuildOnly intent — when the customer's request is about an
+  // asset they've already re-uploaded. Defaults to false. Validated
+  // against the same defence-in-depth pattern as patches: must be
+  // boolean, never silently coerced.
+  let rebuildOnly = false;
+  if (obj.rebuildOnly !== undefined && obj.rebuildOnly !== null) {
+    if (typeof obj.rebuildOnly !== "boolean") return null;
+    rebuildOnly = obj.rebuildOnly;
+  }
+  // Defensive: rebuildOnly only meaningful when in_scope. If
+  // Haiku set it on out_of_scope/ambiguous, drop it.
+  if (rebuildOnly && classification !== "in_scope") {
+    rebuildOnly = false;
+  }
+
+  // In-scope without patches is still useful — Cowork will escalate,
+  // but Ben sees the model's reasoning. Don't filter it.
   return {
     classification,
     confidence,
     reasoning: reasoning.trim(),
-    patch,
+    patches,
+    rebuildOnly: rebuildOnly ? true : undefined,
   };
 }

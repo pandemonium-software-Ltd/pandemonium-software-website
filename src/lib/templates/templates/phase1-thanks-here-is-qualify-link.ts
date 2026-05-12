@@ -18,18 +18,20 @@ export const phase1ThanksHereIsQualifyLink: Template = {
   riskTier: "low",
   required: ["customerName", "businessName", "qualifyUrl"],
   cta: { urlKey: "qualifyUrl", label: "Open the qualification form" },
-  subject: "Thanks for your enquiry — next step inside",
+  subject: "Thanks for getting in touch — next step",
   body: `Hi {{customerName}},
 
-Thanks for getting in touch about a website for {{businessName}}.
+Thanks for the message about a website for {{businessName}}.
 
-Before I commit either of our time, I just need a few quick
-questions about what you're after — to make sure we're a good fit
-and I can quote accurately. About 10 minutes; use the button
-below to open the form.
+Before either of us spends much more time on this, I'd like to
+get a clearer picture of what you need — that way I can quote
+accurately and make sure I can actually help.
 
-Once you submit it, I'll review your answers personally and get
-back to you within 4 hours.
+It's a short form, about 10 minutes. Tap the button below to
+open it.
+
+Once you've filled it in, I'll have a look myself and reply
+within 4 working hours.
 
 — Ben`,
 };

@@ -18,6 +18,14 @@ export const MODULE_ENQUIRY_MONTHLY_GBP = 4;
 export const MODULE_NEWSLETTER_SETUP_GBP = 39;
 export const MODULE_NEWSLETTER_MONTHLY_GBP = 6;
 
+// Offers module — homepage promotional strip (headline + dates +
+// CTA) the customer manages from their dashboard. Lighter touch
+// than Newsletter (no per-customer email volume to bill), so
+// priced lower. Cowork moderates each offer before it goes live
+// to keep claims honest.
+export const MODULE_OFFERS_SETUP_GBP = 29;
+export const MODULE_OFFERS_MONTHLY_GBP = 4;
+
 export const GBP_ADDON_ONE_OFF_GBP = 29;
 // Monthly fee for the GBP module — covers the Google Places API
 // cost of refreshing the customer's reviews on their site daily.
@@ -35,6 +43,7 @@ export type ModuleSelection = {
   moduleBooking: boolean;
   moduleEnquiry: boolean;
   moduleNewsletter: boolean;
+  moduleOffers: boolean;
   gbpAddon: boolean;
 };
 
@@ -61,6 +70,7 @@ export function calculateFees(
   if (selection.moduleBooking) modules.push("Online Booking");
   if (selection.moduleEnquiry) modules.push("Enquiry Form");
   if (selection.moduleNewsletter) modules.push("Newsletter");
+  if (selection.moduleOffers) modules.push("Offers");
   if (selection.gbpAddon) modules.push("Google Business Profile Setup/Audit");
 
   if (foundingMember) {
@@ -90,6 +100,10 @@ export function calculateFees(
   if (selection.moduleNewsletter) {
     setup += MODULE_NEWSLETTER_SETUP_GBP;
     monthly += MODULE_NEWSLETTER_MONTHLY_GBP;
+  }
+  if (selection.moduleOffers) {
+    setup += MODULE_OFFERS_SETUP_GBP;
+    monthly += MODULE_OFFERS_MONTHLY_GBP;
   }
   if (selection.gbpAddon) {
     setup += GBP_ADDON_ONE_OFF_GBP;
@@ -125,6 +139,11 @@ export function buildModuleListMarkdown(
   if (selection.moduleNewsletter) {
     lines.push(
       "  • Newsletter (send up to 1000 emails/month from name@yourdomain)",
+    );
+  }
+  if (selection.moduleOffers) {
+    lines.push(
+      "  • Offers (a promotional strip on your homepage — set a headline, dates and CTA from your dashboard)",
     );
   }
   if (selection.gbpAddon) {

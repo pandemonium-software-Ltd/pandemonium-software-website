@@ -22,27 +22,26 @@ export const paymentMethodUpdateNeeded: Template = {
     "accountUrl",
   ],
   cta: { urlKey: "accountUrl", label: "Open your account" },
-  subject: "Payment method needs updating",
+  subject: "Quick fix needed: your card",
   body: `Hi {{customerName}},
 
-Quick heads-up: I tried to {{failedActionDescription}} but the
-payment didn't go through. Most likely your card has expired or
-been reissued — happens often.
+Quick heads-up — I tried to {{failedActionDescription}} but the
+payment didn't go through. Usually that means a card that's
+expired or been replaced (happens to everyone).
 
 What I've done:
-  • Removed the modules you were adding ({{removedModulesSummary}})
-    so you're not seeing features you haven't paid for.
-  • Held off on charging you again until we sort out the card.
+  • Held off on the change you were trying to make
+    ({{removedModulesSummary}}), so you're not paying for
+    anything you haven't approved.
+  • Stopped trying to charge you for now.
 
 What I need from you:
-  Reply to this email and I'll send you a secure Stripe link to
-  update your card. Takes about 30 seconds. Once that's done I'll
-  re-run the change and email you again to confirm.
+  Just reply to this email. I'll send you a secure link to
+  pop in a new card — takes about 30 seconds. Once that's
+  done I'll re-run the change and confirm.
 
-Nothing else on your account is affected — your existing
-subscription continues as normal. This is purely about the
-add-on we couldn't process.
+Your existing subscription continues as normal — this only
+affects the new thing we were trying to add.
 
-Thanks,
-Ben (and the ModuForge ops assistant)`,
+— Ben`,
 };

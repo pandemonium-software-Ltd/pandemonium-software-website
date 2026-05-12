@@ -8,6 +8,6 @@
   },
   "expected": {
     "subject": "Got it — change request received",
-    "body": "Hi Sam,\n\nYour change request landed safely:\n\n  Please update phone number on the contact page to 020 1234 5678\n\nWhat happens next:\n  • If it's a straight-forward edit (text, hours, services etc.)\n    the system applies it automatically and your site updates\n    within minutes.\n  • If it needs my eye (anything design-y, structural, or\n    out-of-scope) I'll review and reply on your dashboard.\n\nYou'll get another email when the change is done or if I need\nanything from you. The request is listed on your account\ndashboard so you can check status any time.\n\n— Ben"
+    "body": "Hi Sam,\n\nGot your change request:\n\n  \"Please update phone number on the contact page to 020 1234 5678\"\n\nWhat happens next:\n  • Straightforward edits (text, opening hours, services, your\n    phone number, photos etc.) get applied automatically and\n    your site usually updates within a few minutes.\n  • Anything bigger or design-related I'll look at personally\n    and reply on your dashboard.\n\nI'll email you when it's done, or if I need anything from you\nto finish it off. You can check status any time on your\ndashboard.\n\n— Ben"
   }
 }

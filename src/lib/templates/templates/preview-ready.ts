@@ -16,30 +16,28 @@ export const previewReady: Template = {
   riskTier: "low",
   required: ["customerName", "previewUrl", "hubUrl"],
   cta: { urlKey: "hubUrl", label: "Review your preview" },
-  subject: "Your site preview is ready ✓",
+  subject: "Your site preview is ready to view ✓",
   body: `Hi {{customerName}},
 
-Your site preview is ready to view.
+Good news — your site preview is ready.
 
-Open your hub and head to Step 5 — the preview is embedded inline so
-you can scroll through the whole site without bouncing tabs:
+Tap the button below to open your hub and scroll down to the
+last step ("Review"). You'll see your site embedded right
+there — click around like a real visitor would.
 
-  {{hubUrl}}
+What to do:
+  1. Look at every page — homepage, about, services, contact,
+     plus anything extra (booking, newsletter, enquiry form).
+  2. Try it on your phone too.
+  3. If anything needs changing, use the "Request edits"
+     section to tell me — you get up to 3 free rounds of
+     tweaks before launch. I usually turn each round around
+     within a working day.
+  4. When you're happy, hit the big "Submit and commit site"
+     button to lock in your launch date.
 
-(If you'd rather open the preview directly, here's the standalone
-link: {{previewUrl}})
+Reply to this email if anything looks broken or you're not
+sure what you're looking at.
 
-What to do next:
-  1. Click through every page — header, services, contact, any
-     module pages (booking / newsletter / enquiry form / GBP).
-  2. Check it on your phone too — the embed shrinks to fit.
-  3. If you want changes, use the "Request edits" section in
-     Step 5. You get up to 3 rounds of pre-launch edits.
-  4. When you're happy, scroll down to the commit section and
-     hit "Submit and commit site" — that locks in your launch.
-
-Reply to this email if anything's not loading or feels off.
-
-Thanks,
-Ben (and the ModuForge ops assistant)`,
+— Ben`,
 };

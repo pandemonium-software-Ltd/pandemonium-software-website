@@ -21,6 +21,9 @@
 
 import { useState } from "react";
 import type { Phase3Seeds } from "@/app/onboarding/[token]/page";
+import type { OfferEntry } from "@/lib/onboarding";
+import Step4OfferSection from "@/components/onboarding/Step4OfferSection";
+import Step4NewsletterSection from "@/components/onboarding/Step4NewsletterSection";
 
 // Mirrors src/lib/onboarding.ts step4ContentSchema. Keeping the
 // component types close to the schema prevents drift; the API
@@ -93,6 +96,14 @@ type Props = {
    *  trust signals, business details). Each section seeds ONLY when
    *  the customer's content-step value is blank for that section. */
   phase3Seeds: Phase3Seeds;
+  /** The customer's purchased module strings (e.g. "Newsletter",
+   *  "Offers"). Used to conditionally render module-specific
+   *  sections like the Offers strip composer. */
+  modules: ReadonlyArray<string>;
+  /** Customer's domain — used inside the Newsletter section to
+   *  preview the "From line" (`news@yourdomain`). Empty string is
+   *  fine; the form shows a placeholder. */
+  customerDomain: string;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
@@ -138,6 +149,8 @@ export default function Step4Content({
   readOnly,
   services,
   phase3Seeds,
+  modules,
+  customerDomain,
   savePartial,
   markDone,
 }: Props) {
@@ -608,6 +621,87 @@ export default function Step4Content({
           disabled={disabled}
         />
       </SectionCard>
+
+      {/* ---------- Offers (conditional on module) ---------- */}
+      {modules.includes("Offers") && (
+        <div className="mt-9">
+          <Step4OfferSection
+            current={
+              (data as { offers?: { current?: OfferEntry } }).offers?.current
+            }
+            readOnly={readOnly}
+            onSave={async (entry) => {
+              // Read the current `offers` slice so we don't clobber
+              // `history` when we update just `current`. Saving null
+              // moves any active offer to history (so the customer
+              // doesn't lose their last copy) and clears current.
+              const prevOffers = (data as {
+                offers?: { current?: OfferEntry; history?: OfferEntry[] };
+              }).offers;
+              const prevCurrent = prevOffers?.current;
+              const history = prevOffers?.history ?? [];
+              let nextOffers: {
+                current?: OfferEntry;
+                history?: OfferEntry[];
+              };
+              if (entry === null) {
+                // Clearing — archive the existing current entry.
+                nextOffers = {
+                  current: undefined,
+                  history: prevCurrent
+                    ? [prevCurrent, ...history].slice(0, 24)
+                    : history,
+                };
+              } else if (
+                prevCurrent &&
+                prevCurrent.id !== entry.id
+              ) {
+                // Different entry — old one goes to history.
+                nextOffers = {
+                  current: entry,
+                  history: [prevCurrent, ...history].slice(0, 24),
+                };
+              } else {
+                // Same entry being updated, or first save.
+                nextOffers = { current: entry, history };
+              }
+              return savePartial({ offers: nextOffers });
+            }}
+          />
+        </div>
+      )}
+
+      {/* ---------- Newsletter setup (conditional on module) ---------- */}
+      {modules.includes("Newsletter") && (
+        <div className="mt-6">
+          <Step4NewsletterSection
+            current={
+              (data as { newsletter?: { config?: Record<string, unknown> } })
+                .newsletter?.config
+            }
+            customerDomain={customerDomain}
+            readOnly={readOnly}
+            onSave={async (config) => {
+              // Read existing newsletter slice so we don't clobber
+              // subscribers / drafts / history when we update config.
+              const prev = (data as {
+                newsletter?: {
+                  subscribers?: unknown[];
+                  drafts?: unknown[];
+                  history?: unknown[];
+                };
+              }).newsletter;
+              const nextNewsletter = {
+                config,
+                subscribers: prev?.subscribers ?? [],
+                drafts: prev?.drafts ?? [],
+                history: prev?.history ?? [],
+              };
+              return savePartial({ newsletter: nextNewsletter });
+            }}
+          />
+        </div>
+      )}
 
       {/* ---------- Notes + buttons ---------- */}
       <section className="mt-9">

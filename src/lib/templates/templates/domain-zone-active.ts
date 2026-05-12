@@ -13,14 +13,14 @@ export const domainZoneActive: Template = {
   id: "domain-zone-active",
   riskTier: "low",
   required: ["customerName", "domain"],
-  subject: "{{domain}} is verified — ready for launch ✓",
+  subject: "{{domain}} is all set — ready for launch ✓",
   body: `Hi {{customerName}},
 
-Your domain {{domain}} is now verified and connected to Cloudflare.
+Your web address {{domain}} is connected and ready.
 
-Next up: I'll deploy your site to this domain when you give the
-green light on the final review step in your onboarding hub. You'll
-get one more email from me when the site goes live.
+The next step is yours: when you're happy with the site
+preview, sign off on the final step in your onboarding hub
+and I'll put it live on the date you've chosen.
 
-— Cowork (your ModuForge ops assistant)`,
+— Ben`,
 };

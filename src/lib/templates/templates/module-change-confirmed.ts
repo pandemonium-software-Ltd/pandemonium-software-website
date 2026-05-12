@@ -24,10 +24,10 @@ export const moduleChangeConfirmed: Template = {
     "accountUrl",
   ],
   cta: { urlKey: "accountUrl", label: "Open your hub" },
-  subject: "Module change confirmed ✓",
+  subject: "Module change done ✓",
   body: `Hi {{customerName}},
 
-Your module change is live.
+Your module change is sorted.
 
 What changed:
   • Added: {{addedSummary}}
@@ -40,14 +40,14 @@ Your new totals:
   • Setup fee: £{{newSetupTotal}}
   • Monthly: £{{newMonthlyTotal}}/month
 
-Any new module cards are now visible on your hub — head over and
-finish their setup. Any modules you removed are hidden, but your
-data is preserved if you ever re-add them.
+Any new modules are now showing on your hub — open it from
+the button below and finish setting them up. Anything you
+removed is hidden but your data is safe in case you change
+your mind.
 
-Note: this was your one allowed pre-launch module change. Anything
-else needs to wait until after launch (post-launch monthly
-allowance) or be quoted separately.
+Heads-up: that was your one pre-launch module swap. After
+launch you can still change modules — just reply and I'll
+quote it.
 
-Thanks,
-Ben (and the ModuForge ops assistant)`,
+— Ben`,
 };

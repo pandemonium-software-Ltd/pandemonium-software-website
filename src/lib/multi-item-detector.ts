@@ -1,60 +1,57 @@
-// Conservative regex-based detector for multi-item submissions.
-// Flags obvious multi-item structures (numbered/bullet lists,
-// explicit conjunctive markers like "also" or "additionally",
-// multiple "Please" headers) without being noisy on single-item
-// requests with multiple data points (e.g. "update opening hours:
-// Mon-Fri 8-6, Sat 9-12").
+// Conservative wishlist detector for change-request submissions.
+//
+// Cowork's classifier now properly handles multi-field requests
+// (e.g. "change phone AND email" → 2 patches → applied atomically),
+// so this detector ONLY catches genuinely list-shaped submissions
+// that look like a wishlist or site rebrief rather than a normal
+// edit. The classifier won't auto-apply 5+ patches in one go and
+// the operator UX of approving a sprawling list is poor — better
+// to ask the customer to split.
+//
+// Triggers (any one):
+//   - 3+ numbered list items (1. ... 2. ... 3. ...)
+//   - 3+ bullet items (-, *, •)
+//   - 2+ instances of "additionally" / "also another" / "thirdly"
+//     (genuine multi-paragraph compound asks)
 //
 // Used at the API boundary (BOTH /api/account/change-request and
-// /api/onboarding/review-edit) to decline multi-item submissions
-// before they reach Cowork's LLM classifier — saves an API call
-// and gives the customer a clearer "split into separate requests"
-// message than a Haiku-generated reasoning string would.
-//
-// Doesn't catch every multi-field combination: e.g. "change email
-// to X and number to Y" doesn't trigger any of these rules. The
-// Haiku classifier should refuse those at semantic level (its
-// prompt explicitly tells it to classify multi-field patches as
-// "ambiguous" — see src/lib/haiku/classify-change-request.ts).
+// /api/onboarding/review-edit) to give the customer a fast, clear
+// "split into separate requests" message before paying for a
+// classification round-trip. Two-field "and" requests are now
+// ALLOWED through — Haiku handles them.
 
 export function looksLikeMultipleItems(message: string): boolean {
-  // Numbered list: lines like "1." "1)" "(1)" with content after
+  // Numbered list: lines like "1." "1)" "(1)" with content after.
+  // Threshold raised from 2 to 3 so that a customer numbering two
+  // related fields (which Haiku can patch as 2 patches) doesn't
+  // get blocked at the front door.
   const numbered = (
     message.match(/(?:^|\n)\s*\(?\d+[.)]\s+\S/g) ?? []
   ).length;
-  if (numbered >= 2) return true;
+  if (numbered >= 3) return true;
 
-  // Bullet list: lines starting with -, *, • with content after
+  // Bullet list: lines starting with -, *, • with content after.
+  // Same threshold reasoning as numbered.
   const bullets = (
     message.match(/(?:^|\n)\s*[-*•]\s+\S/g) ?? []
   ).length;
-  if (bullets >= 2) return true;
+  if (bullets >= 3) return true;
 
-  // Sentence-starting conjunctive markers ("Also,", "Additionally,",
-  // "Secondly,", etc. — anywhere a new sentence begins). Restricting
-  // to sentence start avoids false-positives on filler "also" mid-
-  // sentence ("I have also uploaded the new file" should NOT match).
-  if (
-    /(?:^|[.!?\n]\s*)(?:also|additionally|secondly|thirdly|second:|third:)\b[,.\s]/i.test(
-      message,
-    )
-  ) {
-    return true;
-  }
-  // "and also" anywhere — that's a compound conjunction joining two
-  // distinct asks ("change X and also do Y"), not filler.
-  if (/\band\s+also\b/i.test(message)) {
-    return true;
-  }
-
-  // 2+ "Please" instances — each typically heads a separate ask
-  const pleases = (message.match(/(?:^|\W)please\b/gi) ?? []).length;
-  if (pleases >= 2) return true;
+  // Multiple compound-ask markers ("Additionally,", "Also another",
+  // "Thirdly,") — singular use is fine ("change X. Also Y." is a
+  // legitimate 2-field request); 2+ is wishlist territory.
+  const compoundMarkers = (
+    message.match(
+      /(?:^|[.!?\n]\s*)(?:additionally|also another|thirdly|second:|third:)\b/gi,
+    ) ?? []
+  ).length;
+  if (compoundMarkers >= 2) return true;
 
   return false;
 }
 
-/** The standard customer-facing decline message. Same wording in
- *  both endpoints so the customer sees consistent feedback. */
+/** The standard customer-facing decline message for genuine
+ *  wishlists. (Two-field "and" requests no longer hit this — Cowork
+ *  patches them atomically.) */
 export const MULTI_ITEM_DECLINE_MESSAGE =
-  "Looks like you've sent multiple changes in one request. Please split them into separate requests — one item per request — so each can be tracked and applied cleanly.";
+  "This request looks like a list of several distinct changes. Please split it into separate requests — one ask per request — so each can be tracked, classified, and deployed cleanly.";

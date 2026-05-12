@@ -25,37 +25,35 @@ export const moduleChangePending: Template = {
     "accountUrl",
   ],
   cta: { urlKey: "accountUrl", label: "View your account" },
-  subject: "Module change request received",
+  subject: "Got your module change — confirming shortly",
   body: `Hi {{customerName}},
 
-Got it — your module change is in the queue.
+Got your update — here's what's about to change.
 
-What's changing:
+What's different:
   • Adding: {{addedSummary}}
   • Removing: {{removedSummary}}
 
 Money side:
   • Setup: {{chargeOrRefundLine}}
-  • Subscription: {{monthlyDeltaLine}}
+  • Monthly subscription: {{monthlyDeltaLine}}
 
 Your new totals:
   • Setup fee: £{{newSetupTotal}}
   • Monthly: £{{newMonthlyTotal}}/month
 
-I'll process the payment side and confirm by email — usually within
-one working day. Once confirmed, your modules update on your hub
-and any new module cards appear ready to set up.
+I'll process the payment and email you to confirm — usually
+within one working day. After that, any new modules show up
+on your hub ready to set up.
 
-A reminder of the policy:
-  • This is your one allowed module change before launch — no
-    further switches once it's done.
-  • If you remove a module you've already set up, we keep your data
-    safely in case you re-add later. The module just disappears
-    from your hub.
+Heads-up:
+  • You only get one module change before launch, so this is
+    it. Anything else needs to wait until after you go live.
+  • If you're removing a module you'd already set up, I keep
+    your data safe in case you change your mind later.
 
-Reply to this email if any of the above doesn't look right and
-I'll fix it before processing.
+If anything looks wrong above, hit reply and I'll fix it
+before processing the payment.
 
-Thanks,
-Ben (and the ModuForge ops assistant)`,
+— Ben`,
 };

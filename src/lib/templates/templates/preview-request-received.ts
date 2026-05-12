@@ -13,24 +13,23 @@ export const previewRequestReceived: Template = {
   riskTier: "low",
   required: ["customerName", "accountUrl"],
   cta: { urlKey: "accountUrl", label: "Open your hub" },
-  subject: "Got it — building your site preview",
+  subject: "Got it — I'm building your site now",
   body: `Hi {{customerName}},
 
-Got your preview request. I'm starting work on your site now.
+Got your request — I'm starting to build your site preview now.
 
 What happens next:
-  1. I build your site preview from the brand assets, modules and
-     review notes you've provided. Typically 3-5 working days.
-  2. You'll get another email with a link to view the preview.
-  3. From there you can request up to 3 rounds of pre-launch edits
-     and then commit to launch on your chosen go-live date.
+  1. I'll put together a working preview from the photos, copy
+     and modules you've shared. Usually takes 3-5 working days.
+  2. You'll get another email with a link to view it.
+  3. After that you can request up to 3 free rounds of tweaks,
+     then sign off on your launch date.
 
 While you wait:
-  - Your hub is read-only-ish for the review step but you can still
-    edit Steps 1-4 if anything needs updating.
-  - If you remember anything else important, hit reply to this
-    email and I'll fold it into the preview before sending.
+  • You can still update earlier steps in your hub if you spot
+    something — just open the hub from the button below.
+  • Remembered something else important? Reply to this email
+    and I'll add it before the preview goes out.
 
-Thanks,
-Ben (and the ModuForge ops assistant)`,
+— Ben`,
 };
