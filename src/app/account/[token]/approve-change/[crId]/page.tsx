@@ -150,7 +150,7 @@ export default async function ApproveChangePage({
     return (
       <Wrapper
         title="Promotion paused"
-        body="GitHub Actions credentials aren't configured. Your approval is recorded; please reply to me and I'll promote manually."
+        body="GitHub Actions credentials aren't configured. Your approval is recorded; please reply to us and we'll promote manually."
       />
     );
   }
@@ -193,7 +193,7 @@ export default async function ApproveChangePage({
     return (
       <Wrapper
         title="Couldn't promote yet"
-        body={`Approval is recorded but the promote dispatch failed: ${msg}. I'll see this and follow up — you don't need to do anything.`}
+        body={`Approval is recorded but the promote dispatch failed: ${msg}. We've been notified and will follow up — you don't need to do anything.`}
       />
     );
   }

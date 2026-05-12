@@ -29,18 +29,18 @@ in total. You can stop at any point and come back; nothing
 gets lost.
 
 What you'll do:
-  1. Set up a free hosting account (Cloudflare — I'll send
+  1. Set up a free hosting account (Cloudflare — we'll send
      instructions in the hub).
-  2. Tell me your web address.
+  2. Tell us your web address.
   3. Connect a couple of tools (booking calendar, Google
      listing, etc. — only if you bought those bits).
   4. Upload your logo and any photos you want on the site.
   5. Pick a launch date and sign off.
 
-Each time you finish a step, I get a ping and pick up the
-behind-the-scenes work — connecting your web address, setting
-up secure hosting, building your site. You'll get an email
-each time something happens.
+Each time you finish a step, we pick up the behind-the-scenes
+work — connecting your web address, setting up secure hosting,
+building your site. You'll get an email each time something
+happens.
 
-— Ben`,
+— ModuForge`,
 };

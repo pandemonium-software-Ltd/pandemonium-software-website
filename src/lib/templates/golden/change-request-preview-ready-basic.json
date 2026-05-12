@@ -11,6 +11,6 @@
   },
   "expected": {
     "subject": "Have a look — your change is ready to approve",
-    "body": "Hi Lucas,\n\nI've made a preview of the change you asked for:\n\n  \"Please change my tagline to 'Award-winning gardens in Oxfordshire'\"\n\nYour live site hasn't changed yet — it only goes live once\nyou approve.\n\nPreview: https://abc123-customer-bobbuilders.benpandher.workers.dev\n\nIf it looks right, click here and it'll be live in a few\nseconds:\n\n  Approve & publish:  https://modu-forge.co.uk/account/4935d93e/approve-change/req-1?t=tk-1\n\nIf it's not what you had in mind, reject and I'll take another\nlook:\n\n  Reject:  https://modu-forge.co.uk/account/4935d93e/reject-change/req-1?t=tk-1\n\nYou can check status any time on your dashboard:\nhttps://modu-forge.co.uk/account/4935d93e\n\n— Ben"
+    "body": "Hi Lucas,\n\nWe've made a preview of the change you asked for:\n\n  \"Please change my tagline to 'Award-winning gardens in Oxfordshire'\"\n\nYour live site hasn't changed yet — it only goes live once\nyou approve.\n\nPreview: https://abc123-customer-bobbuilders.benpandher.workers.dev\n\nIf it looks right, click here and it'll be live in a few\nseconds:\n\n  Approve & publish:  https://modu-forge.co.uk/account/4935d93e/approve-change/req-1?t=tk-1\n\nIf it's not what you had in mind, reject and we'll take\nanother look:\n\n  Reject:  https://modu-forge.co.uk/account/4935d93e/reject-change/req-1?t=tk-1\n\nYou can check status any time on your dashboard:\nhttps://modu-forge.co.uk/account/4935d93e\n\n— ModuForge"
   }
 }

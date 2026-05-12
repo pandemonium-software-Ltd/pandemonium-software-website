@@ -9,6 +9,6 @@
   },
   "expected": {
     "subject": "Your change is live ✓",
-    "body": "Hi Lucas,\n\nThat's done. Your site now shows:\n\n  Please change my tagline to 'Award-winning gardens in Oxfordshire'\n\nHave a look: https://test09052026moduforge.store/\n\nIf something looks off, just reply to this email — I can put\nthe old version back in seconds if needed.\n\nFor anything else, head to your dashboard. You get 2 changes\na month included with your subscription.\n\n— Ben"
+    "body": "Hi Lucas,\n\nThat's done. Your site now shows:\n\n  Please change my tagline to 'Award-winning gardens in Oxfordshire'\n\nHave a look: https://test09052026moduforge.store/\n\nIf something looks off, just reply to this email — we can put\nthe old version back in seconds if needed.\n\nFor anything else, head to your dashboard. You get 2 changes\na month included with your subscription.\n\n— ModuForge"
   }
 }

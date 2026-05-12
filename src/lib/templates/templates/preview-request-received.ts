@@ -13,13 +13,13 @@ export const previewRequestReceived: Template = {
   riskTier: "low",
   required: ["customerName", "accountUrl"],
   cta: { urlKey: "accountUrl", label: "Open your hub" },
-  subject: "Got it — I'm building your site now",
+  subject: "Got it — we're building your site now",
   body: `Hi {{customerName}},
 
-Got your request — I'm starting to build your site preview now.
+Got your request — we're starting to build your site preview now.
 
 What happens next:
-  1. I'll put together a working preview from the photos, copy
+  1. We'll put together a working preview from the photos, copy
      and modules you've shared. Usually takes 3-5 working days.
   2. You'll get another email with a link to view it.
   3. After that you can request up to 3 free rounds of tweaks,
@@ -29,7 +29,7 @@ While you wait:
   • You can still update earlier steps in your hub if you spot
     something — just open the hub from the button below.
   • Remembered something else important? Reply to this email
-    and I'll add it before the preview goes out.
+    and we'll add it before the preview goes out.
 
-— Ben`,
+— ModuForge`,
 };

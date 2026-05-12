@@ -21,8 +21,8 @@ In plain terms:
   • If you set up email forwarding on this address, that's
     working now too.
 
-Nothing to do from your end — I'll email you again the
+Nothing to do from your end — we'll email you again the
 moment your site is live.
 
-— Ben`,
+— ModuForge`,
 };

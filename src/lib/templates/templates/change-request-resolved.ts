@@ -28,12 +28,12 @@ About this one:
 
   "{{originalMessage}}"
 
-My reply:
+Our reply:
 
 {{reply}}
 
 You can see your other requests + submit new ones from your
 dashboard any time.
 
-— Ben`,
+— ModuForge`,
 };

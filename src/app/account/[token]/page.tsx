@@ -235,10 +235,10 @@ function ErrorWrapper({
           <h1 className="heading-2 mt-3">{title}</h1>
           <p className="prose-body mt-5">
             {body ??
-              "Double-check the URL from my email, or reply and I'll resend it."}
+              "Double-check the URL from our email, or reply and we'll resend it."}
           </p>
           <p className="prose-body mt-4">
-            Email me at{" "}
+            Email us at{" "}
             <a href={`mailto:${site.contactEmail}`} className="link">
               {site.contactEmail}
             </a>

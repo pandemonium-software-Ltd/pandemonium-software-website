@@ -23,15 +23,15 @@ export const phase1ThanksHereIsQualifyLink: Template = {
 
 Thanks for the message about a website for {{businessName}}.
 
-Before either of us spends much more time on this, I'd like to
-get a clearer picture of what you need — that way I can quote
-accurately and make sure I can actually help.
+Before either of us spends much more time on this, we'd like to
+get a clearer picture of what you need — that way we can quote
+accurately and make sure we can actually help.
 
 It's a short form, about 10 minutes. Tap the button below to
 open it.
 
-Once you've filled it in, I'll have a look myself and reply
+Once you've filled it in, we'll review your answers and reply
 within 4 working hours.
 
-— Ben`,
+— ModuForge`,
 };

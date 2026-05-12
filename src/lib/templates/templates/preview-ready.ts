@@ -30,8 +30,8 @@ What to do:
      plus anything extra (booking, newsletter, enquiry form).
   2. Try it on your phone too.
   3. If anything needs changing, use the "Request edits"
-     section to tell me — you get up to 3 free rounds of
-     tweaks before launch. I usually turn each round around
+     section to let us know — you get up to 3 free rounds of
+     tweaks before launch. Each round usually turns around
      within a working day.
   4. When you're happy, hit the big "Submit and commit site"
      button to lock in your launch date.
@@ -39,5 +39,5 @@ What to do:
 Reply to this email if anything looks broken or you're not
 sure what you're looking at.
 
-— Ben`,
+— ModuForge`,
 };

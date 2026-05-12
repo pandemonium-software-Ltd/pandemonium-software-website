@@ -244,7 +244,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   {!isLive && (
                     <p className="mt-2 text-sm text-navy-600">
                       {status === "Build Started"
-                        ? "Your site is being built. I'll email you when the preview is ready."
+                        ? "Your site is being built. We'll email you when the preview is ready."
                         : status === "Onboarding Complete"
                           ? "Onboarding complete — your build is queued."
                           : "Setup in progress — finish your Onboarding Hub steps to unlock the build."}
@@ -657,7 +657,7 @@ function NextStepCard({
     case "Phase 2 Accepted":
       step = {
         title: "Your quote's in your inbox",
-        body: `We're a fit. Check your email for the quote (£${setupFee} setup + monthly). Once you're happy, hit the "Start onboarding intake" link in that email to fill in the details I need to set up your accounts.`,
+        body: `We're a fit. Check your email for the quote (£${setupFee} setup + monthly). Once you're happy, hit the "Start onboarding intake" link in that email to fill in the details we need to set up your accounts.`,
         cta: { label: "Re-send quote email", href: `mailto:${site.contactEmail}?subject=Resend%20my%20quote` },
       };
       break;
@@ -671,7 +671,7 @@ function NextStepCard({
     case "Phase 3 Complete":
       step = {
         title: "Awaiting payment",
-        body: `Intake's done — I just need the £${setupFee} setup fee to unlock your Onboarding Hub. The payment link's in your last email; reply if you can't find it and I'll re-send.`,
+        body: `Intake's done — we just need the £${setupFee} setup fee to unlock your Onboarding Hub. The payment link's in your last email; reply if you can't find it and we'll re-send.`,
         cta: { label: "Email about payment", href: `mailto:${site.contactEmail}?subject=Payment%20for%20setup` },
       };
       break;
@@ -686,13 +686,13 @@ function NextStepCard({
     case "Onboarding Complete":
       step = {
         title: "Build queued",
-        body: "Onboarding's done — your build is in the queue. I'll email you when the preview is ready so you can review before going live.",
+        body: "Onboarding's done — your build is in the queue. We'll email you when the preview is ready so you can review before going live.",
       };
       break;
     case "Build Started":
       step = {
         title: "Building your site",
-        body: "Your site is being built right now. I'll email you the moment it's ready — you don't need to do anything.",
+        body: "Your site is being built right now. We'll email you the moment it's ready — you don't need to do anything.",
       };
       break;
     case "Live":
@@ -912,9 +912,9 @@ function ChangeRequestsBlock({
           Bundle related tweaks freely
         </p>
         <p className="mt-1">
-          Two or three related changes in one request? Fine — Cowork
-          will apply them together. The exception is genuine
-          wishlists: numbered lists with 3+ separate items, or
+          Two or three related changes in one request? Fine — we
+          apply them together. The exception is genuine wishlists:
+          numbered lists with 3+ separate items, or
           paragraph-after-paragraph &ldquo;additionally&rdquo;
           requests. Those get auto-declined with a note to split
           them, and they don&apos;t burn a slot.

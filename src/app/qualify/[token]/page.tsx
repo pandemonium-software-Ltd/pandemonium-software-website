@@ -53,7 +53,7 @@ export default async function QualifyPage({
       <Wrapper>
         <ErrorCard
           title="That link doesn't look right."
-          body="The qualification link from my email should be 36 characters of letters, numbers and dashes. Double-check the URL, or reply to my email and I'll resend it."
+          body="The qualification link from our email should be 36 characters of letters, numbers and dashes. Double-check the URL, or reply to our email and we'll resend it."
         />
       </Wrapper>
     );
@@ -67,8 +67,8 @@ export default async function QualifyPage({
     return (
       <Wrapper>
         <ErrorCard
-          title="Something went wrong on my end."
-          body="Please try again in a minute. If the page still won't load, drop me an email and I'll sort it out."
+          title="Something went wrong on our end."
+          body="Please try again in a minute. If the page still won't load, drop us an email and we'll sort it out."
         />
       </Wrapper>
     );
@@ -79,7 +79,7 @@ export default async function QualifyPage({
       <Wrapper>
         <ErrorCard
           title="Link not found."
-          body="I can't find an enquiry that matches this link. Make sure you used the most recent email I sent — older qualification links expire when I send a new one. If in doubt, reply to my email."
+          body="We can't find an enquiry that matches this link. Make sure you used the most recent email we sent — older qualification links expire when a new one is issued. If in doubt, reply to our email."
         />
       </Wrapper>
     );
@@ -90,7 +90,7 @@ export default async function QualifyPage({
       <Wrapper>
         <InfoCard
           title="Already got your answers."
-          body={`I've got your qualification answers from ${prospect.business ?? "you"}. Watch your inbox — the next email from me will either be an acceptance with your fixed quote, a quick clarification, or (rarely) a polite no. If you haven't heard from me within 24 working hours, drop me a line.`}
+          body={`We've got your qualification answers from ${prospect.business ?? "you"}. Watch your inbox — the next email from us will either be an acceptance with your fixed quote, a quick clarification, or (rarely) a polite no. If you haven't heard from us within 24 working hours, drop us a line.`}
         />
       </Wrapper>
     );

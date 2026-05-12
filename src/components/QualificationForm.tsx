@@ -57,7 +57,7 @@ const MODULE_DETAILS: Record<
     setup: "£29 one-off",
     monthly: "+£2/mo",
     tagline:
-      "I sort your Google listing AND your top reviews refresh on your site automatically.",
+      "We sort your Google listing AND your top reviews refresh on your site automatically.",
   },
 };
 
@@ -244,7 +244,7 @@ export default function QualificationForm({
       {/* ---------- Section 3: Look and feel ---------- */}
       <Section
         title="Look and feel"
-        intro="Optional — I'll pick sensible defaults if you'd rather I just get on with it."
+        intro="Optional — we'll pick sensible defaults if you'd rather we just get on with it."
       >
         <div>
           <label

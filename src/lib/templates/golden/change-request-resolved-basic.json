@@ -9,6 +9,6 @@
   },
   "expected": {
     "subject": "Your change is done ✓",
-    "body": "Hi Alex,\n\nAbout this one:\n\n  \"Update phone number on the contact page to 020 1234 5678\"\n\nMy reply:\n\nDone — your phone number is updated. Refresh your site to see it live.\n\nYou can see your other requests + submit new ones from your\ndashboard any time.\n\n— Ben"
+    "body": "Hi Alex,\n\nAbout this one:\n\n  \"Update phone number on the contact page to 020 1234 5678\"\n\nOur reply:\n\nDone — your phone number is updated. Refresh your site to see it live.\n\nYou can see your other requests + submit new ones from your\ndashboard any time.\n\n— ModuForge"
   }
 }

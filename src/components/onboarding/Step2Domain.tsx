@@ -448,7 +448,7 @@ export default function Step2Domain({
       <section className="mt-7">
         <label className="block">
           <span className="block text-sm font-semibold text-navy-900">
-            Anything I should know? (optional)
+            Anything we should know? (optional)
           </span>
           <textarea
             value={notes}

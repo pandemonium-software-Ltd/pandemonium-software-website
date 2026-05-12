@@ -31,7 +31,7 @@ export const changeRequestPreviewReady: Template = {
   subject: "Have a look — your change is ready to approve",
   body: `Hi {{customerName}},
 
-I've made a preview of the change you asked for:
+We've made a preview of the change you asked for:
 
   "{{originalMessage}}"
 
@@ -45,13 +45,13 @@ seconds:
 
   Approve & publish:  {{approveUrl}}
 
-If it's not what you had in mind, reject and I'll take another
-look:
+If it's not what you had in mind, reject and we'll take
+another look:
 
   Reject:  {{rejectUrl}}
 
 You can check status any time on your dashboard:
 {{accountUrl}}
 
-— Ben`,
+— ModuForge`,
 };

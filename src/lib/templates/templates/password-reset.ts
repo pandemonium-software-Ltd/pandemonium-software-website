@@ -22,8 +22,8 @@ Here's your new password:
 Use it to sign in: {{loginUrl}}
 
 Your old password no longer works. If you didn't request this
-reset, hit reply and let me know — but typically it just means
+reset, hit reply and let us know — but typically it just means
 you forgot the old one.
 
-— Ben`,
+— ModuForge`,
 };

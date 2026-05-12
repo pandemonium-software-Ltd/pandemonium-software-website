@@ -373,7 +373,7 @@ function ErrorWrapper({
           <h1 className="heading-2 mt-3">{title}</h1>
           <p className="prose-body mt-5">
             {body ??
-              "Double-check the URL from my email, or reply and I'll resend it."}
+              "Double-check the URL from our email, or reply and we'll resend it."}
           </p>
         </div>
       </div>

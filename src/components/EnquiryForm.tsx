@@ -206,10 +206,10 @@ export default function EnquiryForm() {
       <div className="rounded-xl bg-cream-100 p-5 text-sm text-navy-700">
         <p>
           <strong className="text-navy-900">What happens next:</strong> when
-          you click &quot;Send enquiry&quot;, your details go to my private
-          Notion workspace. An AI assistant reads them and drafts a reply
-          against my playbook; I review and send it within 4 working hours.
-          No sales call, no chase-ups.
+          you click &quot;Send enquiry&quot;, we&apos;ll review your answers
+          and reply within 4 working hours with a short qualification form
+          (or, if we&apos;re clearly not a fit, an honest no). No sales
+          call, no chase-ups.
         </p>
       </div>
 

@@ -45,13 +45,13 @@ const STAGES: Stage[] = [
   {
     key: "enquiry",
     label: "Enquiry",
-    activeHint: "Got your details — I'll reply soon with the qualification link.",
+    activeHint: "Got your details — we'll reply soon with the qualification link.",
     linkLabel: "View what you submitted",
   },
   {
     key: "qualify",
     label: "Qualification",
-    activeHint: "Checking compatibility — I'll come back with a yes / no / let's-chat.",
+    activeHint: "Checking compatibility — we'll come back with a yes / no / let's-chat.",
     linkLabel: "View what you submitted",
   },
   {

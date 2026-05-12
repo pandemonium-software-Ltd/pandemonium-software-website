@@ -12,6 +12,6 @@
   },
   "expected": {
     "subject": "Module change done ✓",
-    "body": "Hi Alex,\n\nYour module change is sorted.\n\nWhat changed:\n  • Added: Newsletter\n  • Removed: (none)\n\nPayment:\n  • Your card was charged £39 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.\n\nYour new totals:\n  • Setup fee: £246\n  • Monthly: £31/month\n\nAny new modules are now showing on your hub — open it from\nthe button below and finish setting them up. Anything you\nremoved is hidden but your data is safe in case you change\nyour mind.\n\nHeads-up: that was your one pre-launch module swap. After\nlaunch you can still change modules — just reply and I'll\nquote it.\n\n— Ben"
+    "body": "Hi Alex,\n\nYour module change is sorted.\n\nWhat changed:\n  • Added: Newsletter\n  • Removed: (none)\n\nPayment:\n  • Your card was charged £39 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.\n\nYour new totals:\n  • Setup fee: £246\n  • Monthly: £31/month\n\nAny new modules are now showing on your hub — open it from\nthe button below and finish setting them up. Anything you\nremoved is hidden but your data is safe in case you change\nyour mind.\n\nHeads-up: that was your one pre-launch module swap. After\nlaunch you can still change modules — just reply and we'll\nquote it.\n\n— ModuForge"
   }
 }

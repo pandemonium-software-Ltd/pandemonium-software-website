@@ -24,20 +24,20 @@ your site will be live on {{goLiveDate}}.
 
 Here's what happens next — you don't need to do anything:
 
-  1. I'll do the final tidy-up on your site over the next few
+  1. We'll do the final tidy-up on your site over the next few
      days.
-  2. On launch morning (before 11am), I'll switch your web
+  2. On launch morning (before 11am), we'll switch your web
      address over so visitors land on your new site.
   3. Once your site is live, you can ask for up to 2 changes
      a month from your dashboard — things like swapping a
-     photo, tweaking text, updating opening hours. I'll get
+     photo, tweaking text, updating opening hours. We'll get
      them done within 48 working hours.
 
 The button below opens your dashboard — that's where you'll
 manage everything from here.
 
 If you spot anything you want changed before launch, just
-reply to this email and I'll sort it.
+reply to this email and we'll sort it.
 
-— Ben`,
+— ModuForge`,
 };

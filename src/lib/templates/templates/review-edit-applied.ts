@@ -44,5 +44,5 @@ launch.
 Once everything looks the way you want, hit "Submit and
 commit site" on that same step to lock in your launch.
 
-— Ben`,
+— ModuForge`,
 };

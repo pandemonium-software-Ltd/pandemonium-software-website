@@ -46,10 +46,10 @@ a link to your onboarding hub. That's where we'll work through
 a short checklist (~30 minutes total) — your web address, your
 photos, your launch date.
 
-I'll handle all the behind-the-scenes work (hosting, secure
+We'll handle all the behind-the-scenes work (hosting, secure
 connection, your custom email setup, building the site
 itself). You'll get an email at every step so you always
 know what's happening.
 
-— Ben`,
+— ModuForge`,
 };

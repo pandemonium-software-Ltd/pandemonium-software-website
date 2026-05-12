@@ -1009,9 +1009,9 @@ function ModuleGbp({
           Pick Manager, not Owner.
         </p>
         <p className="mt-1.5">
-          Manager gives me everything I need to audit and update the
-          listing. Owner would let me transfer the listing&apos;s
-          primary ownership — which I&apos;d never do, but the
+          Manager gives us everything we need to audit and update the
+          listing. Owner would let us transfer the listing&apos;s
+          primary ownership — which we&apos;d never do, but the
           option shouldn&apos;t exist in the first place.
         </p>
       </div>

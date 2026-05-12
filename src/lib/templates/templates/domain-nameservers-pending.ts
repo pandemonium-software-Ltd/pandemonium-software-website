@@ -22,7 +22,7 @@ export const domainNameserversPending: Template = {
   subject: "One quick thing — connect {{domain}} to your site",
   body: `Hi {{customerName}},
 
-To set up your new site at {{domain}}, I need you to do one
+To set up your new site at {{domain}}, we need you to do one
 small change with whoever you bought the domain from (GoDaddy,
 123-reg, Names.co.uk, etc.).
 
@@ -35,13 +35,13 @@ whatever's listed with these two lines:
 
 Save the change. That's it from your end.
 
-Once you've done it, tap the button below to let me know.
+Once you've done it, tap the button below to let us know.
 (If you forget, no stress — it'll sort itself out automatically
 within a day or so anyway.)
 
 If you can't find the right setting, reply with a screenshot
-of the page you're looking at and I'll point you to the right
+of the page you're looking at and we'll point you to the right
 spot.
 
-— Ben`,
+— ModuForge`,
 };

@@ -38,12 +38,12 @@ What happens next:
   • Straightforward edits (text, opening hours, services, your
     phone number, photos etc.) get applied automatically and
     your site usually updates within a few minutes.
-  • Anything bigger or design-related I'll look at personally
+  • Anything bigger or design-related we'll look at personally
     and reply on your dashboard.
 
-I'll email you when it's done, or if I need anything from you
-to finish it off. You can check status any time on your
+We'll email you when it's done, or if we need anything from
+you to finish it off. You can check status any time on your
 dashboard.
 
-— Ben`,
+— ModuForge`,
 };

@@ -779,11 +779,11 @@ function EditHistoryItem({
         {edit.message}
       </p>
 
-      {/* Cowork classification panel (when present) */}
+      {/* Auto-classification panel (when present) */}
       {ext.coworkClassification && (
         <div className="mt-3 rounded-lg border-l-2 border-amber-300 bg-white p-3 text-xs">
           <p className="font-semibold uppercase tracking-wider text-amber-900">
-            What I (Cowork) did
+            What we did
             {ext.coworkConfidence !== undefined && (
               <span className="ml-2 font-mono text-[10px] text-amber-700">
                 ({ext.coworkClassification},{" "}

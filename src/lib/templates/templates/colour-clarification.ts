@@ -20,15 +20,15 @@ Got your change request:
 
   "{{originalMessage}}"
 
-To swap brand colours I need an exact code (e.g. #2c5e9f) — it's
-the only way I can lock in the same shade everywhere on your site.
+To swap brand colours we need an exact code (e.g. #2c5e9f) — it's
+the only way we can lock in the same shade everywhere on your site.
 
 Easiest way to grab one: open https://htmlcolorcodes.com/color-picker/
 in a browser, pick the shade you like, copy the hex code (the
 "#abcdef" thing) and reply to this email with it.
 
-Once I have the hex I'll apply it straight away — usually live
+Once we have the hex we'll apply it straight away — usually live
 within a few minutes.
 
-— Ben`,
+— ModuForge`,
 };

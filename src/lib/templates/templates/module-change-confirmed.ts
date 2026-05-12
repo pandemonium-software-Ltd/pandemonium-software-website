@@ -46,8 +46,8 @@ removed is hidden but your data is safe in case you change
 your mind.
 
 Heads-up: that was your one pre-launch module swap. After
-launch you can still change modules — just reply and I'll
+launch you can still change modules — just reply and we'll
 quote it.
 
-— Ben`,
+— ModuForge`,
 };

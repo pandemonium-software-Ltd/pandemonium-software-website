@@ -51,7 +51,7 @@ export default async function IntakePage({
       <Wrapper>
         <ErrorCard
           title="That link doesn't look right."
-          body="Double-check the URL from my email, or reply and I'll resend it."
+          body="Double-check the URL from our email, or reply and we'll resend it."
         />
       </Wrapper>
     );
@@ -65,8 +65,8 @@ export default async function IntakePage({
     return (
       <Wrapper>
         <ErrorCard
-          title="Something went wrong on my end."
-          body="Please try again in a minute. If the page still won't load, drop me an email and I'll sort it out."
+          title="Something went wrong on our end."
+          body="Please try again in a minute. If the page still won't load, drop us an email and we'll sort it out."
         />
       </Wrapper>
     );
@@ -77,7 +77,7 @@ export default async function IntakePage({
       <Wrapper>
         <ErrorCard
           title="Link not found."
-          body="Use the most recent intake link I sent — older links expire when a new one is issued."
+          body="Use the most recent intake link we sent — older links expire when a new one is issued."
         />
       </Wrapper>
     );
@@ -88,7 +88,7 @@ export default async function IntakePage({
       <Wrapper>
         <InfoCard
           title="You've already done the intake."
-          body={`Your build is on the way. If you need to change anything before launch, drop me an email.`}
+          body={`Your build is on the way. If you need to change anything before launch, drop us an email.`}
         />
       </Wrapper>
     );
@@ -99,7 +99,7 @@ export default async function IntakePage({
       <Wrapper>
         <InfoCard
           title="Not quite ready for this step."
-          body="The intake form unlocks once I've replied to your qualification with an acceptance. Watch your inbox — I'm normally back within 4 working hours."
+          body="The intake form unlocks once we've replied to your qualification with an acceptance. Watch your inbox — we're normally back within 4 working hours."
         />
       </Wrapper>
     );

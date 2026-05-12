@@ -20,7 +20,7 @@ Your web address {{domain}} is connected and ready.
 
 The next step is yours: when you're happy with the site
 preview, sign off on the final step in your onboarding hub
-and I'll put it live on the date you've chosen.
+and we'll put it live on the date you've chosen.
 
-— Ben`,
+— ModuForge`,
 };

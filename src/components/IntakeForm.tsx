@@ -975,7 +975,7 @@ function ModulesSection({
         />
         <ModuleRow
           label="Offers"
-          tagline="A promo strip on your homepage you control from your dashboard — set a headline, dates and CTA. I'll moderate each before it goes live."
+          tagline="A promo strip on your homepage you control from your dashboard — set a headline, dates and CTA. We'll moderate each before it goes live."
           setup={`+£${MODULE_OFFERS_SETUP_GBP}`}
           monthly={`+£${MODULE_OFFERS_MONTHLY_GBP}/mo`}
           register={register("modules.moduleOffers")}
@@ -1201,14 +1201,14 @@ function LegalSection({
   return (
     <div className="space-y-6">
       <p className="text-sm text-navy-700">
-        Two boxes I need {prospectName.split(/\s+/)[0] ?? "you"} to tick before
-        I can build your site. Plain English; no fine print.
+        Two boxes we need {prospectName.split(/\s+/)[0] ?? "you"} to tick
+        before we can build your site. Plain English; no fine print.
       </p>
 
       <CheckboxBlock
         id="lg-isDataController"
         label="I confirm I'm the data controller for my own site"
-        body="That means GDPR-wise, you own your customers' data — I'm just the developer. Standard for this kind of arrangement."
+        body="That means GDPR-wise, you own your customers' data — we're just the developer. Standard for this kind of arrangement."
         register={register("legal.isDataController")}
         error={e?.isDataController?.message}
       />

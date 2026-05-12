@@ -42,18 +42,18 @@ Your new totals:
   • Setup fee: £{{newSetupTotal}}
   • Monthly: £{{newMonthlyTotal}}/month
 
-I'll process the payment and email you to confirm — usually
+We'll process the payment and email you to confirm — usually
 within one working day. After that, any new modules show up
 on your hub ready to set up.
 
 Heads-up:
   • You only get one module change before launch, so this is
     it. Anything else needs to wait until after you go live.
-  • If you're removing a module you'd already set up, I keep
+  • If you're removing a module you'd already set up, we keep
     your data safe in case you change your mind later.
 
-If anything looks wrong above, hit reply and I'll fix it
+If anything looks wrong above, hit reply and we'll fix it
 before processing the payment.
 
-— Ben`,
+— ModuForge`,
 };

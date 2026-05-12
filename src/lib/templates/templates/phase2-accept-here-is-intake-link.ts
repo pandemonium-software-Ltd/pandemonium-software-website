@@ -29,13 +29,13 @@ export const phase2AcceptHereIsIntakeLink: Template = {
   subject: "We're a good match — let's get the details",
   body: `Hi {{customerName}},
 
-Had a look at your answers — looks like a great fit. I'd be
-glad to build your site.
+We've had a look at your answers — looks like a great fit. We'd
+be glad to build your site.
 
-Next step is a slightly longer form where you tell me the
+Next step is a slightly longer form where you tell us the
 specifics: which add-ons you want (online booking, enquiry
 form, newsletter, Google listing setup), your brand colours,
-opening hours, etc. Everything I need to build your site
+opening hours, etc. Everything we need to build your site
 the way you want it.
 
 About 15-20 minutes. You can save and come back to it any time.
@@ -45,12 +45,12 @@ dashboard:
 
   {{password}}
 
-Save this email — I only send the password once. If you ever
+Save this email — we only send the password once. If you ever
 lose it, there's a "Forgot password" link on every sign-in
 page that'll send you a new one.
 
-Once you've finished the form, I'll work out your fees and
+Once you've finished the form, we'll work out your fees and
 take it from there.
 
-— Ben`,
+— ModuForge`,
 };

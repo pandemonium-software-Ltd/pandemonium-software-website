@@ -30,11 +30,11 @@ That's done. Your site now shows:
 
 Have a look: {{siteUrl}}
 
-If something looks off, just reply to this email — I can put
+If something looks off, just reply to this email — we can put
 the old version back in seconds if needed.
 
 For anything else, head to your dashboard. You get 2 changes
 a month included with your subscription.
 
-— Ben`,
+— ModuForge`,
 };

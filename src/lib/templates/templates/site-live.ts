@@ -28,8 +28,8 @@ What this means for you:
     on business cards.
   • You can ask for up to 2 changes a month from your
     dashboard — text tweaks, swapped photos, new testimonials,
-    price updates. I'll get them done within 48 working hours.
-  • Bigger jobs (new pages, redesigns) I quote separately.
+    price updates. We'll get them done within 48 working hours.
+  • Bigger jobs (new pages, redesigns) we quote separately.
 
 Your dashboard is where you'll do everything from now on
 (submit changes, see status, manage your subscription):
@@ -37,7 +37,7 @@ Your dashboard is where you'll do everything from now on
   {{accountUrl}}
 
 If anything's not right — anything at all — just reply to
-this email and I'll sort it.
+this email and we'll sort it.
 
-— Ben`,
+— ModuForge`,
 };

@@ -189,7 +189,7 @@ export default function OfferCard({
         json.autoApplied && !json.buildWarning
           ? `Done — your offer is being deployed and will be live on your site in about 2 minutes. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} changes remaining this month.)`
           : json.autoApplied && json.buildWarning
-            ? `Saved your offer details — there's a hiccup with the build (${json.buildWarning}). I'll be notified and sort it. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} remaining this month.)`
+            ? `Saved your offer details — there's a hiccup with the build (${json.buildWarning}). We've been notified and will sort it. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} remaining this month.)`
             : `Submitted. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} changes remaining this month.)`,
       );
       setTimeout(() => setSuccess(null), 12000);

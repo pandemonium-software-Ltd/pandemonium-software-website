@@ -27,7 +27,7 @@ About this one:
 
   "{{originalMessage}}"
 
-My reply:
+Our reply:
 
 {{reply}}
 
@@ -39,5 +39,5 @@ just reply — happy to quote.
 You can see your other requests + submit new ones from your
 dashboard any time.
 
-— Ben`,
+— ModuForge`,
 };
