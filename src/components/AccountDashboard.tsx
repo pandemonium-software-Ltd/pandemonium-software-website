@@ -221,6 +221,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 siteUrl={siteUrl}
                 domain={domain}
                 setupFee={setupFee}
+                goLiveDate={goLiveDate}
               />
             </div>
           )}
@@ -249,9 +250,11 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   {!isLive && (
                     <p className="mt-2 text-sm text-navy-600">
                       {status === "Build Started"
-                        ? "Your site is being built. We'll email you when the preview is ready."
+                        ? "Going live now — your final site is being built. We'll email you the moment it's reachable on your domain."
                         : status === "Onboarding Complete"
-                          ? "Onboarding complete — your build is queued."
+                          ? goLiveDate
+                            ? `Signed off — nothing to do until your launch date. On the morning of ${formatDate(goLiveDate)} we'll build the final site and switch your domain over.`
+                            : "Signed off — your launch is scheduled. We'll build the final site and switch your domain over on launch morning."
                           : "Setup in progress — finish your Onboarding Hub steps to unlock the build."}
                     </p>
                   )}
@@ -476,6 +479,56 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                     changeRequests={changeRequests}
                   />
                 </div>
+              </DashCard>
+            )}
+
+            {/* ---------- Pre-launch teaser ---------------------
+             *  Shown to customers between sign-off and go-live so
+             *  they can see the post-launch self-serve tools they'll
+             *  unlock. Otherwise the dashboard reads empty in that
+             *  window and they wonder where their modules went. */}
+            {!isSiteLive && !isCancelled && (status === "Onboarding Complete" || status === "Build Started") && (
+              <DashCard title="Your modules & updates">
+                <p className="text-sm text-navy-700">
+                  Once your site is live you&apos;ll see your self-
+                  serve tools here. Each module has its own monthly
+                  allowance, included in your subscription:
+                </p>
+                <ul className="mt-4 space-y-2 text-sm">
+                  {hasNewsletterModule && (
+                    <li className="flex items-start gap-2">
+                      <span aria-hidden="true" className="text-brand-primary-600">•</span>
+                      <span>
+                        <strong className="text-navy-900">Newsletter sends</strong>
+                        {" "}— send {NEWSLETTER_MONTHLY_SEND_LIMIT} emails
+                        a month to your subscribers, including an image upload.
+                      </span>
+                    </li>
+                  )}
+                  {hasOffersModule && (
+                    <li className="flex items-start gap-2">
+                      <span aria-hidden="true" className="text-brand-primary-600">•</span>
+                      <span>
+                        <strong className="text-navy-900">Offer updates</strong>
+                        {" "}— schedule {MONTHLY_OFFER_UPDATE_LIMIT}{" "}
+                        promotional strips a month on your homepage with
+                        a headline, dates and CTA.
+                      </span>
+                    </li>
+                  )}
+                  <li className="flex items-start gap-2">
+                    <span aria-hidden="true" className="text-brand-primary-600">•</span>
+                    <span>
+                      <strong className="text-navy-900">Text edits</strong>
+                      {" "}— update {MONTHLY_DIRECT_EDIT_LIMIT} text fields
+                      a month directly (tagline, phone, address, opening
+                      hours…) — live within 2 minutes, no review needed.
+                    </span>
+                  </li>
+                </ul>
+                <p className="mt-4 rounded-lg bg-cream-50 px-3 py-2 text-xs text-navy-600">
+                  Unlocks automatically the morning of your launch.
+                </p>
               </DashCard>
             )}
 
@@ -742,12 +795,17 @@ function NextStepCard({
   siteUrl,
   domain,
   setupFee,
+  goLiveDate,
 }: {
   status: ProspectStatus;
   token: string;
   siteUrl: string;
   domain: string;
   setupFee: number;
+  /** ISO date string for the launch when known. Used by the
+   *  "Onboarding Complete" branch so the customer sees the exact
+   *  date their site is scheduled to go live. */
+  goLiveDate: string | null;
 }) {
   // Each entry: title + body + CTA (label, href). When CTA is null,
   // there's no actionable next step (e.g. "I'm building your site").
@@ -790,14 +848,18 @@ function NextStepCard({
       break;
     case "Onboarding Complete":
       step = {
-        title: "Build queued",
-        body: "Onboarding's done — your build is in the queue. We'll email you when the preview is ready so you can review before going live.",
+        title: goLiveDate
+          ? `Launch scheduled — ${formatDate(goLiveDate)}`
+          : "Launch scheduled",
+        body: goLiveDate
+          ? `You're signed off. Nothing to do until ${formatDate(goLiveDate)} — that morning we'll build the final site, switch your domain over, and email you when it's reachable. Until then your preview stays available in the Hub.`
+          : "You're signed off. We'll build the final site and switch your domain over on your scheduled launch morning. Until then your preview stays available in the Hub.",
       };
       break;
     case "Build Started":
       step = {
-        title: "Building your site",
-        body: "Your site is being built right now. We'll email you the moment it's ready — you don't need to do anything.",
+        title: "Going live now",
+        body: "Today's the day. The final site is being built and your domain is being switched over. We'll email you the moment it's reachable — typically a couple of minutes.",
       };
       break;
     case "Live":
