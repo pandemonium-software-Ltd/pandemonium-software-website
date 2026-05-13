@@ -401,9 +401,20 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               </DashCard>
             )}
 
-            {/* ---------- Modules (with self-serve change request) ---------- */}
+            {/* ---------- Your modules ---------------------------
+             *  Single tile that combines: what the customer bought,
+             *  what self-serve tools each module unlocks, the active
+             *  composers (Newsletter / Offers) once their site is
+             *  live, and the CTA to add or remove modules.
+             *
+             *  Composers (NewsletterCard / OfferCard) are
+             *  structured pre-baked-patch flows — no Haiku in the
+             *  loop. General text edits use the change-request
+             *  block lower on the page; they're not modules. */}
             {isHubUnlocked && !isCancelled && (
               <DashCard title="Your modules">
+                {/* Bought-modules list — always shown so the customer
+                 *  can audit at a glance "what am I paying for?". */}
                 <ul className="space-y-1 text-sm">
                   <li className="flex items-center gap-2 text-navy-900">
                     <CheckIcon /> Base website
@@ -427,87 +438,90 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   >
                     Modules step
                   </Link>{" "}
-                  in your Hub — I&apos;ll review + confirm pricing
+                  in your Hub — we&apos;ll review + confirm pricing
                   before anything changes on your bill.
                 </p>
-              </DashCard>
-            )}
 
-            {/* ---------- Your modules & updates ---------------------
-             *  Single cluster of cards for the post-launch modules the
-             *  customer paid for. Newsletter + Offers are structured
-             *  composers — pre-baked patches auto-applied, no Haiku
-             *  in the loop. Text content edits live in the
-             *  change-request block further down the page (free-text
-             *  → Haiku classifier → patches), not here — they're not
-             *  a separate "module", they're part of the included
-             *  change-request allowance. */}
-            {isSiteLive && !isCancelled && (hasNewsletterModule || hasOffersModule) && (
-              <DashCard title="Your modules & updates">
-                <p className="text-sm text-navy-700">
-                  Updates you can run yourself, included with your
-                  subscription. Each module has its own monthly
-                  allowance — they don&apos;t share a budget.
-                </p>
-                <div className="mt-4 grid gap-4">
-                  {hasNewsletterModule && newsletterSummary && (
-                    <NewsletterCard
-                      token={token}
-                      summary={newsletterSummary}
-                    />
-                  )}
-                  {hasOffersModule && (
-                    <OfferCard
-                      token={token}
-                      current={currentOffer ?? null}
-                      changeRequests={changeRequests}
-                    />
-                  )}
-                </div>
-              </DashCard>
-            )}
+                {/* Self-serve composers — only render the divider +
+                 *  block when the customer bought one of the
+                 *  structured-composer modules. Three states:
+                 *    1. Live with module        → render the composer card
+                 *    2. Pre-launch with module  → bullet teaser
+                 *    3. Cancelled / no module   → nothing
+                 */}
+                {(hasNewsletterModule || hasOffersModule) && (
+                  <div className="mt-6 border-t border-navy-100 pt-5">
+                    <p className="text-sm font-semibold text-navy-900">
+                      {isSiteLive
+                        ? "Self-serve tools"
+                        : "Self-serve tools — at launch"}
+                    </p>
+                    <p className="mt-1 text-xs text-navy-600">
+                      {isSiteLive
+                        ? "Each has its own monthly allowance — they don't share a budget."
+                        : "Unlocks automatically the morning your site goes live. Each has its own monthly allowance — they don't share a budget."}
+                    </p>
 
-            {/* ---------- Pre-launch teaser ---------------------
-             *  Shown to customers between sign-off and go-live IF
-             *  they bought any structured modules (Newsletter,
-             *  Offers). Otherwise nothing to tease — they get text
-             *  edits via the standard change-request allowance,
-             *  same as every customer. */}
-            {!isSiteLive && !isCancelled &&
-              (status === "Onboarding Complete" || status === "Build Started") &&
-              (hasNewsletterModule || hasOffersModule) && (
-              <DashCard title="Your modules & updates">
-                <p className="text-sm text-navy-700">
-                  Once your site is live you&apos;ll see your self-
-                  serve tools here. Each module has its own monthly
-                  allowance, included in your subscription:
-                </p>
-                <ul className="mt-4 space-y-2 text-sm">
-                  {hasNewsletterModule && (
-                    <li className="flex items-start gap-2">
-                      <span aria-hidden="true" className="text-brand-primary-600">•</span>
-                      <span>
-                        <strong className="text-navy-900">Newsletter sends</strong>
-                        {" "}— send {NEWSLETTER_MONTHLY_SEND_LIMIT} emails
-                        a month to your subscribers, including an image upload.
-                      </span>
-                    </li>
-                  )}
-                  {hasOffersModule && (
-                    <li className="flex items-start gap-2">
-                      <span aria-hidden="true" className="text-brand-primary-600">•</span>
-                      <span>
-                        <strong className="text-navy-900">Offer updates</strong>
-                        {" "}— schedule {MONTHLY_OFFER_UPDATE_LIMIT}{" "}
-                        promotional strips a month on your homepage with
-                        a headline, dates and CTA.
-                      </span>
-                    </li>
-                  )}
-                </ul>
-                <p className="mt-4 rounded-lg bg-cream-50 px-3 py-2 text-xs text-navy-600">
-                  Unlocks automatically the morning of your launch.
-                </p>
+                    {isSiteLive ? (
+                      // Live composers — full interactive cards.
+                      <div className="mt-4 grid gap-4">
+                        {hasNewsletterModule && newsletterSummary && (
+                          <NewsletterCard
+                            token={token}
+                            summary={newsletterSummary}
+                          />
+                        )}
+                        {hasOffersModule && (
+                          <OfferCard
+                            token={token}
+                            current={currentOffer ?? null}
+                            changeRequests={changeRequests}
+                          />
+                        )}
+                      </div>
+                    ) : (
+                      // Pre-launch teaser — bullet list of what's coming.
+                      <ul className="mt-3 space-y-2 text-sm">
+                        {hasNewsletterModule && (
+                          <li className="flex items-start gap-2">
+                            <span
+                              aria-hidden="true"
+                              className="text-brand-primary-600"
+                            >
+                              •
+                            </span>
+                            <span>
+                              <strong className="text-navy-900">
+                                Newsletter sends
+                              </strong>{" "}
+                              — send {NEWSLETTER_MONTHLY_SEND_LIMIT}{" "}
+                              emails a month to your subscribers,
+                              including an image upload.
+                            </span>
+                          </li>
+                        )}
+                        {hasOffersModule && (
+                          <li className="flex items-start gap-2">
+                            <span
+                              aria-hidden="true"
+                              className="text-brand-primary-600"
+                            >
+                              •
+                            </span>
+                            <span>
+                              <strong className="text-navy-900">
+                                Offer updates
+                              </strong>{" "}
+                              — schedule {MONTHLY_OFFER_UPDATE_LIMIT}{" "}
+                              promotional strips a month on your
+                              homepage with a headline, dates and CTA.
+                            </span>
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </DashCard>
             )}
 
