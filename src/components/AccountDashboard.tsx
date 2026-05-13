@@ -8,11 +8,15 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 import {
+  countActiveChangeRequestsByKind,
   countActiveChangeRequestsThisMonth,
   MONTHLY_CHANGE_REQUEST_LIMIT,
+  MONTHLY_DIRECT_EDIT_LIMIT,
+  MONTHLY_OFFER_UPDATE_LIMIT,
   type ChangeRequest,
   type ProspectStatus,
 } from "@/lib/notion-prospects";
+import { NEWSLETTER_MONTHLY_SEND_LIMIT } from "@/lib/newsletter/limits";
 import type { StepId } from "@/lib/onboarding";
 import RAGStatus from "@/components/RAGStatus";
 import ProgressTracker from "@/components/ProgressTracker";
@@ -20,6 +24,7 @@ import OfferCard from "@/components/OfferCard";
 import NewsletterCard, {
   type NewsletterSummary,
 } from "@/components/NewsletterCard";
+import DirectEditCard from "@/components/DirectEditCard";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -427,18 +432,51 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               </DashCard>
             )}
 
-            {/* ---------- Offers (live customers with the module) ---------- */}
-            {isSiteLive && !isCancelled && hasOffersModule && (
-              <OfferCard
-                token={token}
-                current={currentOffer ?? null}
-                changeRequests={changeRequests}
-              />
-            )}
-
-            {/* ---------- Newsletter (live customers with the module) ---------- */}
-            {isSiteLive && !isCancelled && hasNewsletterModule && newsletterSummary && (
-              <NewsletterCard token={token} summary={newsletterSummary} />
+            {/* ---------- Your modules & updates ---------------------
+             *  Single cluster of cards for everything the customer
+             *  can update post-launch without emailing us. Each card
+             *  has its own monthly budget (Newsletter sends, Offer
+             *  updates, Text edits — 2 each, independent). The
+             *  Newsletter + Offers cards only render when the
+             *  customer paid for those modules; Text edits render
+             *  for every live customer (included in the base
+             *  subscription).
+             *
+             *  Important: none of these paths call the Claude / Haiku
+             *  classifier. Offers + Text edits build their patches
+             *  server-side from validated form data and auto-apply;
+             *  Newsletter sends template emails via Resend with
+             *  inlined customer content. Anything outside the
+             *  whitelisted fields routes through the free-text
+             *  change-request block further down the page (which
+             *  does use the classifier — kept as a fallback). */}
+            {isSiteLive && !isCancelled && (
+              <DashCard title="Your modules & updates">
+                <p className="text-sm text-navy-700">
+                  Updates you can run yourself, included with your
+                  subscription. Each module has its own monthly
+                  allowance — they don&apos;t share a budget.
+                </p>
+                <div className="mt-4 grid gap-4">
+                  {hasNewsletterModule && newsletterSummary && (
+                    <NewsletterCard
+                      token={token}
+                      summary={newsletterSummary}
+                    />
+                  )}
+                  {hasOffersModule && (
+                    <OfferCard
+                      token={token}
+                      current={currentOffer ?? null}
+                      changeRequests={changeRequests}
+                    />
+                  )}
+                  <DirectEditCard
+                    token={token}
+                    changeRequests={changeRequests}
+                  />
+                </div>
+              </DashCard>
             )}
 
             {/* ---------- Billing (placeholder for #6) ---------- */}
@@ -468,27 +506,52 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               </DashCard>
             )}
 
-            {/* ---------- This month ---------- */}
+            {/* ---------- This month ----------
+             *  Per-kind usage. Each module has its own 2/month budget
+             *  (or 1/month for legacy free-text change-requests under
+             *  the old shared cap). Resets together on the 1st UTC. */}
             <DashCard title="This month">
               <p className="text-sm text-navy-700">
-                {MONTHLY_CHANGE_REQUEST_LIMIT} changes are included
-                every month — text edits, photo swaps, price updates,
-                anything in scope. You can bundle a few related
-                tweaks into one request.
+                Each module has its own monthly allowance. Resets on
+                the 1st. Out-of-scope items quoted separately
+                don&apos;t count.
               </p>
-              <div className="mt-4 rounded-xl bg-cream-50 p-4">
-                <p className="text-xs uppercase tracking-wider text-navy-500">
-                  Used this month
-                </p>
-                <p className="mt-1 font-serif text-2xl font-semibold text-navy-900">
-                  {countActiveChangeRequestsThisMonth(requests)} /{" "}
-                  {MONTHLY_CHANGE_REQUEST_LIMIT}
-                </p>
-                <p className="mt-1 text-xs text-navy-500">
-                  Resets on the 1st of next month. Out-of-scope items
-                  quoted separately don&apos;t count.
-                </p>
-              </div>
+              <dl className="mt-4 space-y-2 text-sm">
+                {hasNewsletterModule && newsletterSummary && (
+                  <UsageRow
+                    label="Newsletter sends"
+                    used={newsletterSummary.sentThisMonth}
+                    cap={NEWSLETTER_MONTHLY_SEND_LIMIT}
+                  />
+                )}
+                {hasOffersModule && (
+                  <UsageRow
+                    label="Offer updates"
+                    used={countActiveChangeRequestsByKind(
+                      requests,
+                      "offer-update",
+                    )}
+                    cap={MONTHLY_OFFER_UPDATE_LIMIT}
+                  />
+                )}
+                <UsageRow
+                  label="Text edits"
+                  used={countActiveChangeRequestsByKind(
+                    requests,
+                    "direct-edit",
+                  )}
+                  cap={MONTHLY_DIRECT_EDIT_LIMIT}
+                />
+                <UsageRow
+                  label="Free-text requests"
+                  used={countActiveChangeRequestsByKind(
+                    requests,
+                    "free-text",
+                  )}
+                  cap={MONTHLY_CHANGE_REQUEST_LIMIT}
+                  muted
+                />
+              </dl>
             </DashCard>
 
             {/* ---------- Get in touch ---------- */}
@@ -584,6 +647,48 @@ function DashCard({
       </h2>
       <div className="mt-4">{children}</div>
     </article>
+  );
+}
+
+/**
+ * A single "X/Y used" row for the "This month" usage card. `muted`
+ * styling backgrounds rows that the customer rarely hits (legacy
+ * free-text change-requests) so the structured modules visually
+ * dominate.
+ */
+function UsageRow({
+  label,
+  used,
+  cap,
+  muted = false,
+}: {
+  label: string;
+  used: number;
+  cap: number;
+  muted?: boolean;
+}) {
+  const atCap = used >= cap;
+  return (
+    <div
+      className={[
+        "flex items-center justify-between gap-3 rounded-lg px-3 py-2",
+        muted ? "bg-cream-100/60" : "bg-cream-50",
+      ].join(" ")}
+    >
+      <dt className={muted ? "text-navy-600" : "text-navy-800"}>{label}</dt>
+      <dd>
+        <span
+          className={[
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+            atCap
+              ? "bg-navy-200 text-navy-700"
+              : "bg-green-100 text-green-800",
+          ].join(" ")}
+        >
+          {used}/{cap}
+        </span>
+      </dd>
+    </div>
   );
 }
 

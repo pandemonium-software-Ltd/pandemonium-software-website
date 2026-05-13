@@ -22,8 +22,8 @@
 
 import { useRef, useState } from "react";
 import {
-  countActiveChangeRequestsThisMonth,
-  MONTHLY_CHANGE_REQUEST_LIMIT,
+  countActiveChangeRequestsByKind,
+  MONTHLY_OFFER_UPDATE_LIMIT,
   type ChangeRequest,
 } from "@/lib/notion-prospects";
 import {
@@ -118,11 +118,14 @@ export default function OfferCard({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const usedThisMonth = countActiveChangeRequestsThisMonth(changeRequests);
-  const remaining = Math.max(
-    0,
-    MONTHLY_CHANGE_REQUEST_LIMIT - usedThisMonth,
+  // Offer updates now have their own per-kind 2/month budget,
+  // independent of the legacy free-text change-request cap. The
+  // dashboard's "Your modules" section reads this same counter.
+  const usedThisMonth = countActiveChangeRequestsByKind(
+    changeRequests,
+    "offer-update",
   );
+  const remaining = Math.max(0, MONTHLY_OFFER_UPDATE_LIMIT - usedThisMonth);
   const atCap = remaining === 0;
 
   function openComposer() {
@@ -187,10 +190,10 @@ export default function OfferCard({
       const remainingAfter = remaining - 1;
       setSuccess(
         json.autoApplied && !json.buildWarning
-          ? `Done — your offer is being deployed and will be live on your site in about 2 minutes. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} changes remaining this month.)`
+          ? `Done — your offer is being deployed and will be live on your site in about 2 minutes. (${remainingAfter} of ${MONTHLY_OFFER_UPDATE_LIMIT} changes remaining this month.)`
           : json.autoApplied && json.buildWarning
-            ? `Saved your offer details — there's a hiccup with the build (${json.buildWarning}). We've been notified and will sort it. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} remaining this month.)`
-            : `Submitted. (${remainingAfter} of ${MONTHLY_CHANGE_REQUEST_LIMIT} changes remaining this month.)`,
+            ? `Saved your offer details — there's a hiccup with the build (${json.buildWarning}). We've been notified and will sort it. (${remainingAfter} of ${MONTHLY_OFFER_UPDATE_LIMIT} remaining this month.)`
+            : `Submitted. (${remainingAfter} of ${MONTHLY_OFFER_UPDATE_LIMIT} changes remaining this month.)`,
       );
       setTimeout(() => setSuccess(null), 12000);
       // Soft refresh so the updated offer shows up on the card.
@@ -247,7 +250,7 @@ export default function OfferCard({
           No active offer right now. Use the button below to schedule
           a promotional strip for your homepage — a headline, dates and
           optional button. Counts as one of your{" "}
-          <strong>{MONTHLY_CHANGE_REQUEST_LIMIT} changes a month</strong>.
+          <strong>{MONTHLY_OFFER_UPDATE_LIMIT} changes a month</strong>.
         </p>
       )}
 
@@ -271,7 +274,7 @@ export default function OfferCard({
         </button>
         <span className="text-xs text-navy-500">
           {atCap
-            ? `All ${MONTHLY_CHANGE_REQUEST_LIMIT} monthly changes used — resets on the 1st`
+            ? `All ${MONTHLY_OFFER_UPDATE_LIMIT} monthly changes used — resets on the 1st`
             : `Uses 1 of ${remaining} remaining this month`}
         </span>
       </div>
@@ -285,9 +288,9 @@ export default function OfferCard({
             {current ? "Update your offer" : "Schedule an offer"}
           </h2>
           <p className="mt-1 text-sm text-navy-600">
-            This counts as 1 of your {MONTHLY_CHANGE_REQUEST_LIMIT}{" "}
-            monthly changes. I&apos;ll review and it&apos;ll be live within a
-            working day.
+            This counts as 1 of your {MONTHLY_OFFER_UPDATE_LIMIT}{" "}
+            monthly offer updates. Once you save, it&apos;ll be live on
+            your site within a couple of minutes.
           </p>
 
           <div className="mt-4 space-y-3">

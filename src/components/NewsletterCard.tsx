@@ -95,8 +95,13 @@ function emptyDraft(): Draft {
 export default function NewsletterCard({ token, summary }: Props) {
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const subscribersDialogRef = useRef<HTMLDialogElement | null>(null);
+  // Hidden <input type=file> the "Upload image" button triggers.
+  // Refs (not state) because the dialog re-mounts between opens.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [pending, setPending] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   // Subscriber management state (loaded on first dialog open).
@@ -454,24 +459,131 @@ export default function NewsletterCard({ token, summary }: Props) {
               </span>
             </label>
 
-            <label className="block">
+            <div>
               <span className="block text-sm font-semibold text-navy-900">
-                Image URL (optional)
+                Image (optional)
               </span>
+              <p className="mt-1 text-[11px] text-navy-500">
+                Upload one image to appear at the top of your email
+                (JPG / PNG / WebP, max 5MB), or paste a URL to a photo
+                already hosted elsewhere.
+              </p>
+              {/* Hidden file input — opened by the "Upload image"
+               *  button. We POST it to /api/account/upload-newsletter-image
+               *  which puts to R2 + returns the public URL. The URL
+               *  lands in draft.imageUrl exactly as if the customer
+               *  had pasted it manually, so downstream code (preview,
+               *  send) doesn't need to differentiate uploads from
+               *  pasted URLs. */}
               <input
-                type="url"
-                value={draft.imageUrl}
-                onChange={(e) =>
-                  setDraft({ ...draft, imageUrl: e.target.value })
-                }
-                placeholder="https://..."
-                className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900"
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setImageError(null);
+                  setImageUploading(true);
+                  try {
+                    const form = new FormData();
+                    form.append("token", token);
+                    form.append("file", file);
+                    const res = await fetch(
+                      "/api/account/upload-newsletter-image",
+                      { method: "POST", body: form },
+                    );
+                    const json = (await res.json().catch(() => ({}))) as {
+                      success?: boolean;
+                      url?: string;
+                      error?: string;
+                    };
+                    if (!res.ok || !json.success || !json.url) {
+                      setImageError(json.error ?? "Upload failed.");
+                      return;
+                    }
+                    setDraft((d) => ({ ...d, imageUrl: json.url! }));
+                  } catch (err) {
+                    setImageError(
+                      err instanceof Error ? err.message : String(err),
+                    );
+                  } finally {
+                    setImageUploading(false);
+                    // Reset the input so picking the same file twice
+                    // still fires the change handler.
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }
+                }}
               />
-              <span className="mt-1 block text-[11px] text-navy-500">
-                Paste a direct URL to a photo (e.g. from Imgur, your
-                own site). Inline upload coming soon.
-              </span>
-            </label>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={imageUploading}
+                  className="rounded-md border border-navy-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:border-navy-400 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {imageUploading ? "Uploading…" : "Upload image"}
+                </button>
+                {draft.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, imageUrl: "" })}
+                    className="text-xs text-navy-500 underline hover:text-navy-900"
+                  >
+                    Remove image
+                  </button>
+                )}
+              </div>
+              <label className="mt-2 block">
+                <span className="block text-[11px] font-semibold text-navy-700">
+                  …or paste an image URL
+                </span>
+                <input
+                  type="url"
+                  value={draft.imageUrl}
+                  onChange={(e) =>
+                    setDraft({ ...draft, imageUrl: e.target.value })
+                  }
+                  placeholder="https://..."
+                  className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900"
+                />
+              </label>
+              {imageError && (
+                <p
+                  role="alert"
+                  className="mt-2 rounded-md bg-ember-50 px-2 py-1 text-xs text-ember-700"
+                >
+                  {imageError}
+                </p>
+              )}
+              {draft.imageUrl && !imageError && (
+                <>
+                  {/* Live preview — gives the customer immediate
+                   *  visual feedback the image is the right one
+                   *  before sending. Capped at h-32 so a tall photo
+                   *  doesn't push the composer fields off-screen.
+                   *  next/image isn't a good fit: the URL is
+                   *  arbitrary (R2 OR a pasted third-party host the
+                   *  customer typed in), so the remotePatterns
+                   *  whitelist would have to allow * — which defeats
+                   *  the point. Plain <img> with a fixed height
+                   *  bound keeps this thumbnail tight. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={draft.imageUrl}
+                    alt="Newsletter image preview"
+                    className="mt-2 h-32 w-auto rounded-md border border-navy-100 object-cover"
+                    onError={() =>
+                      setImageError(
+                        "That image URL didn't load. Check the link or upload directly.",
+                      )
+                    }
+                  />
+                </>
+              )}
+            </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block">

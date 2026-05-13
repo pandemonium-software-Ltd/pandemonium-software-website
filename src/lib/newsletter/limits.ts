@@ -40,10 +40,11 @@ export const SUBSCRIBER_EMAIL_MAX = 254;
 export const SUBSCRIBER_FIRST_NAME_MAX = 60;
 
 // ---------- Sending ----------
-// Built-in monthly send limit per customer (the £6/mo Newsletter
-// fee includes one send). Extra sends require operator approval
-// in Phase 2.
-export const NEWSLETTER_MONTHLY_SEND_LIMIT = 1;
+// Built-in monthly send limit per customer. The Newsletter module
+// includes TWO sends a month (raised 2026-05 from 1 — matches the
+// "2 of each module" rule applied to offers + post-commit edits).
+// Extra sends require operator approval in Phase 2.
+export const NEWSLETTER_MONTHLY_SEND_LIMIT = 2;
 // History entries kept in the prospect's onboardingData blob.
 // 24 = two years of monthly sends.
 export const NEWSLETTER_HISTORY_CAP = 24;

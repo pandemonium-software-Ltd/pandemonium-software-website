@@ -268,6 +268,67 @@ export function countActiveChangeRequestsThisMonth(
 }
 
 /**
+ * Infer a ChangeRequest's kind from its persisted shape when the
+ * explicit `kind` field is absent (legacy records pre-2026-05).
+ *
+ *   Patches target content.offers.current  → "offer-update"
+ *   Patches target a direct-edit safe target (tagline, business
+ *   contact fields, trust signals, etc.) AND coworkClassification
+ *   is "in_scope" with confidence === 1.0   → "direct-edit"
+ *   Anything else                            → "free-text"
+ *
+ * Used by countActiveChangeRequestsByKind for backward compat. New
+ * records always set kind explicitly so inference is the fallback.
+ */
+export function inferChangeRequestKind(
+  request: ChangeRequest,
+): NonNullable<ChangeRequest["kind"]> {
+  if (request.kind) return request.kind;
+  const patches = readCoworkPatches(request);
+  if (patches.length === 0) return "free-text";
+  if (patches.some((p) => p.target === "content.offers.current")) {
+    return "offer-update";
+  }
+  // Direct-edit signature: hand-built patches always carry
+  // coworkConfidence === 1.0 and a marker classification. Haiku-
+  // generated patches typically have confidence in [0.6, 0.95] and
+  // a softer reasoning string.
+  if (request.coworkConfidence === 1.0) return "direct-edit";
+  return "free-text";
+}
+
+/**
+ * Per-kind monthly counter. Each module gets its own 2/month
+ * budget — offers, direct-edits, and free-text classified requests
+ * are independent. Used by the dashboard's "Your modules" section
+ * to render usage counters.
+ *
+ * Same status exclusions as countActiveChangeRequestsThisMonth.
+ */
+export function countActiveChangeRequestsByKind(
+  requests: ChangeRequest[],
+  kind: NonNullable<ChangeRequest["kind"]>,
+): number {
+  const now = new Date();
+  const startOfMonth = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
+  return requests.filter(
+    (r) =>
+      r.submittedAt >= startOfMonth &&
+      r.status !== "rejected" &&
+      r.status !== "retracted" &&
+      inferChangeRequestKind(r) === kind,
+  ).length;
+}
+
+/** Per-module monthly budget. Newsletter sends are counted
+ *  separately (see NEWSLETTER_MONTHLY_SEND_LIMIT in newsletter/
+ *  limits.ts). */
+export const MONTHLY_OFFER_UPDATE_LIMIT = 2;
+export const MONTHLY_DIRECT_EDIT_LIMIT = 2;
+
+/**
  * One row in the customer's change-requests inbox. Submitted via the
  * /account/[token] dashboard's "Need a change?" form. Cowork will
  * pick these up in Stage 2C, classify (content / module / out-of-
@@ -290,6 +351,32 @@ export type ChangeRequest = {
   id: string; // UUID
   submittedAt: string; // ISO-8601
   message: string; // raw customer text
+  /**
+   * Discriminator for how the request was submitted + processed.
+   * Drives the per-kind monthly counters on the dashboard so each
+   * module's budget is independent.
+   *
+   *   "free-text" (default when absent — legacy records)
+   *     The historic flow: customer types a free-text message,
+   *     Haiku classifier patches OR escalates. This is the only
+   *     path that consumes Anthropic tokens.
+   *
+   *   "offer-update"
+   *     Structured offer composer from OfferCard. Pre-baked
+   *     coworkPatches[content.offers.current], no Haiku.
+   *     Auto-resolved on submit.
+   *
+   *   "direct-edit"
+   *     Structured single-field text edit from DirectEditCard
+   *     (tagline, address, phone, trust signals, etc.). Pre-baked
+   *     coworkPatches built from the form, no Haiku. Auto-resolved
+   *     on submit.
+   *
+   * Counters: countActiveChangeRequestsByKind() filters on this.
+   * When absent (old records), the inferred kind comes from the
+   * patch targets — see inferChangeRequestKind().
+   */
+  kind?: "free-text" | "offer-update" | "direct-edit";
   status:
     | "pending"
     | "in-progress"
