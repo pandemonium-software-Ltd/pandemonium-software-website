@@ -24,6 +24,7 @@ import type {
   OpeningHoursEntry,
   Service,
   SiteGeneratorInput,
+  Structure,
   Testimonial,
   TrustSignals,
   Vibe,
@@ -157,7 +158,7 @@ export function adaptProspect(prospect: ProspectRecord): {
     );
   }
 
-  // --- Vibe ---
+  // --- Vibe (style axis) ---
   const vibeRaw =
     optionalString(intake.vibe) ?? optionalString(branding.vibe);
   if (!vibeRaw || !VALID_VIBES.has(vibeRaw as Vibe)) {
@@ -167,6 +168,24 @@ export function adaptProspect(prospect: ProspectRecord): {
     );
   }
   const vibe = vibeRaw as Vibe;
+
+  // --- Structure (layout axis) ---
+  // Sourced from the same Phase 3 brand slice as vibe. Optional —
+  // legacy customers (intake completed before 2026-05-13) have no
+  // structure field; default to "services" which is the layout
+  // they had before the 4×4 split. New intakes set this explicitly.
+  const VALID_STRUCTURES: ReadonlySet<Structure> = new Set([
+    "services",
+    "showcase",
+    "booking",
+    "editorial",
+  ]);
+  const structureRaw =
+    optionalString(intake.structure) ?? optionalString(branding.structure);
+  const structure: Structure =
+    structureRaw && VALID_STRUCTURES.has(structureRaw as Structure)
+      ? (structureRaw as Structure)
+      : "services";
 
   // --- Colours ---
   // Sourced from intake (where the colour wheel lives) or the
@@ -606,6 +625,7 @@ export function adaptProspect(prospect: ProspectRecord): {
       colors,
       copy,
       vibe,
+      structure,
       domain,
     },
     copySources,

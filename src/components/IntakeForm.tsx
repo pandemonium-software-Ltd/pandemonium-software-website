@@ -46,11 +46,15 @@ import {
   phase3Schema,
   type Phase3Data,
   type Phase3Partial,
+  STRUCTURE_OPTIONS,
   VIBE_OPTIONS,
 } from "@/lib/schemas";
 import VibePreview from "@/components/VibePreview";
 import {
+  recommendedStructureFor,
   recommendedVibeFor,
+  STRUCTURE_BEST_FOR,
+  STRUCTURE_FEATURES,
   VIBE_FEATURES,
   VIBE_BEST_FOR,
 } from "@/lib/vibe-recommendations";
@@ -124,6 +128,28 @@ const VIBE_DETAILS: Record<
   },
 };
 
+const STRUCTURE_DETAILS: Record<
+  (typeof STRUCTURE_OPTIONS)[number],
+  { title: string; tagline: string }
+> = {
+  services: {
+    title: "Services",
+    tagline: "Photo hero + tagline, services grid prominent. Default.",
+  },
+  showcase: {
+    title: "Showcase",
+    tagline: "Gallery mosaic hero. Photos lead, copy supports.",
+  },
+  booking: {
+    title: "Booking",
+    tagline: "Calendar embed in hero, services as bookable items.",
+  },
+  editorial: {
+    title: "Editorial",
+    tagline: "Long-form text + portrait, credentials lead.",
+  },
+};
+
 // ---------- Defaults ----------
 
 type IntakeDefaults = {
@@ -186,6 +212,7 @@ function buildDefaultValues(
       primaryColour: saved.brand?.primaryColour ?? "#1d3a5f",
       secondaryColour: saved.brand?.secondaryColour,
       vibe: saved.brand?.vibe ?? "traditional",
+      structure: saved.brand?.structure ?? "services",
       logoFileName: saved.brand?.logoFileName ?? "",
     },
     modules: {
@@ -376,6 +403,7 @@ export default function IntakeForm({
             register={register}
             errors={errors}
             control={control}
+            watch={watch}
             businessType={businessType}
           />
         )}
@@ -845,21 +873,31 @@ function BrandSection({
   register,
   errors,
   control,
+  watch,
   businessType,
 }: SectionProps & {
   control: Control<Phase3Data>;
+  watch: ReturnType<typeof useForm<Phase3Data>>["watch"];
   businessType?: string;
 }) {
   const e = errors.brand;
-  // Compute the vibe recommendation once. The picker below uses
-  // this to stamp a "Recommended for {businessType}" badge on the
-  // matching card. When businessType is missing or "Other", the
-  // recommendation falls back to "modern" — we suppress the badge
-  // in that case so customers don't see an unhelpful "Recommended
-  // for Other" label.
+  // Two-axis picker — Style (typography) × Structure (layout).
+  // Each axis has its own 4-option picker. Both pickers' thumbnails
+  // render the CURRENT selection of the OTHER axis so the customer
+  // sees a live cross-product. E.g. clicking "Showcase" updates the
+  // style picker's 4 thumbnails to all show showcase layout — the
+  // customer can then compare modern-showcase vs traditional-showcase
+  // side-by-side.
   const recommendedVibe = recommendedVibeFor(businessType);
+  const recommendedStructure = recommendedStructureFor(businessType);
   const showRecommendation =
     !!businessType && businessType !== "Other";
+  // Watch live form values so the picker thumbnails re-render
+  // when the customer flips either axis.
+  const currentVibe =
+    watch("brand.vibe") ?? recommendedVibe;
+  const currentStructure =
+    watch("brand.structure") ?? recommendedStructure;
   return (
     <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2">
@@ -896,13 +934,12 @@ function BrandSection({
 
       <fieldset>
         <legend className="mb-3 block text-sm font-semibold text-navy-900">
-          Site vibe{" "}
+          Layout{" "}
           <span aria-hidden="true" className="text-ember-600">*</span>
         </legend>
         <p className="mb-4 text-xs text-navy-500">
-          Pick the one that fits your customers best — we&apos;ll work
-          within this preset. Hover any preview to see its design
-          features and which businesses it suits.
+          The shape of your homepage — which content leads, where the
+          hero photo goes, how services are presented.
           {showRecommendation && (
             <>
               {" "}
@@ -910,12 +947,93 @@ function BrandSection({
               <span className="font-semibold text-green-700">
                 Recommended
               </span>{" "}
-              is the one that usually fits a {businessType} best — but
-              you can pick any of the four.
+              is the layout that usually fits a {businessType} best.
             </>
           )}{" "}
-          Previews use the same teal everywhere so you can compare the
-          layouts head-to-head; your real site uses your brand colours.
+          Each thumbnail uses your selected STYLE below — flip styles
+          and the layouts update so you can compare side-by-side.
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
+          {STRUCTURE_OPTIONS.map((s) => {
+            const detail = STRUCTURE_DETAILS[s];
+            const isRecommended =
+              showRecommendation && s === recommendedStructure;
+            return (
+              <label
+                key={s}
+                className="group relative flex cursor-pointer flex-col gap-3 rounded-2xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400 has-[:checked]:border-brand-primary-500 has-[:checked]:bg-brand-primary-50"
+              >
+                <div className="relative">
+                  <VibePreview
+                    vibe={currentVibe}
+                    structure={s}
+                    size="thumb"
+                  />
+                  {/* Hover overlay — structure-specific features + best-for. */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 flex flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-t from-navy-950/95 via-navy-950/85 to-navy-950/0 p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-cream-200">
+                      Features
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-cream-50">
+                      {STRUCTURE_FEATURES[s].map((f, i) => (
+                        <li key={i} className="flex gap-1.5">
+                          <span aria-hidden="true" className="text-brand-primary-300">·</span>
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-[10px] font-semibold uppercase tracking-wider text-cream-200">
+                      Best for
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-cream-50">
+                      {STRUCTURE_BEST_FOR[s].map((b, i) => (
+                        <li key={i} className="flex gap-1.5">
+                          <span aria-hidden="true" className="text-brand-primary-300">·</span>
+                          <span>{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  {isRecommended && (
+                    <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lift">
+                      <span aria-hidden="true">★</span>
+                      Recommended
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-start gap-3">
+                  <input
+                    type="radio"
+                    value={s}
+                    {...register("brand.structure")}
+                    className="mt-1 h-4 w-4 flex-none border-2 border-navy-300 text-navy-900"
+                  />
+                  <div>
+                    <span className="font-semibold text-navy-900">
+                      {detail.title}
+                    </span>
+                    <p className="mt-1 text-sm text-navy-700">
+                      {detail.tagline}
+                    </p>
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend className="mb-3 block text-sm font-semibold text-navy-900">
+          Style{" "}
+          <span aria-hidden="true" className="text-ember-600">*</span>
+        </legend>
+        <p className="mb-4 text-xs text-navy-500">
+          The typography + corner radii — same bones, different feel.
+          Each thumbnail uses your selected LAYOUT above.
         </p>
         <div className="grid gap-4 md:grid-cols-2">
           {VIBE_OPTIONS.map((v) => {
@@ -927,16 +1045,12 @@ function BrandSection({
                 key={v}
                 className="group relative flex cursor-pointer flex-col gap-3 rounded-2xl border-2 border-navy-200 bg-white p-4 transition-colors hover:border-navy-400 has-[:checked]:border-brand-primary-500 has-[:checked]:bg-brand-primary-50"
               >
-                {/* Preview + hover-reveal overlay + optional
-                 *  recommendation badge. Same component the marketing
-                 *  homepage uses — when you change it there, this
-                 *  picker updates in lockstep. */}
                 <div className="relative">
-                  <VibePreview vibe={v} size="thumb" />
-                  {/* Hover-reveal overlay (desktop) — features +
-                   *  best-for content layered over the preview. Fades
-                   *  in on group-hover OR group-focus-within so
-                   *  keyboard users can reach it via tab. */}
+                  <VibePreview
+                    vibe={v}
+                    structure={currentStructure}
+                    size="thumb"
+                  />
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-0 flex flex-col justify-end overflow-hidden rounded-2xl bg-gradient-to-t from-navy-950/95 via-navy-950/85 to-navy-950/0 p-4 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
@@ -947,9 +1061,7 @@ function BrandSection({
                     <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-cream-50">
                       {VIBE_FEATURES[v].map((f, i) => (
                         <li key={i} className="flex gap-1.5">
-                          <span aria-hidden="true" className="text-brand-primary-300">
-                            ·
-                          </span>
+                          <span aria-hidden="true" className="text-brand-primary-300">·</span>
                           <span>{f}</span>
                         </li>
                       ))}
@@ -960,17 +1072,12 @@ function BrandSection({
                     <ul className="mt-1 space-y-0.5 text-[11px] leading-snug text-cream-50">
                       {VIBE_BEST_FOR[v].map((b, i) => (
                         <li key={i} className="flex gap-1.5">
-                          <span aria-hidden="true" className="text-brand-primary-300">
-                            ·
-                          </span>
+                          <span aria-hidden="true" className="text-brand-primary-300">·</span>
                           <span>{b}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
-                  {/* Recommendation badge — only on the matching
-                   *  vibe, only when we have a meaningful
-                   *  businessType ("Other" suppressed). */}
                   {isRecommended && (
                     <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lift">
                       <span aria-hidden="true">★</span>

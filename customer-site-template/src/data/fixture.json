@@ -150,5 +150,6 @@
     }
   },
   "vibe": "modern",
+  "structure": "services",
   "domain": "test09052026moduforge.store"
 }

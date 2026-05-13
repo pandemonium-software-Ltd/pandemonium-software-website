@@ -10,10 +10,28 @@
 // templates can import it without dragging server deps.
 
 /**
- * The four standard vibes (matches src/lib/schemas.ts VIBE_OPTIONS).
- * Each maps to one template directory under templates/.
+ * Style axis — typography + radii + heading weight. Matches
+ * src/lib/schemas.ts VIBE_OPTIONS. Drives CSS via the
+ * [data-vibe="..."] selector in the customer-site-template's
+ * globals.css.
  */
 export type Vibe = "traditional" | "modern" | "premium" | "friendly";
+
+/**
+ * Structure axis — page layout + hero shape + section emphasis.
+ * Independent of style. A "modern showcase" wedding-supplier site
+ * has the same Geist typography as a "modern services" plumber
+ * site but completely different page bones.
+ *
+ *   "services"   — text + photo hero, services grid dominant.
+ *   "showcase"   — full-bleed gallery hero, photos lead.
+ *   "booking"    — Cal.com embed prominent in hero.
+ *   "editorial"  — long-form text + portrait hero, credentials lead.
+ *
+ * Customer-site-template's page.tsx switches on this. Schema-level
+ * source is src/lib/schemas.ts STRUCTURE_OPTIONS.
+ */
+export type Structure = "services" | "showcase" | "booking" | "editorial";
 
 /**
  * Hex colour string, including the leading #. Validation happens at
@@ -242,6 +260,12 @@ export type SiteGeneratorInput = {
   colors: BrandColors;
   copy: CustomCopy;
   vibe: Vibe;
+  /** Page layout structure — orthogonal to `vibe` (style). Drives
+   *  which hero component renders + body section emphasis. Adapter
+   *  defaults to "services" when the prospect's brand slice doesn't
+   *  carry an explicit structure (legacy customers from before
+   *  2026-05-13 had only a vibe field). */
+  structure: Structure;
   /** Customer's primary domain (apex). Used for canonical URLs +
    *  open-graph tags. e.g. "alexsbakery.co.uk". */
   domain: string;

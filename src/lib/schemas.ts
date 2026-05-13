@@ -100,11 +100,39 @@ export const MODULE_OPTIONS = [
   "Google Business Profile Setup/Audit",
 ] as const;
 
+/** Style axis — typography + corner radii + heading weight.
+ *  Driven by globals.css [data-vibe="..."] rules on the customer-
+ *  site. Unrelated to layout (see STRUCTURE_OPTIONS below). */
 export const VIBE_OPTIONS = [
   "traditional",
   "modern",
   "premium",
   "friendly",
+] as const;
+
+/** Structure axis — page layout, hero shape, section emphasis.
+ *  Picked by businessType (some businesses NEED photos in the
+ *  hero, others NEED a booking widget, etc.). Drives a switch in
+ *  customer-site-template/src/app/page.tsx that selects which
+ *  hero component renders + which body-section emphasis applies.
+ *
+ *    "services"   — text + photo hero, services grid prominent.
+ *                   Trades + professional services baseline.
+ *    "showcase"   — full-bleed gallery hero, services as cards
+ *                   beneath, gallery dominant. For visual-product
+ *                   businesses where photos sell the work.
+ *    "booking"    — Cal.com embed prominent in hero, services as
+ *                   a "bookable items" list. For appointment-
+ *                   driven businesses.
+ *    "editorial"  — long-form text hero + portrait, credentials
+ *                   + trust signals lead. For consultancy /
+ *                   thought-leadership.
+ */
+export const STRUCTURE_OPTIONS = [
+  "services",
+  "showcase",
+  "booking",
+  "editorial",
 ] as const;
 
 // ---------- Phase 1: Initial Enquiry ----------
@@ -232,6 +260,11 @@ const brandSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .optional(),
   vibe: z.enum(VIBE_OPTIONS),
+  /** Page layout structure — added 2026-05-13. Existing customers
+   *  with no structure default to "services" via the adapter, so
+   *  the field is optional in the schema (back-compat). New
+   *  intakes set it explicitly. */
+  structure: z.enum(STRUCTURE_OPTIONS).optional(),
   logoFileName: z.string().max(200).optional(),
 });
 

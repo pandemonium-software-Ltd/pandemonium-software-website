@@ -1,11 +1,37 @@
 import Link from "next/link";
 import HeroIllustration from "@/components/HeroIllustration";
+import { VibePreviewCard, type Structure } from "@/components/VibePreview";
 import {
-  VibePreviewCard,
-  VIBE_PREVIEW_LIST,
-} from "@/components/VibePreview";
-import { VIBE_FEATURES, VIBE_BEST_FOR } from "@/lib/vibe-recommendations";
+  STRUCTURE_BEST_FOR,
+  STRUCTURE_FEATURES,
+} from "@/lib/vibe-recommendations";
 import { site } from "@/lib/site";
+
+/** Four hand-picked layout × style combinations for the marketing
+ *  homepage gallery. Each pair is chosen to show MAXIMUM cross-axis
+ *  variation — visitors should see four visibly different sites,
+ *  not four font swaps of the same layout.
+ *
+ *  Showing one example per structure makes the structure axis the
+ *  headline differentiation on the marketing site; the style axis
+ *  surfaces in the intake form picker where the customer can mix
+ *  + match all 16 combinations. */
+const HOMEPAGE_COMBOS: Array<{
+  structure: Structure;
+  vibe: "modern" | "traditional" | "premium" | "friendly";
+  /** Display business name in the preview — chosen to fit the
+   *  structure's archetypal customer. */
+  businessName: string;
+}> = [
+  // Services × Modern — the default tradesperson layout
+  { structure: "services", vibe: "modern", businessName: "Reliable Plumbing" },
+  // Showcase × Premium — visual-portfolio template (weddings, photographers)
+  { structure: "showcase", vibe: "premium", businessName: "Hayley Vance" },
+  // Booking × Friendly — appointment-driven warm template
+  { structure: "booking", vibe: "friendly", businessName: "The Yoga Studio" },
+  // Editorial × Traditional — credentialed advisory
+  { structure: "editorial", vibe: "traditional", businessName: "Smith & Co Law" },
+];
 
 export default function HomePage() {
   return (
@@ -204,44 +230,51 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Vibe gallery — four home-page previews so visitors can SEE
-          the range before they enquire. Same teal accent across all
-          four so the comparison is about typography + layout, not
-          colour (which the customer picks per-site later). */}
+      {/* Vibe gallery — four hand-picked layout × style combinations
+       *  so visitors see actually-different sites, not four font
+       *  swaps. Each preview demonstrates one structure (Services /
+       *  Showcase / Booking / Editorial) paired with a style that
+       *  shows off that structure's strength. The intake form lets
+       *  customers mix any of the 4 layouts with any of the 4 styles
+       *  (16 combinations total) — this gallery is the headline
+       *  pitch, not the exhaustive set. */}
       <section className="section bg-cream-100/60">
         <div className="container-content">
           <div className="mx-auto max-w-3xl text-center">
             <span className="eyebrow">Pick a look</span>
             <h2 className="heading-2 mt-3">
-              Four styles. Your business, your call.
+              Four layouts. Four styles. Pick what fits.
             </h2>
             <p className="prose-body mx-auto mt-5 max-w-2xl">
-              Every site we build slots into one of four design vibes.
-              Same modular content (services, FAQs, photos, booking,
-              newsletter); different typography + corner radii + spacing
-              rhythm. You pick the one that matches your business when
-              you fill in your details — and you can see what each one
-              looks like below.
+              Every site we build slots into one of four layouts
+              (Services, Showcase, Booking, Editorial) and one of four
+              styles (Modern, Traditional, Premium, Friendly). Mix
+              them however you like — 16 combinations in total. The
+              four below are hand-picked to show the range; we&apos;ll
+              recommend the right pair for your business when you fill
+              in your details.
             </p>
           </div>
 
           <div className="mt-12 grid gap-8 md:grid-cols-2">
-            {VIBE_PREVIEW_LIST.map((v) => (
+            {HOMEPAGE_COMBOS.map((combo) => (
               <VibePreviewCard
-                key={v}
-                vibe={v}
+                key={`${combo.structure}-${combo.vibe}`}
+                vibe={combo.vibe}
+                structure={combo.structure}
+                businessName={combo.businessName}
                 size="full"
-                features={VIBE_FEATURES[v]}
-                bestFor={VIBE_BEST_FOR[v]}
+                features={STRUCTURE_FEATURES[combo.structure]}
+                bestFor={STRUCTURE_BEST_FOR[combo.structure]}
               />
             ))}
           </div>
 
           <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-navy-600">
-            All four use your brand colours, your photos, and your copy
-            — the previews use the same teal everywhere so you can
-            compare the layouts head-to-head. Hover over any preview to
-            see what makes it tick and which businesses it suits best.
+            Previews use the same teal everywhere so you can compare
+            layouts head-to-head; your real site uses your brand
+            colours, your photos, and your copy. Hover any preview to
+            see which businesses each layout suits best.
           </p>
         </div>
       </section>

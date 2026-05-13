@@ -9,6 +9,12 @@
 // translation.
 
 export type Vibe = "traditional" | "modern" | "premium" | "friendly";
+
+/** Page layout structure — orthogonal to Vibe (style). Drives the
+ *  hero variant rendered on the homepage + body section emphasis.
+ *  See src/lib/site-generator/types.ts on the marketing side for
+ *  the full doc-block. */
+export type Structure = "services" | "showcase" | "booking" | "editorial";
 export type HexColor = `#${string}`;
 
 /** Day-of-week keys for the structured opening-hours record.
@@ -160,5 +166,9 @@ export type SiteData = {
   colors: BrandColors;
   copy: CustomCopy;
   vibe: Vibe;
+  /** Page layout structure — defaults to "services" if the
+   *  adapter doesn't carry an explicit value (legacy customers).
+   *  Drives which hero variant the homepage renders. */
+  structure: Structure;
   domain: string;
 };

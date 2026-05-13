@@ -126,8 +126,18 @@ export const VIBE_PREVIEW_FONTS_URL =
 
 type Size = "thumb" | "full";
 
+/** Structure axis — mirror of the type in
+ *  src/lib/site-generator/types.ts. Re-declared here (rather than
+ *  imported) so this component stays trivially renderable in
+ *  isolation. Keep in sync. */
+export type Structure = "services" | "showcase" | "booking" | "editorial";
+
 type Props = {
   vibe: Vibe;
+  /** Page layout — picks which hero shape the preview draws.
+   *  Defaults to "services" so existing callers (homepage gallery
+   *  pre-2026-05-13) keep their current look. */
+  structure?: Structure;
   /** "thumb" = compact for grids (~320px wide, 4-in-a-row).
    *  "full"  = larger preview for the qualification form picker. */
   size?: Size;
@@ -140,6 +150,7 @@ type Props = {
 
 export default function VibePreview({
   vibe,
+  structure = "services",
   size = "thumb",
   businessName = "Your Business",
   className,
@@ -333,52 +344,162 @@ export default function VibePreview({
           </div>
         </div>
 
-        {/* Hero — placeholder image + headline + 2 CTA buttons. */}
+        {/* Hero — shape varies per structure. Each variant uses
+         *  the same scale tokens + typography vars so a customer
+         *  comparing structures sees a real layout difference,
+         *  not just a font swap. */}
         <div
           style={{
             padding: `${Math.round(20 * scale)}px ${Math.round(18 * scale)}px`,
           }}
         >
-          <div
-            style={{
-              background:
-                "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
-              borderRadius: s.cardRadius,
-              height: `${Math.round(96 * scale)}px`,
-              marginBottom: `${Math.round(14 * scale)}px`,
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            {/* Decorative diagonal sheen so the hero reads as a
-                photograph at a glance, not a flat grey block. */}
-            <span
-              aria-hidden="true"
+          {structure === "showcase" ? (
+            // Gallery mosaic — 1 dominant + 3 small tiles.
+            <div
               style={{
-                position: "absolute",
-                inset: 0,
-                background:
-                  "linear-gradient(115deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 35%, rgba(15,23,42,0.1) 100%)",
+                display: "grid",
+                gridTemplateColumns: "2fr 1fr",
+                gridTemplateRows: "1fr 1fr",
+                gap: `${Math.round(4 * scale)}px`,
+                height: `${Math.round(108 * scale)}px`,
+                marginBottom: `${Math.round(12 * scale)}px`,
               }}
-            />
-          </div>
-          <h1 style={headingStyle}>
-            Trusted {businessName}.{" "}
-            <span style={{ color: PREVIEW_ACCENT }}>Built for results.</span>
-          </h1>
-          <p
-            style={{
-              fontSize: `${bodyPx}px`,
-              color: "#475569",
-              marginTop: `${Math.round(8 * scale)}px`,
-              lineHeight: 1.5,
-              fontFamily: s.bodyFont,
-              letterSpacing: s.bodyLetterSpacing,
-            }}
+            >
+              <span
+                style={{
+                  gridRow: "span 2",
+                  background:
+                    "linear-gradient(135deg, #94a3b8 0%, #475569 100%)",
+                  borderRadius: s.cardRadius,
+                }}
+              />
+              <span
+                style={{
+                  background:
+                    "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
+                  borderRadius: s.cardRadius,
+                }}
+              />
+              <span
+                style={{
+                  background:
+                    "linear-gradient(135deg, #a3b8cb 0%, #6b7e94 100%)",
+                  borderRadius: s.cardRadius,
+                }}
+              />
+            </div>
+          ) : structure === "editorial" ? (
+            // Editorial — two-column: text-rich left, portrait right.
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1.5fr 1fr",
+                gap: `${Math.round(10 * scale)}px`,
+                marginBottom: `${Math.round(10 * scale)}px`,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    height: `${Math.round(6 * scale)}px`,
+                    width: "70%",
+                    background: "#e2e8f0",
+                    borderRadius: "2px",
+                    marginBottom: `${Math.round(6 * scale)}px`,
+                  }}
+                />
+                <div
+                  style={{
+                    height: `${Math.round(6 * scale)}px`,
+                    width: "85%",
+                    background: "#e2e8f0",
+                    borderRadius: "2px",
+                    marginBottom: `${Math.round(6 * scale)}px`,
+                  }}
+                />
+                <div
+                  style={{
+                    height: `${Math.round(6 * scale)}px`,
+                    width: "60%",
+                    background: "#e2e8f0",
+                    borderRadius: "2px",
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  background:
+                    "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
+                  borderRadius: s.cardRadius,
+                  aspectRatio: "4 / 5",
+                }}
+              />
+            </div>
+          ) : (
+            // Services + booking share the wide hero photo. Booking
+            // gets a calendar mockup below instead of services
+            // (rendered further down in the body section).
+            <div
+              style={{
+                background:
+                  "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
+                borderRadius: s.cardRadius,
+                height: `${Math.round(96 * scale)}px`,
+                marginBottom: `${Math.round(14 * scale)}px`,
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background:
+                    "linear-gradient(115deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 35%, rgba(15,23,42,0.1) 100%)",
+                }}
+              />
+            </div>
+          )}
+
+          <h1
+            style={
+              structure === "editorial"
+                ? { ...headingStyle, fontSize: `${Math.round(22 * scale)}px` }
+                : headingStyle
+            }
           >
-            A short, confident promise about what the business does,
-            for whom, and where.
-          </p>
+            {structure === "booking"
+              ? `Book with ${businessName}.`
+              : `Trusted ${businessName}.`}{" "}
+            {structure !== "booking" && (
+              <span style={{ color: PREVIEW_ACCENT }}>
+                {structure === "showcase"
+                  ? "See the work."
+                  : structure === "editorial"
+                    ? "Built on trust."
+                    : "Built for results."}
+              </span>
+            )}
+          </h1>
+          {structure !== "editorial" && (
+            <p
+              style={{
+                fontSize: `${bodyPx}px`,
+                color: "#475569",
+                marginTop: `${Math.round(8 * scale)}px`,
+                lineHeight: 1.5,
+                fontFamily: s.bodyFont,
+                letterSpacing: s.bodyLetterSpacing,
+              }}
+            >
+              {structure === "booking"
+                ? "Pick a time below — most slots confirm instantly."
+                : structure === "showcase"
+                  ? "A look at recent work, plus how to start a project of your own."
+                  : "A short, confident promise about what the business does, for whom, and where."}
+            </p>
+          )}
           <div
             style={{
               marginTop: `${Math.round(14 * scale)}px`,
@@ -387,9 +508,53 @@ export default function VibePreview({
               gap: `${Math.round(8 * scale)}px`,
             }}
           >
-            <span style={btnStyle}>Get in touch</span>
-            <span style={btnSecondaryStyle}>View services</span>
+            <span style={btnStyle}>
+              {structure === "booking"
+                ? "Book a time"
+                : structure === "editorial"
+                  ? "Get in touch"
+                  : structure === "showcase"
+                    ? "Start a project"
+                    : "Get in touch"}
+            </span>
+            <span style={btnSecondaryStyle}>
+              {structure === "booking"
+                ? "Send a message"
+                : "View services"}
+            </span>
           </div>
+
+          {/* Booking-only — mini calendar mockup beneath the buttons
+           *  so the preview reads as "calendar is the centrepiece". */}
+          {structure === "booking" && (
+            <div
+              style={{
+                marginTop: `${Math.round(12 * scale)}px`,
+                background: "#ffffff",
+                border: "1px solid rgba(15,23,42,0.1)",
+                borderRadius: s.cardRadius,
+                padding: `${Math.round(8 * scale)}px`,
+                display: "grid",
+                gridTemplateColumns: "repeat(7, 1fr)",
+                gap: `${Math.round(3 * scale)}px`,
+              }}
+            >
+              {Array.from({ length: 14 }).map((_, i) => (
+                <span
+                  key={i}
+                  style={{
+                    height: `${Math.round(12 * scale)}px`,
+                    borderRadius: "3px",
+                    background:
+                      [3, 5, 9, 12].includes(i)
+                        ? PREVIEW_ACCENT
+                        : "#f1f5f9",
+                    opacity: [3, 5, 9, 12].includes(i) ? 1 : 0.6,
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Services grid — 3 mini cards. Demonstrates the vibe's
@@ -509,6 +674,7 @@ export function VibePreviewCaption({
  */
 export function VibePreviewCard({
   vibe,
+  structure = "services",
   size = "thumb",
   businessName,
   recommendedFor,
@@ -516,6 +682,9 @@ export function VibePreviewCard({
   bestFor,
 }: {
   vibe: Vibe;
+  /** Page layout structure — picks which hero variant the preview
+   *  draws. Defaults to "services" for back-compat. */
+  structure?: Structure;
   size?: "thumb" | "full";
   businessName?: string;
   /** When set, stamps a "Recommended for {label}" badge. The label
@@ -536,6 +705,7 @@ export function VibePreviewCard({
       <div className="relative">
         <VibePreview
           vibe={vibe}
+          structure={structure}
           size={size}
           businessName={businessName}
         />
