@@ -272,9 +272,6 @@ export function countActiveChangeRequestsThisMonth(
  * explicit `kind` field is absent (legacy records pre-2026-05).
  *
  *   Patches target content.offers.current  → "offer-update"
- *   Patches target a direct-edit safe target (tagline, business
- *   contact fields, trust signals, etc.) AND coworkClassification
- *   is "in_scope" with confidence === 1.0   → "direct-edit"
  *   Anything else                            → "free-text"
  *
  * Used by countActiveChangeRequestsByKind for backward compat. New
@@ -285,15 +282,9 @@ export function inferChangeRequestKind(
 ): NonNullable<ChangeRequest["kind"]> {
   if (request.kind) return request.kind;
   const patches = readCoworkPatches(request);
-  if (patches.length === 0) return "free-text";
   if (patches.some((p) => p.target === "content.offers.current")) {
     return "offer-update";
   }
-  // Direct-edit signature: hand-built patches always carry
-  // coworkConfidence === 1.0 and a marker classification. Haiku-
-  // generated patches typically have confidence in [0.6, 0.95] and
-  // a softer reasoning string.
-  if (request.coworkConfidence === 1.0) return "direct-edit";
   return "free-text";
 }
 
@@ -324,9 +315,10 @@ export function countActiveChangeRequestsByKind(
 
 /** Per-module monthly budget. Newsletter sends are counted
  *  separately (see NEWSLETTER_MONTHLY_SEND_LIMIT in newsletter/
- *  limits.ts). */
+ *  limits.ts). General text/content edits use the legacy
+ *  free-text MONTHLY_CHANGE_REQUEST_LIMIT — they're part of the
+ *  customer's change-request allowance, not a separate module. */
 export const MONTHLY_OFFER_UPDATE_LIMIT = 2;
-export const MONTHLY_DIRECT_EDIT_LIMIT = 2;
 
 /**
  * One row in the customer's change-requests inbox. Submitted via the
@@ -357,26 +349,21 @@ export type ChangeRequest = {
    * module's budget is independent.
    *
    *   "free-text" (default when absent — legacy records)
-   *     The historic flow: customer types a free-text message,
-   *     Haiku classifier patches OR escalates. This is the only
-   *     path that consumes Anthropic tokens.
+   *     The customer types a free-text message via the change-
+   *     request block on the dashboard, Haiku classifier patches
+   *     OR escalates. This is the only path that consumes
+   *     Anthropic tokens.
    *
    *   "offer-update"
    *     Structured offer composer from OfferCard. Pre-baked
    *     coworkPatches[content.offers.current], no Haiku.
    *     Auto-resolved on submit.
    *
-   *   "direct-edit"
-   *     Structured single-field text edit from DirectEditCard
-   *     (tagline, address, phone, trust signals, etc.). Pre-baked
-   *     coworkPatches built from the form, no Haiku. Auto-resolved
-   *     on submit.
-   *
    * Counters: countActiveChangeRequestsByKind() filters on this.
    * When absent (old records), the inferred kind comes from the
    * patch targets — see inferChangeRequestKind().
    */
-  kind?: "free-text" | "offer-update" | "direct-edit";
+  kind?: "free-text" | "offer-update";
   status:
     | "pending"
     | "in-progress"

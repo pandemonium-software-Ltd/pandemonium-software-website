@@ -23,10 +23,8 @@ import { z } from "zod";
 import {
   appendChangeRequest,
   countActiveChangeRequestsByKind,
-  countActiveChangeRequestsThisMonth,
   getProspectByToken,
   MONTHLY_CHANGE_REQUEST_LIMIT,
-  MONTHLY_DIRECT_EDIT_LIMIT,
   MONTHLY_OFFER_UPDATE_LIMIT,
   updateChangeRequest,
   type ChangeRequest,
@@ -97,89 +95,6 @@ const offerPayloadSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be YYYY-MM-DD"),
 });
 
-/** Whitelist of patch targets the dashboard direct-edit composer
- *  is allowed to write. Each is a single-string update — no
- *  locator (services/faq/testimonials) targets and no JSON-encoded
- *  payloads (openHours, aboutBullets), because those need their
- *  own UI work and aren't in this phase.
- *
- *  Customer asks for anything OUTSIDE this list = free-text path
- *  (currently still Haiku-classified). When we expand the picker
- *  later, add targets here AND wire validation below + a renderer
- *  in DirectEditCard.tsx.
- */
-const DIRECT_EDIT_TARGETS = [
-  "copy.tagline",
-  "copy.aboutBlurb",
-  "business.contactName",
-  "business.phoneDisplay",
-  "business.publicEmail",
-  "business.address",
-  "business.serviceArea",
-  "content.trust.associations",
-  "content.trust.awards",
-  "content.trust.yearsExperience",
-] as const;
-
-type DirectEditTarget = (typeof DIRECT_EDIT_TARGETS)[number];
-
-/** Per-target newValue validators. Hand-tuned caps mirror the
- *  Phase 3 + Hub Step 4 schemas in src/lib/schemas.ts so a value
- *  that's valid in onboarding stays valid in the post-launch edit. */
-const directEditPayloadSchema = z
-  .object({
-    target: z.enum(DIRECT_EDIT_TARGETS),
-    /** newValue is always a string from the client; the server
-     *  parses numeric targets (yearsExperience) into the right
-     *  shape before applying. */
-    newValue: z
-      .string()
-      .trim()
-      .min(1, "Please enter a value."),
-  })
-  .superRefine((data, ctx) => {
-    // Per-target length / format validation.
-    const limit: Partial<Record<DirectEditTarget, number>> = {
-      "copy.tagline": 200,
-      "copy.aboutBlurb": 5000,
-      "business.contactName": 100,
-      "business.phoneDisplay": 30,
-      "business.publicEmail": 254,
-      "business.address": 500,
-      "business.serviceArea": 500,
-      "content.trust.associations": 500,
-      "content.trust.awards": 500,
-    };
-    const max = limit[data.target];
-    if (max !== undefined && data.newValue.length > max) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Keep this under ${max} characters.`,
-        path: ["newValue"],
-      });
-    }
-    if (data.target === "business.publicEmail") {
-      // Lighter than full RFC 5322 — same regex as Phase 1 enquiry.
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.newValue)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "That doesn't look like a valid email address.",
-          path: ["newValue"],
-        });
-      }
-    }
-    if (data.target === "content.trust.yearsExperience") {
-      const n = Number(data.newValue);
-      if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 200) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Years of experience must be a whole number between 0 and 200.",
-          path: ["newValue"],
-        });
-      }
-    }
-  });
-
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE, "Missing or invalid token."),
   message: z
@@ -187,16 +102,14 @@ const requestSchema = z.object({
     .trim()
     .min(5, "Please describe the change in at least a few words.")
     .max(5000, "That's a lot for one message — please split it up."),
-  /** Optional discriminator. Determines which pre-baked path runs
-   *  (no Haiku for these), or absent = legacy free-text route.
-   *  Future kinds (e.g. "newsletter-draft") plug in the same way. */
-  kind: z.enum(["offer-update", "direct-edit"]).optional(),
+  /** Optional discriminator — currently only "offer-update" is
+   *  recognised. When present the server runs the structured
+   *  auto-apply path (no Haiku). Absent = legacy free-text route
+   *  (Haiku-classified). */
+  kind: z.literal("offer-update").optional(),
   /** Required when kind="offer-update". Server validates dates +
    *  embeds the resulting OfferEntry on the change-request. */
   offer: offerPayloadSchema.optional(),
-  /** Required when kind="direct-edit". Single-target patch the
-   *  dashboard composer constructed from the customer's form. */
-  directEdit: directEditPayloadSchema.optional(),
 });
 
 const ELIGIBLE_STATUSES = new Set([
@@ -227,7 +140,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, message, kind, offer, directEdit } = parsed.data;
+  const { token, message, kind, offer } = parsed.data;
   // Offer-update sanity checks (server side) — offer must be
   // present when kind=offer-update, end ≥ start.
   if (kind === "offer-update") {
@@ -252,12 +165,6 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-  }
-  if (kind === "direct-edit" && !directEdit) {
-    return NextResponse.json(
-      { error: "Missing edit details." },
-      { status: 400 },
-    );
   }
 
   let prospect;
@@ -302,18 +209,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // Monthly cap check. Per-module budgets are independent — the
-  // dashboard's "Your modules" cards each show their own usage
-  // counter. Free-text requests still share the legacy global cap
-  // so this path can't be used to bypass the per-kind limits.
-  // Reset is on the 1st of each month, UTC.
+  // Monthly cap check. Offer updates have their own per-kind 2/mo
+  // budget (the structured composer auto-applies and can't be used
+  // to abuse the free-text path). Free-text change-requests share
+  // the legacy global cap. Reset on the 1st of each month, UTC.
   const requests = prospect.changeRequests;
-  const usedThisMonth = countActiveChangeRequestsThisMonth(requests);
+  const usedFreeText = countActiveChangeRequestsByKind(requests, "free-text");
   const usedOffers = countActiveChangeRequestsByKind(requests, "offer-update");
-  const usedDirectEdits = countActiveChangeRequestsByKind(
-    requests,
-    "direct-edit",
-  );
 
   const nextReset = nextMonthStartIso();
   const resetCopy = `Allowance resets on ${formatDateNice(nextReset)}.`;
@@ -328,18 +230,7 @@ export async function POST(request: Request) {
       { status: 429 },
     );
   }
-  if (kind === "direct-edit" && usedDirectEdits >= MONTHLY_DIRECT_EDIT_LIMIT) {
-    return NextResponse.json(
-      {
-        error: `You've used your ${MONTHLY_DIRECT_EDIT_LIMIT} text edits for this month. ${resetCopy}`,
-        remaining: 0,
-        resetsOn: nextReset,
-      },
-      { status: 429 },
-    );
-  }
-  if (!kind && usedThisMonth >= MONTHLY_CHANGE_REQUEST_LIMIT) {
-    // Legacy free-text path still uses the global cap.
+  if (!kind && usedFreeText >= MONTHLY_CHANGE_REQUEST_LIMIT) {
     return NextResponse.json(
       {
         error: `You've used your ${MONTHLY_CHANGE_REQUEST_LIMIT} change requests for this month. ${resetCopy} For anything bigger or more urgent, email me directly and I'll quote it separately.`,
@@ -355,47 +246,6 @@ export async function POST(request: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
     "https://pandemonium-software-website.benpandher.workers.dev";
-
-  const isDirectEdit = kind === "direct-edit" && !!directEdit;
-
-  // ---- Auto-apply path for direct-edit ----
-  // Customer submitted a structured single-field update via the
-  // dashboard's DirectEditCard. Same auto-apply model as offer-update:
-  // no Haiku call, no admin review, patch applies straight to Notion,
-  // CR is resolved on creation, build dispatches live. Fail-soft on
-  // apply errors so the monthly slot stays unburned.
-  let autoAppliedDirectEdit:
-    | {
-        patch: { target: string; newValue: string };
-        previousValue: unknown;
-      }
-    | null = null;
-  if (isDirectEdit && directEdit) {
-    const apply = await applyChangeRequestPatches({
-      prospect,
-      patches: [
-        {
-          target: directEdit.target,
-          newValue: directEdit.newValue,
-        },
-      ],
-    });
-    if (!apply.ok) {
-      console.error(
-        `[api/account/change-request] direct-edit auto-apply failed for ${prospect.token.slice(0, 8)} (${directEdit.target}): ${apply.reason}`,
-      );
-      return NextResponse.json(
-        {
-          error: `Couldn't apply that change: ${apply.reason}. Tweak it and try again.`,
-        },
-        { status: 400 },
-      );
-    }
-    autoAppliedDirectEdit = {
-      patch: { target: directEdit.target, newValue: directEdit.newValue },
-      previousValue: apply.applied[0]?.previousValue ?? null,
-    };
-  }
 
   // ---- Auto-apply path for offer-update ----
   // The customer's submitted structured form data via the dashboard
@@ -458,33 +308,10 @@ export async function POST(request: Request) {
     id: requestId,
     submittedAt: nowIso,
     message,
-    kind: isOfferUpdate
-      ? "offer-update"
-      : isDirectEdit
-        ? "direct-edit"
-        : "free-text",
-    // Auto-applied paths are immediately resolved — the patch is
-    // already on Notion and no admin review is needed.
-    status: isOfferUpdate || isDirectEdit ? "resolved" : "pending",
-    ...(isDirectEdit && autoAppliedDirectEdit
-      ? {
-          resolvedAt: nowIso,
-          reply:
-            "Auto-applied via the dashboard text editor — live within a couple of minutes once the build completes.",
-          coworkClassification: "in_scope" as const,
-          coworkConfidence: 1.0,
-          coworkReasoning:
-            "Customer submitted a structured single-field text edit via the dashboard direct-edit composer — auto-applied without classifier or admin review.",
-          coworkPatchAppliedAt: nowIso,
-          coworkPatches: [
-            {
-              target: autoAppliedDirectEdit.patch.target,
-              newValue: autoAppliedDirectEdit.patch.newValue,
-              previousValue: autoAppliedDirectEdit.previousValue,
-            },
-          ],
-        }
-      : {}),
+    kind: isOfferUpdate ? "offer-update" : "free-text",
+    // Auto-applied offer updates are immediately resolved — the
+    // patch is already on Notion and no admin review is needed.
+    status: isOfferUpdate ? "resolved" : "pending",
     ...(isOfferUpdate && autoAppliedOffer
       ? {
           resolvedAt: nowIso,
@@ -526,11 +353,7 @@ export async function POST(request: Request) {
   // even if the dispatch fails; we surface a warning and the
   // operator can re-trigger manually.
   let buildWarning: string | null = null;
-  const needsBuildDispatch =
-    (isOfferUpdate || isDirectEdit) &&
-    !!prospect.workerName &&
-    !!prospect.cloudflareAccountId;
-  if (needsBuildDispatch) {
+  if (isOfferUpdate && prospect.workerName && prospect.cloudflareAccountId) {
     const env = getServerEnv();
     if (env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO) {
       try {
@@ -555,7 +378,7 @@ export async function POST(request: Request) {
               : String(e);
         buildWarning = msg;
         console.warn(
-          `[api/account/change-request] ${isDirectEdit ? "direct-edit" : "offer"} applied but build dispatch failed: ${msg}`,
+          `[api/account/change-request] offer applied but build dispatch failed: ${msg}`,
         );
       }
     } else {
@@ -599,36 +422,6 @@ export async function POST(request: Request) {
     } catch (e) {
       console.warn(
         `[api/account/change-request] admin FYI failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
-  } else if (isDirectEdit && autoAppliedDirectEdit) {
-    // Direct-edit FYI to the admin inbox — auto-applied, no action
-    // needed; logged for the audit trail + so the operator can spot
-    // surprising patterns in real time.
-    try {
-      const env = getServerEnv();
-      const prettyTarget = autoAppliedDirectEdit.patch.target;
-      await notifyAdmin(env, {
-        category: "change-request",
-        subject: `Direct edit auto-applied — ${prospect.name}`,
-        body:
-          `${prospect.name}${prospect.business ? ` (${prospect.business})` : ""} updated a single field from the dashboard. Auto-applied + live build dispatched.\n\n` +
-          `Field: ${prettyTarget}\n` +
-          `New value: ${JSON.stringify(autoAppliedDirectEdit.patch.newValue).slice(0, 500)}\n` +
-          `Previous: ${JSON.stringify(autoAppliedDirectEdit.previousValue).slice(0, 500)}\n` +
-          (buildWarning
-            ? `\n⚠️  Build dispatch FAILED: ${buildWarning}. Patch landed in Notion but the site won't rebuild — re-trigger manually.\n`
-            : `\nBuild should be live within ~2 minutes.\n`) +
-          `\n` +
-          adminFooter({
-            prospectName: prospect.name,
-            prospectToken: token,
-            anchor: `cr-${requestId.slice(0, 8)}`,
-          }),
-      });
-    } catch (e) {
-      console.warn(
-        `[api/account/change-request] direct-edit admin FYI failed: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   } else {
@@ -677,14 +470,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // `remaining` is reported per-kind for structured paths so the
-  // dashboard composer can show the right counter, and globally
+  // `remaining` is reported per-kind for the structured offer path
+  // so the OfferCard composer shows the right counter, and globally
   // for legacy free-text submissions.
   const remainingAfter = isOfferUpdate
     ? MONTHLY_OFFER_UPDATE_LIMIT - (usedOffers + 1)
-    : isDirectEdit
-      ? MONTHLY_DIRECT_EDIT_LIMIT - (usedDirectEdits + 1)
-      : MONTHLY_CHANGE_REQUEST_LIMIT - (usedThisMonth + 1);
+    : MONTHLY_CHANGE_REQUEST_LIMIT - (usedFreeText + 1);
   return NextResponse.json({
     success: true,
     request: newRequest,
@@ -695,7 +486,7 @@ export async function POST(request: Request) {
      *  auto-applied. Dashboard composer relies on this to show the
      *  "live within ~2 min" toast instead of "we'll review and get
      *  back to you". */
-    autoApplied: isOfferUpdate || isDirectEdit,
+    autoApplied: isOfferUpdate,
     buildWarning,
   });
 }

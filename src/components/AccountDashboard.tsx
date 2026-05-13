@@ -11,7 +11,6 @@ import {
   countActiveChangeRequestsByKind,
   countActiveChangeRequestsThisMonth,
   MONTHLY_CHANGE_REQUEST_LIMIT,
-  MONTHLY_DIRECT_EDIT_LIMIT,
   MONTHLY_OFFER_UPDATE_LIMIT,
   type ChangeRequest,
   type ProspectStatus,
@@ -24,7 +23,6 @@ import OfferCard from "@/components/OfferCard";
 import NewsletterCard, {
   type NewsletterSummary,
 } from "@/components/NewsletterCard";
-import DirectEditCard from "@/components/DirectEditCard";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -436,24 +434,15 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             )}
 
             {/* ---------- Your modules & updates ---------------------
-             *  Single cluster of cards for everything the customer
-             *  can update post-launch without emailing us. Each card
-             *  has its own monthly budget (Newsletter sends, Offer
-             *  updates, Text edits — 2 each, independent). The
-             *  Newsletter + Offers cards only render when the
-             *  customer paid for those modules; Text edits render
-             *  for every live customer (included in the base
-             *  subscription).
-             *
-             *  Important: none of these paths call the Claude / Haiku
-             *  classifier. Offers + Text edits build their patches
-             *  server-side from validated form data and auto-apply;
-             *  Newsletter sends template emails via Resend with
-             *  inlined customer content. Anything outside the
-             *  whitelisted fields routes through the free-text
-             *  change-request block further down the page (which
-             *  does use the classifier — kept as a fallback). */}
-            {isSiteLive && !isCancelled && (
+             *  Single cluster of cards for the post-launch modules the
+             *  customer paid for. Newsletter + Offers are structured
+             *  composers — pre-baked patches auto-applied, no Haiku
+             *  in the loop. Text content edits live in the
+             *  change-request block further down the page (free-text
+             *  → Haiku classifier → patches), not here — they're not
+             *  a separate "module", they're part of the included
+             *  change-request allowance. */}
+            {isSiteLive && !isCancelled && (hasNewsletterModule || hasOffersModule) && (
               <DashCard title="Your modules & updates">
                 <p className="text-sm text-navy-700">
                   Updates you can run yourself, included with your
@@ -474,20 +463,19 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                       changeRequests={changeRequests}
                     />
                   )}
-                  <DirectEditCard
-                    token={token}
-                    changeRequests={changeRequests}
-                  />
                 </div>
               </DashCard>
             )}
 
             {/* ---------- Pre-launch teaser ---------------------
-             *  Shown to customers between sign-off and go-live so
-             *  they can see the post-launch self-serve tools they'll
-             *  unlock. Otherwise the dashboard reads empty in that
-             *  window and they wonder where their modules went. */}
-            {!isSiteLive && !isCancelled && (status === "Onboarding Complete" || status === "Build Started") && (
+             *  Shown to customers between sign-off and go-live IF
+             *  they bought any structured modules (Newsletter,
+             *  Offers). Otherwise nothing to tease — they get text
+             *  edits via the standard change-request allowance,
+             *  same as every customer. */}
+            {!isSiteLive && !isCancelled &&
+              (status === "Onboarding Complete" || status === "Build Started") &&
+              (hasNewsletterModule || hasOffersModule) && (
               <DashCard title="Your modules & updates">
                 <p className="text-sm text-navy-700">
                   Once your site is live you&apos;ll see your self-
@@ -516,15 +504,6 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                       </span>
                     </li>
                   )}
-                  <li className="flex items-start gap-2">
-                    <span aria-hidden="true" className="text-brand-primary-600">•</span>
-                    <span>
-                      <strong className="text-navy-900">Text edits</strong>
-                      {" "}— update {MONTHLY_DIRECT_EDIT_LIMIT} text fields
-                      a month directly (tagline, phone, address, opening
-                      hours…) — live within 2 minutes, no review needed.
-                    </span>
-                  </li>
                 </ul>
                 <p className="mt-4 rounded-lg bg-cream-50 px-3 py-2 text-xs text-navy-600">
                   Unlocks automatically the morning of your launch.
@@ -588,21 +567,12 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   />
                 )}
                 <UsageRow
-                  label="Text edits"
-                  used={countActiveChangeRequestsByKind(
-                    requests,
-                    "direct-edit",
-                  )}
-                  cap={MONTHLY_DIRECT_EDIT_LIMIT}
-                />
-                <UsageRow
-                  label="Free-text requests"
+                  label="Change requests"
                   used={countActiveChangeRequestsByKind(
                     requests,
                     "free-text",
                   )}
                   cap={MONTHLY_CHANGE_REQUEST_LIMIT}
-                  muted
                 />
               </dl>
             </DashCard>
