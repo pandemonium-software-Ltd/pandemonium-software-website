@@ -1,11 +1,11 @@
 import type { Template } from "../types";
 
 // Sent when the operator marks a customer's change request "resolved"
-// in /admin/[token]. Includes the operator's reply verbatim — that's
-// the substance of the email; the template is just the wrapping.
-//
-// CTA: account dashboard (where the customer can submit further
-// change requests if needed).
+// in /admin/[token]. The change has now landed on the customer's
+// LIVE site — this email is post-commit + post-launch, not a
+// preview-style "review before going live" notice. CTA layout
+// reflects that: primary "View your site" so the customer can
+// verify, secondary "Open dashboard" for the audit trail.
 //
 // Low risk tier (§11.2) for the wrapping. The reply text itself
 // has been written by Ben (or by Cowork via the Drafts inbox flow
@@ -18,9 +18,11 @@ export const changeRequestResolved: Template = {
     "customerName",
     "originalMessage",
     "reply",
+    "siteUrl",
     "accountUrl",
   ],
-  cta: { urlKey: "accountUrl", label: "Open your account dashboard" },
+  cta: { urlKey: "siteUrl", label: "View your site" },
+  secondaryCta: { urlKey: "accountUrl", label: "Open dashboard" },
   subject: "Your change is done ✓",
   body: `Hi {{customerName}},
 
@@ -32,7 +34,11 @@ Our reply:
 
 {{reply}}
 
-You can see your other requests + submit new ones from your
+That change is now live on your site — tap the button below to
+take a look. If anything's off, just reply to this email and
+we'll fix it.
+
+You can see your other requests and submit new ones from your
 dashboard any time.
 
 — ModuForge`,

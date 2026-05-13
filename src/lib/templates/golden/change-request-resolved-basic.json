@@ -5,10 +5,11 @@
     "customerName": "Alex",
     "originalMessage": "Update phone number on the contact page to 020 1234 5678",
     "reply": "Done — your phone number is updated. Refresh your site to see it live.",
+    "siteUrl": "https://alexsbakery.co.uk/",
     "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
   },
   "expected": {
     "subject": "Your change is done ✓",
-    "body": "Hi Alex,\n\nAbout this one:\n\n  \"Update phone number on the contact page to 020 1234 5678\"\n\nOur reply:\n\nDone — your phone number is updated. Refresh your site to see it live.\n\nYou can see your other requests + submit new ones from your\ndashboard any time.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nAbout this one:\n\n  \"Update phone number on the contact page to 020 1234 5678\"\n\nOur reply:\n\nDone — your phone number is updated. Refresh your site to see it live.\n\nThat change is now live on your site — tap the button below to\ntake a look. If anything's off, just reply to this email and\nwe'll fix it.\n\nYou can see your other requests and submit new ones from your\ndashboard any time.\n\n— ModuForge"
   }
 }

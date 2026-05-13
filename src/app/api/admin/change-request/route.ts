@@ -111,6 +111,18 @@ export async function PATCH(request: Request) {
       status === "resolved"
         ? "change-request-resolved"
         : "change-request-rejected";
+    // siteUrl is required by the resolved template (primary CTA).
+    // We resolve it from the prospect's onboarding domain — same
+    // resolution as the build-callback's applied-live email so both
+    // post-commit confirmations point at the same URL. Falls back
+    // to a placeholder when the domain isn't yet captured (rare;
+    // the customer is post-launch by this point in the flow).
+    const customerDomain = ((prospect.onboardingData ?? {}) as {
+      domain?: { domain?: string };
+    }).domain?.domain;
+    const siteUrl = customerDomain
+      ? `https://${customerDomain}/`
+      : "https://your-site.example/";
     try {
       await sendCustomerEmail(
         getServerEnv(),
@@ -120,6 +132,7 @@ export async function PATCH(request: Request) {
           customerName: firstName(prospect.name),
           originalMessage: updateResult.updated.message,
           reply,
+          siteUrl,
           accountUrl: `${baseUrl}/account/${token}`,
         },
       );

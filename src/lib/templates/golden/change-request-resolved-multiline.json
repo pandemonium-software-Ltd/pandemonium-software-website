@@ -5,10 +5,11 @@
     "customerName": "Sam",
     "originalMessage": "Add the new opening hours to the homepage",
     "reply": "Done.\n\nThe footer now shows: Mon-Fri 8-6, Sat 9-12, closed Sundays.\nAlso updated the booking page to match.",
+    "siteUrl": "https://sams-bakery.co.uk/",
     "accountUrl": "https://modu-forge.co.uk/account/xyz789"
   },
   "expected": {
     "subject": "Your change is done ✓",
-    "body": "Hi Sam,\n\nAbout this one:\n\n  \"Add the new opening hours to the homepage\"\n\nOur reply:\n\nDone.\n\nThe footer now shows: Mon-Fri 8-6, Sat 9-12, closed Sundays.\nAlso updated the booking page to match.\n\nYou can see your other requests + submit new ones from your\ndashboard any time.\n\n— ModuForge"
+    "body": "Hi Sam,\n\nAbout this one:\n\n  \"Add the new opening hours to the homepage\"\n\nOur reply:\n\nDone.\n\nThe footer now shows: Mon-Fri 8-6, Sat 9-12, closed Sundays.\nAlso updated the booking page to match.\n\nThat change is now live on your site — tap the button below to\ntake a look. If anything's off, just reply to this email and\nwe'll fix it.\n\nYou can see your other requests and submit new ones from your\ndashboard any time.\n\n— ModuForge"
   }
 }

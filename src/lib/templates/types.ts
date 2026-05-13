@@ -67,6 +67,18 @@ export type Template = {
     /** Button label, e.g. "Open the form". Imperative, ≤30 chars. */
     label: string;
   };
+
+  /**
+   * Optional secondary CTA — rendered below the primary as a
+   * lighter outline button. Useful for post-launch confirmation
+   * emails where the customer can either "View your site" (primary)
+   * or "Open dashboard" (secondary). Only valid when `cta` is also
+   * set — there's no UI for a secondary-only layout.
+   */
+  secondaryCta?: {
+    urlKey: string;
+    label: string;
+  };
 };
 
 export type RenderResult = {
@@ -74,4 +86,7 @@ export type RenderResult = {
   body: string;
   /** Populated iff template.cta was set AND values[urlKey] is a non-empty string. */
   cta?: { url: string; label: string };
+  /** Populated iff template.secondaryCta was set AND values[urlKey]
+   *  is a non-empty string. */
+  secondaryCta?: { url: string; label: string };
 };

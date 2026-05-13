@@ -53,19 +53,28 @@ export async function sendCustomerEmail(
   const opsEmail =
     env.BEN_OPS_EMAIL ?? "pandamoniumsoftwareltd@gmail.com";
 
-  // Plain-text fallback gets the CTA URL appended below the body
+  // Plain-text fallback gets each CTA URL appended below the body
   // (templates intentionally don't put URLs inline anymore — keeps
-  // the HTML version clean with just the button + the prose). The
-  // appended line is recognisable to text-only readers as the
-  // call-to-action.
-  const text = rendered.cta
-    ? `${rendered.body}\n\n${rendered.cta.label}:\n${rendered.cta.url}`
-    : rendered.body;
+  // the HTML version clean with just the button + the prose).
+  const ctaLines: string[] = [];
+  if (rendered.cta) {
+    ctaLines.push(`${rendered.cta.label}:\n${rendered.cta.url}`);
+  }
+  if (rendered.secondaryCta) {
+    ctaLines.push(
+      `${rendered.secondaryCta.label}:\n${rendered.secondaryCta.url}`,
+    );
+  }
+  const text =
+    ctaLines.length > 0
+      ? `${rendered.body}\n\n${ctaLines.join("\n\n")}`
+      : rendered.body;
 
   const html = wrapInBrandedHtml({
     subject: rendered.subject,
     body: rendered.body,
     cta: rendered.cta,
+    secondaryCta: rendered.secondaryCta,
   });
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -120,6 +129,12 @@ type WrapOpts = {
   subject: string;
   body: string;
   cta?: { url: string; label: string };
+  /** Optional secondary CTA — rendered below the primary as a
+   *  lighter "ghost" button (transparent background, navy outline).
+   *  Used by post-launch confirmation emails to give the customer
+   *  two natural next steps (e.g. View site + Open dashboard).
+   *  Ignored when `cta` is absent. */
+  secondaryCta?: { url: string; label: string };
 };
 
 export function wrapInBrandedHtml(opts: WrapOpts): string {
@@ -130,7 +145,19 @@ export function wrapInBrandedHtml(opts: WrapOpts): string {
     .map((p) => paragraphToHtml(p))
     .join("\n");
 
-  const cta = opts.cta ? buttonHtml(opts.cta.url, opts.cta.label) : "";
+  // Primary first, secondary directly underneath. Secondary uses
+  // the ghost variant so the visual hierarchy is obvious — primary
+  // dominates, secondary is the "or…" alternative.
+  const ctaParts: string[] = [];
+  if (opts.cta) {
+    ctaParts.push(buttonHtml(opts.cta.url, opts.cta.label));
+  }
+  if (opts.cta && opts.secondaryCta) {
+    ctaParts.push(
+      ghostButtonHtml(opts.secondaryCta.url, opts.secondaryCta.label),
+    );
+  }
+  const cta = ctaParts.join("\n");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -207,6 +234,29 @@ function buttonHtml(url: string, label: string): string {
         <tr>
           <td style="border-radius:8px;background-color:#0f1d30;">
             <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;letter-spacing:0.01em;border-radius:8px;">${escapeHtml(label)}</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+}
+
+/**
+ * Secondary "ghost" button — transparent fill with navy outline.
+ * Lighter visual weight than the primary so the customer's eye
+ * lands on the primary action first. Same bulletproof-button
+ * structure (table-wrapped <a>) for Outlook compatibility. Sits
+ * directly below the primary with a small vertical gap.
+ */
+function ghostButtonHtml(url: string, label: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:10px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="border-radius:8px;background-color:#ffffff;border:2px solid #0f1d30;">
+            <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:12px 28px;color:#0f1d30;text-decoration:none;font-size:15px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;letter-spacing:0.01em;border-radius:6px;">${escapeHtml(label)}</a>
           </td>
         </tr>
       </table>

@@ -45,6 +45,15 @@ export function renderTemplate(
       result.cta = { url, label: template.cta.label };
     }
   }
+  // Same lookup for the optional secondary CTA. Only meaningful
+  // when the primary CTA also resolved — wrapInBrandedHtml ignores
+  // a secondary without a primary (no UI for that layout).
+  if (template.secondaryCta && result.cta) {
+    const url = values[template.secondaryCta.urlKey];
+    if (typeof url === "string" && url.length > 0) {
+      result.secondaryCta = { url, label: template.secondaryCta.label };
+    }
+  }
   return result;
 }
 

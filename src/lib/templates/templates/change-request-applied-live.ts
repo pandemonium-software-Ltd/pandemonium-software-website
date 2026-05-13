@@ -20,7 +20,13 @@ export const changeRequestAppliedLive: Template = {
     "siteUrl",
     "accountUrl",
   ],
+  // Two CTAs: primary "View your site" so the customer can verify
+  // the change landed where it should; secondary "Open dashboard"
+  // for managing requests + subscription state. Live URLs in the
+  // body itself are dropped — the buttons are the canonical action
+  // affordance.
   cta: { urlKey: "siteUrl", label: "View your site" },
+  secondaryCta: { urlKey: "accountUrl", label: "Open dashboard" },
   subject: "Your change is live ✓",
   body: `Hi {{customerName}},
 
@@ -28,7 +34,8 @@ That's done. Your site now shows:
 
   {{originalMessage}}
 
-Have a look: {{siteUrl}}
+Tap the button below to take a look — refresh once if you've
+got it open already.
 
 If something looks off, just reply to this email — we can put
 the old version back in seconds if needed.
