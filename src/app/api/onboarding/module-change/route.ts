@@ -43,6 +43,7 @@ import {
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 
 export const runtime = "nodejs";
 
@@ -75,6 +76,8 @@ export async function POST(request: Request) {
     );
   }
   const { token, newModules } = parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   // Defence in depth — schema already enforces enum, but a future
   // schema relaxation shouldn't silently let arbitrary strings

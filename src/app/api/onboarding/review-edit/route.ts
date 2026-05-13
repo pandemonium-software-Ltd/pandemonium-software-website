@@ -40,6 +40,7 @@ import {
   looksLikeMultipleItems,
   MULTI_ITEM_DECLINE_MESSAGE,
 } from "@/lib/multi-item-detector";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 
 export const runtime = "nodejs";
 
@@ -74,6 +75,8 @@ export async function POST(request: Request) {
     );
   }
   const { token, message } = parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   const prospect = await getProspectByToken(token).catch(() => null);
   if (!prospect) {

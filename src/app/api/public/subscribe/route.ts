@@ -48,6 +48,11 @@ const requestSchema = z.object({
     .trim()
     .max(SUBSCRIBER_FIRST_NAME_MAX)
     .optional(),
+  /** Hidden honeypot — legitimate users leave this empty; bots
+   *  fill every input they see. Server-side check returns a generic
+   *  success so bots don't iterate against the rejection.
+   *  Added 2026-05-13 — security audit M6. */
+  hp: z.string().max(200).optional(),
 });
 
 // Pre-flight (OPTIONS) handler — customer-site origins differ
@@ -84,7 +89,21 @@ export async function POST(request: Request) {
       parsed.error.issues[0]?.message ?? "Invalid request.",
     );
   }
-  const { customerToken, email, firstName } = parsed.data;
+  const { customerToken, email, firstName, hp } = parsed.data;
+
+  // Honeypot tripped: silent-drop with a generic success response
+  // so bots think the submission worked + can't iterate against the
+  // rejection. Nothing's stored, no email fires, monthly cap not
+  // touched. Mirror of the same pattern in /api/public/enquiry.
+  if (hp && hp.trim().length > 0) {
+    console.warn(
+      `[subscribe] honeypot tripped for customer ${customerToken.slice(0, 8)} — silent drop`,
+    );
+    return NextResponse.json(
+      { success: true, stored: false },
+      { headers: corsHeaders() },
+    );
+  }
 
   const prospect = await getProspectByToken(customerToken).catch(() => null);
   if (!prospect) {

@@ -19,6 +19,7 @@ import {
   getProspectByToken,
   updateProspectOnboarding,
 } from "@/lib/notion-prospects";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import {
   SUBSCRIBER_EMAIL_MAX,
   SUBSCRIBER_FIRST_NAME_MAX,
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
     );
   }
   const { token, email, firstName } = parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   const prospect = await getProspectByToken(token).catch(() => null);
   if (!prospect)
@@ -170,6 +173,8 @@ export async function DELETE(request: Request) {
     );
   }
   const { token, email } = parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   const prospect = await getProspectByToken(token).catch(() => null);
   if (!prospect)
@@ -219,6 +224,8 @@ export async function GET(request: Request) {
   if (!TOKEN_RE.test(token)) {
     return NextResponse.json({ error: "Bad token." }, { status: 400 });
   }
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
   const prospect = await getProspectByToken(token).catch(() => null);
   if (!prospect)
     return NextResponse.json({ error: "Account not found." }, { status: 404 });

@@ -22,6 +22,7 @@ import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getProspectByToken } from "@/lib/notion-prospects";
 import { getServerEnv } from "@/lib/env";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 
 export const runtime = "nodejs";
 
@@ -89,17 +90,32 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
   if (!(file instanceof File)) {
     return NextResponse.json(
       { error: "No file uploaded." },
       { status: 400 },
     );
   }
-  if (!file.type.startsWith("image/")) {
+  // Tightened from `startsWith("image/")` to an explicit allowlist
+  // 2026-05-13 — security audit M2. The previous loose check let
+  // image/svg+xml through; email clients mostly strip <script> in
+  // SVG, but enforcing the same allowlist as /api/onboarding/upload
+  // keeps the upload surface consistent + prevents weird edge
+  // cases (SVG referencing remote resources, etc.).
+  const ALLOWED_TYPES = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+  ]);
+  if (!ALLOWED_TYPES.has(file.type.toLowerCase())) {
     return NextResponse.json(
       {
         error:
-          "File must be an image (JPG, PNG, WebP, GIF). Got: " +
+          "File must be a JPG, PNG, WebP or GIF image. Got: " +
           (file.type || "unknown"),
       },
       { status: 400 },

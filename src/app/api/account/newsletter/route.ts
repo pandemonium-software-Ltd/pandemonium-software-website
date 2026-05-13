@@ -26,6 +26,7 @@ import {
 } from "@/lib/notion-prospects";
 import { getServerEnv } from "@/lib/env";
 import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import {
   renderNewsletter,
   type NewsletterTemplateId,
@@ -79,6 +80,8 @@ export async function POST(request: Request) {
   }
   const { token, template, subject, body, imageUrl, ctaLabel, ctaUrl } =
     parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   if (ctaLabel && !ctaUrl) {
     return NextResponse.json(

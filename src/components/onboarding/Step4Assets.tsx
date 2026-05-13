@@ -55,8 +55,12 @@ type Props = {
 // compress.ts before reaching the server. The server's
 // ALLOWED_TYPES whitelist excludes HEIC because it should never
 // reach R2 raw (next/image at build time can't render it).
+//
+// SVG removed 2026-05-13 (security audit M2) — SVGs can execute
+// scripts when served as image/svg+xml. Customers needing a
+// vector logo convert to PNG with transparency before upload.
 const ACCEPTED_TYPES =
-  "image/png,image/jpeg,image/webp,image/svg+xml,image/heic,image/heif,.heic,.heif";
+  "image/png,image/jpeg,image/webp,image/heic,image/heif,.heic,.heif";
 const MAX_GALLERY = 20;
 const MAX_BACKGROUNDS = 5;
 

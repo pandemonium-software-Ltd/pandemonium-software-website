@@ -29,6 +29,7 @@
 
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import {
   getProspectByToken,
   updateProspectOnboarding,
@@ -63,12 +64,20 @@ const MAX_BYTES = 5 * 1024 * 1024;
 // plenty of headroom but blocks runaway uploads.
 const MAX_TOTAL_BYTES = 80 * 1024 * 1024;
 
+// SVG (image/svg+xml) is intentionally excluded — SVGs can carry
+// <script> tags that execute when the file is opened directly as
+// image/svg+xml in a browser. R2 serves uploads with the customer's
+// claimed content-type, so a malicious SVG would execute in the
+// assets.modu-forge.co.uk origin (host-only cookies for
+// modu-forge.co.uk aren't reachable, but phishing / window.opener
+// tricks are still possible). Customers needing a vector logo
+// should convert to PNG with transparency before uploading.
+// Security audit 2026-05-13 (M2).
 const ALLOWED_TYPES = new Set([
   "image/png",
   "image/jpeg",
   "image/jpg",
   "image/webp",
-  "image/svg+xml",
 ]);
 
 // Per-kind upload limits. Keep in sync with the schema in
@@ -166,6 +175,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
   if (!VALID_KINDS.has(kindRaw as AssetKind)) {
     return NextResponse.json(
       {
@@ -207,7 +218,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Only PNG, JPEG, WebP and SVG images are accepted. Convert other formats first.",
+          "Only PNG, JPEG and WebP images are accepted. SVG isn't supported — convert to PNG (with transparency if you need it) before uploading.",
       },
       { status: 400 },
     );
@@ -436,6 +447,8 @@ export async function DELETE(request: Request) {
       { status: 400 },
     );
   }
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
   if (!key) {
     return NextResponse.json(
       { error: "Missing asset key." },

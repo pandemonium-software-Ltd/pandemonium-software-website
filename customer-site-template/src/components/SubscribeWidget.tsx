@@ -51,6 +51,12 @@ export default function SubscribeWidget({
 }: Props) {
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
+  // Hidden honeypot — kept in state so the value POSTs to the
+  // server, which silently drops anything where it's filled.
+  // Legitimate visitors leave hidden inputs alone; bots scrape
+  // the DOM + fill every input. Added 2026-05-13 — security
+  // audit M6 (matches the same pattern in EnquiryFormWidget).
+  const [hp, setHp] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -90,6 +96,7 @@ export default function SubscribeWidget({
             customerToken,
             email: email.trim(),
             firstName: firstName.trim() || undefined,
+            hp,
           }),
         },
       );
@@ -106,6 +113,7 @@ export default function SubscribeWidget({
       );
       setEmail("");
       setFirstName("");
+      setHp("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -126,11 +134,13 @@ export default function SubscribeWidget({
         <Form
           email={email}
           firstName={firstName}
+          hp={hp}
           pending={pending}
           ctaLabel={ctaLabel}
           isPreview={isPreviewMode}
           onEmailChange={setEmail}
           onFirstNameChange={setFirstName}
+          onHpChange={setHp}
           onSubmit={submit}
         />
         {isPreviewMode && <PreviewLabel />}
@@ -166,11 +176,13 @@ export default function SubscribeWidget({
         <Form
           email={email}
           firstName={firstName}
+          hp={hp}
           pending={pending}
           ctaLabel={ctaLabel}
           isPreview={isPreviewMode}
           onEmailChange={setEmail}
           onFirstNameChange={setFirstName}
+          onHpChange={setHp}
           onSubmit={submit}
           compact
         />
@@ -214,21 +226,25 @@ function PreviewLabel({ compact = false }: { compact?: boolean }) {
 function Form({
   email,
   firstName,
+  hp,
   pending,
   ctaLabel,
   isPreview,
   onEmailChange,
   onFirstNameChange,
+  onHpChange,
   onSubmit,
   compact = false,
 }: {
   email: string;
   firstName: string;
+  hp: string;
   pending: boolean;
   ctaLabel: string;
   isPreview: boolean;
   onEmailChange: (v: string) => void;
   onFirstNameChange: (v: string) => void;
+  onHpChange: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   compact?: boolean;
 }) {
@@ -245,6 +261,25 @@ function Form({
           : "mt-5 flex flex-wrap items-stretch gap-3"
       }
     >
+      {/* Hidden honeypot — kept off-screen + out of the tab order
+       *  + screen-reader-hidden. Bots that enumerate inputs will
+       *  fill it; the server silently drops anything that does.
+       *  Security audit M6 (2026-05-13). */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[-9999px] h-0 w-0 overflow-hidden opacity-0"
+      >
+        <label>
+          Don&apos;t fill this in
+          <input
+            type="text"
+            tabIndex={-1}
+            autoComplete="off"
+            value={hp}
+            onChange={(e) => onHpChange(e.target.value)}
+          />
+        </label>
+      </div>
       <input
         type="text"
         placeholder="First name (optional)"

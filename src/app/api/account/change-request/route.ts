@@ -34,6 +34,7 @@ import {
   type NotificationPayload,
 } from "@/lib/email";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
 import {
@@ -141,6 +142,12 @@ export async function POST(request: Request) {
     );
   }
   const { token, message, kind, offer } = parsed.data;
+  // Session gate — defence-in-depth on top of body-token validation.
+  // Token regex is enforced by the zod schema above; this verifies
+  // the caller's signed session cookie matches that token. Security
+  // audit 2026-05-13 (M1).
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
   // Offer-update sanity checks (server side) — offer must be
   // present when kind=offer-update, end ≥ start.
   if (kind === "offer-update") {
@@ -557,6 +564,8 @@ export async function DELETE(request: Request) {
     );
   }
   const { token, requestId } = parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   let prospect;
   try {

@@ -41,6 +41,7 @@ import {
 } from "@/lib/notion-prospects";
 import { site } from "@/lib/site";
 import { getServerEnv } from "@/lib/env";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import {
   buildPreviewRequestNotification,
@@ -84,6 +85,8 @@ export async function POST(request: Request) {
     );
   }
   const { token, stepId, patch, markDone } = parsedReq.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
 
   // Per-step zod validation. Patches arrive partial so each step's
   // schema treats every field as optional.
