@@ -147,8 +147,16 @@ export type ModuleConfig = {
      *  preview + the Phase 1B send pipeline. */
     senderEmail?: string;
   };
-  /** Form-recipient email if enquiry form bought. */
-  enquiry?: { recipientEmail: string };
+  /** Enquiry-form module config — emitted when the customer
+   *  bought "Enquiry Form". `recipientEmail` is where enquiries
+   *  forward to (the customer's public email). `customerToken` +
+   *  `apiOrigin` plumb the EnquiryFormWidget to the marketing
+   *  site's POST /api/public/enquiry route. */
+  enquiry?: {
+    recipientEmail: string;
+    customerToken: string;
+    apiOrigin: string;
+  };
   /** Public GBP listing URL if GBP audit bought. */
   gbp?: { listingUrl: string };
   /** Active promotional offer — only present when the Offers

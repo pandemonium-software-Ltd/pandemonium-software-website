@@ -370,10 +370,18 @@ export function adaptProspect(prospect: ProspectRecord): {
   // customer-site template gets a complete object).
 
   if (selected.has("Enquiry Form")) {
-    // Enquiry form posts back to a per-customer endpoint (Phase 2C
-    // C5.3 wires that). For now, default to the customer's contact
-    // email — the form sends straight to them via Resend transactional.
-    modules.enquiry = { recipientEmail: business.email };
+    // Enquiry form posts back to the marketing site's public
+    // endpoint, which validates the customerToken + forwards via
+    // Resend to recipientEmail. The widget renders inert in
+    // preview mode (env / iframe detection client-side) so test
+    // submissions on a pre-launch preview don't fire emails.
+    modules.enquiry = {
+      recipientEmail: business.email,
+      customerToken: prospect.token,
+      apiOrigin:
+        process.env.NEXT_PUBLIC_SITE_URL ??
+        "https://modu-forge.co.uk",
+    };
   }
   if (selected.has("Google Business Profile Setup/Audit")) {
     const listingUrl = optionalString(tools.gbpUrl);

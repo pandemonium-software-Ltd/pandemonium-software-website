@@ -59,7 +59,11 @@
   ],
   "modules": {
     "booking": { "calcomUrl": "https://cal.eu/lucas-test/quote" },
-    "enquiry": { "recipientEmail": "lucas@bobbuilders.co.uk" }
+    "enquiry": {
+      "recipientEmail": "lucas@bobbuilders.co.uk",
+      "customerToken": "00000000-0000-0000-0000-000000000000",
+      "apiOrigin": "https://modu-forge.co.uk"
+    }
   },
   "brandAssets": {
     "logoUrl": "https://placehold.co/200x80/0f766e/ffffff?text=BobBuilders",

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SITE_DATA } from "@/lib/site-data";
 import type { DayOfWeek } from "@/lib/types";
+import EnquiryFormWidget from "@/components/EnquiryFormWidget";
 
 /** Display order for the opening-hours table. Mon-first matches
  *  most UK convention; flip to Sun-first for US-style if a future
@@ -33,20 +34,32 @@ export const metadata: Metadata = {
 // channels the customer's modules unlock:
 //   - Phone + email (always shown)
 //   - Booking embed (if `modules.booking` set)
-//   - Enquiry form (if `modules.enquiry` set — placeholder until
-//     C5.6 wires the Server Action)
+//   - Enquiry form (if `modules.enquiry` set — live; posts to the
+//     marketing site's POST /api/public/enquiry, forwarded by
+//     email to the customer's recipientEmail)
 //   - Address + hours (if set)
 //
 // Sections are stacked vertically so the page reads as one coherent
 // "ways to reach us" flow rather than competing CTAs side-by-side.
 // The Cal.com iframe is `loading="lazy"` so callers who only want
 // phone don't pay for the embed bundle.
+//
+// Preview gating: the EnquiryFormWidget reads PREVIEW_ACCESS_TOKEN
+// server-side AND does its own iframe detection client-side —
+// either signal renders the form inert so a customer reviewing
+// their own preview doesn't fire test enquiries to themselves.
 
 export default function ContactPage() {
   const { business, modules } = SITE_DATA;
   const hasBooking = !!modules.booking;
   const hasEnquiry = !!modules.enquiry;
   const phoneTel = business.phone.replace(/\s/g, "");
+  // Same env-var pattern as the lock-down suppressor in layout.tsx.
+  // Threaded into the widget so its disabled state is decided
+  // server-side (no hydration flash) for the PREVIEW_ACCESS_TOKEN
+  // case; the widget ALSO does a client-side iframe check for the
+  // pre-commit Hub-embed case.
+  const isPreviewBuild = !!process.env.PREVIEW_ACCESS_TOKEN;
 
   // Sub-headline adapts to which modules unlocked which channels.
   const subline = hasBooking && hasEnquiry
@@ -152,7 +165,7 @@ export default function ContactPage() {
       )}
 
       {/* ---------- Enquiry form (if module set) ---------- */}
-      {hasEnquiry && (
+      {hasEnquiry && modules.enquiry && (
         <section
           id="enquiry"
           className="bg-cream-50 py-20 md:py-28 scroll-mt-24"
@@ -168,15 +181,12 @@ export default function ContactPage() {
               </p>
             </div>
             <div className="mx-auto mt-12 max-w-2xl rounded-3xl border border-navy-100 bg-white p-8 shadow-card md:p-10">
-              {/* TODO C5.6: replace placeholder with the marketing-
-                  site EnquiryForm component, wired to a per-customer
-                  Server Action that posts to Resend transactional
-                  using `modules.enquiry.recipientEmail`. */}
-              <p className="text-sm text-navy-600">
-                Form integration is rolling out (Stage 2C C5.6 — see
-                the plan doc). For now, please use the phone or email
-                above and we&apos;ll get back to you straight away.
-              </p>
+              <EnquiryFormWidget
+                customerToken={modules.enquiry.customerToken}
+                apiOrigin={modules.enquiry.apiOrigin}
+                businessName={business.name}
+                isPreviewBuild={isPreviewBuild}
+              />
             </div>
           </div>
         </section>

@@ -93,7 +93,15 @@ export type ModuleConfig = {
     apiOrigin: string;
     senderEmail?: string;
   };
-  enquiry?: { recipientEmail: string };
+  /** Enquiry-form module — present when the customer bought
+   *  "Enquiry Form". The widget POSTs visitor submissions to
+   *  `<apiOrigin>/api/public/enquiry` with `customerToken`; the
+   *  marketing site forwards them by email to `recipientEmail`. */
+  enquiry?: {
+    recipientEmail: string;
+    customerToken: string;
+    apiOrigin: string;
+  };
   gbp?: { listingUrl: string };
   /** Promotional offer strip rendered at the top of the homepage
    *  when populated AND the visitor's local date falls between
