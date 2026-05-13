@@ -659,17 +659,60 @@ export default function AccountDashboard(props: AccountDashboardProps) {
 function DashCard({
   title,
   children,
+  defaultOpen = true,
 }: {
   title: string;
   children: React.ReactNode;
+  /** Whether the section starts expanded. Defaults to true so the
+   *  customer sees their content on first load; they can collapse
+   *  to tidy. Pass `false` for sections that are useful but
+   *  secondary (e.g. usage stats, contact info). */
+  defaultOpen?: boolean;
 }) {
+  // Native <details> + <summary> for collapsibility — browser
+  // handles state, keyboard ENTER/SPACE, screen reader announce
+  // ("disclosure widget, expanded / collapsed"), no React state
+  // needed. The `group` + `group-open:` pair makes the chevron
+  // rotate without per-instance state. Default-marker is hidden
+  // so the heading + custom chevron are the only visible disclosure
+  // affordance.
   return (
-    <article className="rounded-2xl bg-white p-6 shadow-card md:p-7">
-      <h2 className="font-serif text-xl font-semibold text-navy-900">
-        {title}
-      </h2>
+    <details
+      open={defaultOpen}
+      className="group rounded-2xl bg-white p-6 shadow-card md:p-7 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
+    >
+      <summary className="flex cursor-pointer select-none items-center justify-between gap-3">
+        <h2 className="font-serif text-xl font-semibold text-navy-900">
+          {title}
+        </h2>
+        <ChevronToggle />
+      </summary>
       <div className="mt-4">{children}</div>
-    </article>
+    </details>
+  );
+}
+
+/** Chevron used by collapsible cards. Rotates 180° when the
+ *  parent <details> is open via the `group-open:` selector — no
+ *  per-instance state, no client JS. */
+function ChevronToggle() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className="h-5 w-5 flex-none text-navy-500 transition-transform duration-200 group-open:rotate-180"
+    >
+      <path
+        d="M4 6l4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -1010,25 +1053,36 @@ function ChangeRequestsBlock({
   }
 
   return (
-    <article className="rounded-2xl bg-white p-7 shadow-card md:p-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="font-serif text-xl font-semibold text-navy-900">
-          Need a change?
-        </h2>
-        <span
-          className={[
-            "rounded-full px-3 py-1 text-xs font-semibold",
-            atCap
-              ? "bg-navy-900 text-white"
-              : remaining === 1
-                ? "bg-ember-100 text-ember-800 ring-1 ring-ember-200"
-                : "bg-cream-100 text-navy-800 ring-1 ring-navy-200",
-          ].join(" ")}
-        >
-          {usedThisMonth} of {MONTHLY_CHANGE_REQUEST_LIMIT} used
-          this month
-        </span>
-      </div>
+    // Collapsible — same <details> + custom summary pattern as
+    // DashCard. The usage pill stays visible in the summary so the
+    // customer sees their remaining count even when collapsed.
+    <details
+      open
+      className="group rounded-2xl bg-white p-7 shadow-card md:p-8 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
+    >
+      <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-1 flex-wrap items-baseline gap-3">
+          <h2 className="font-serif text-xl font-semibold text-navy-900">
+            Need a change?
+          </h2>
+          <span
+            className={[
+              "rounded-full px-3 py-1 text-xs font-semibold",
+              atCap
+                ? "bg-navy-900 text-white"
+                : remaining === 1
+                  ? "bg-ember-100 text-ember-800 ring-1 ring-ember-200"
+                  : "bg-cream-100 text-navy-800 ring-1 ring-navy-200",
+            ].join(" ")}
+          >
+            {usedThisMonth} of {MONTHLY_CHANGE_REQUEST_LIMIT} used
+            this month
+          </span>
+        </div>
+        <ChevronToggle />
+      </summary>
+      <div className="mt-4">
+      {/* original block content starts here */}
       <p className="mt-2 text-sm leading-relaxed text-navy-700">
         Tell me what you&apos;d like updated — a phone number, a new
         photo, a price tweak, a fresh testimonial. You get{" "}
@@ -1334,7 +1388,8 @@ function ChangeRequestsBlock({
           </div>
         </div>
       </dialog>
-    </article>
+      </div>
+    </details>
   );
 }
 
