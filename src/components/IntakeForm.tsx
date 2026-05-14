@@ -33,7 +33,7 @@ const optionalNumber = (v: unknown): number | undefined => {
   return undefined;
 };
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useForm,
   Controller,
@@ -690,6 +690,59 @@ function BrandSection({
     watch("brand.vibe") ?? recommendedVibe;
   const currentStructure =
     watch("brand.structure") ?? recommendedStructure;
+
+  // Progressive disclosure (added 2026-05-14) — the Brand step is
+  // long, so reveal it in three swipes:
+  //   1. Colour (primary required, secondary optional) → Continue
+  //   2. Layout (4 structure thumbnails) → Continue
+  //   3. Style (4 vibe thumbnails) → main form's Save & Continue
+  //      handles advancing to the Modules step.
+  // Earlier sub-steps stay visible AND interactive after unlock so
+  // the customer can scroll back up and tweak — only the FORWARD
+  // gating is enforced.
+  const currentColour = watch("brand.primaryColour");
+  const currentColourValid =
+    typeof currentColour === "string" &&
+    /^#[0-9a-fA-F]{6}$/.test(currentColour);
+  const currentStructurePicked = !!watch("brand.structure");
+  const [layoutUnlocked, setLayoutUnlocked] = useState(false);
+  const [styleUnlocked, setStyleUnlocked] = useState(false);
+  const layoutRef = useRef<HTMLFieldSetElement | null>(null);
+  const styleRef = useRef<HTMLFieldSetElement | null>(null);
+  // Initial unlock pass — if the customer is returning to Brand with
+  // values already filled (typical when they hit "Back" from a later
+  // step), unlock past whichever sub-step they've completed so they
+  // can see the full picture without re-clicking Continue.
+  useEffect(() => {
+    if (currentColourValid) setLayoutUnlocked(true);
+    if (currentStructurePicked) setStyleUnlocked(true);
+    // Run once on mount — subsequent unlocks happen via Continue clicks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleContinueColour() {
+    if (!currentColourValid) return; // button is disabled in this case anyway
+    setLayoutUnlocked(true);
+    // Defer to next paint so the just-rendered fieldset has a position.
+    requestAnimationFrame(() => {
+      layoutRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
+  function handleContinueLayout() {
+    if (!currentStructurePicked) return;
+    setStyleUnlocked(true);
+    requestAnimationFrame(() => {
+      styleRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-5 md:grid-cols-2">
@@ -724,7 +777,32 @@ function BrandSection({
         />
       </div>
 
-      <fieldset>
+      {/* Continue gate from Colour → Layout. Hidden once layout
+       *  is unlocked (returning customers + post-click). The disabled
+       *  state pairs with the required-field hint below it so it's
+       *  obvious why the button isn't fireable yet. */}
+      {!layoutUnlocked && (
+        <div className="border-t border-navy-100 pt-4">
+          <p className="mb-3 text-sm text-navy-600">
+            {currentColourValid
+              ? "Looks great. Pick a layout next — that's the shape of your homepage."
+              : "Pick a primary colour to continue."}
+          </p>
+          <button
+            type="button"
+            onClick={handleContinueColour}
+            disabled={!currentColourValid}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Continue to Layout →
+          </button>
+        </div>
+      )}
+
+      {/* Layout — only renders once unlocked. Interactive forever
+       *  after; customer can change selection any time. */}
+      {layoutUnlocked && (
+        <fieldset ref={layoutRef}>
         <legend className="mb-3 block text-sm font-semibold text-navy-900">
           Layout{" "}
           <span aria-hidden="true" className="text-ember-600">*</span>
@@ -816,9 +894,36 @@ function BrandSection({
             );
           })}
         </div>
-      </fieldset>
+        </fieldset>
+      )}
 
-      <fieldset>
+      {/* Continue gate from Layout → Style. Mirrors the Colour gate
+       *  above. Hidden once style is unlocked. */}
+      {layoutUnlocked && !styleUnlocked && (
+        <div className="border-t border-navy-100 pt-4">
+          <p className="mb-3 text-sm text-navy-600">
+            {currentStructurePicked
+              ? "Nice. Last step — pick a style to set the typography and feel."
+              : "Pick a layout to continue."}
+          </p>
+          <button
+            type="button"
+            onClick={handleContinueLayout}
+            disabled={!currentStructurePicked}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Continue to Style →
+          </button>
+        </div>
+      )}
+
+      {/* Style — only renders once unlocked. The form's footer
+       *  Save & Continue button (outside this component) handles
+       *  advancing to the next main step (Modules) once Style is
+       *  picked. No third Continue button here — there's nothing
+       *  more in the Brand section after this. */}
+      {styleUnlocked && (
+      <fieldset ref={styleRef}>
         <legend className="mb-3 block text-sm font-semibold text-navy-900">
           Style{" "}
           <span aria-hidden="true" className="text-ember-600">*</span>
@@ -901,6 +1006,7 @@ function BrandSection({
           <p className="mt-2 text-sm text-ember-700">{e.vibe.message}</p>
         )}
       </fieldset>
+      )}
     </div>
   );
 }
