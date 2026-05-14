@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+ * Per-vibe visual differentiation (Tier 1 — 2026-05-14)
+ * ============================================================
+ *
+ * The four vibes (modern / traditional / premium / friendly) used
+ * to differ only in font + corner radius + heading weight, which
+ * landed as "the same site in different fonts". This block adds:
+ *
+ *   --vibe-bg              body background tone (paper vs pure white
+ *                          vs warm peach)
+ *   --vibe-hero-filter     image filter applied to hero photos
+ *                          (sepia / B&W / warm / none)
+ *   --vibe-eyebrow-deco    decorative treatment for `.eyebrow` text
+ *                          (gold rule for premium, lowercase dot for
+ *                          friendly, etc.)
+ *   --vibe-divider-content unicode/SVG content rendered between
+ *                          sections via `.vibe-divider`
+ *   --vibe-divider-style   how that divider renders (double-rule,
+ *                          dashed wavy, solid bar, centred diamond)
+ *   --vibe-hover-duration  hover animation duration (snappy modern
+ *                          vs slow premium)
+ *   --vibe-hover-easing    hover easing (bouncy friendly vs smooth
+ *                          premium)
+ *
+ * Everything is additive — components that didn't use these vars
+ * before continue rendering identically. New variables consumed by
+ * `.eyebrow`, `.vibe-divider`, `.btn` hover, and the
+ * `.hero-photo-wrap` filter wrapper.
+ * ============================================================ */
+
 @layer base {
   /* Modern vibe (default) — clean, contemporary, lots of whitespace,
    * Geist throughout, rounded button pills. The :root variables here
@@ -19,6 +49,19 @@
     --vibe-heading-weight: 600;
     --vibe-body-letter-spacing: 0;
     --vibe-section-pad-y: 5rem;
+
+    /* --- Tier 1 additions (2026-05-14) --- */
+    /* Modern default: pure white, crisp images, snappy interactions,
+     * lowercase eyebrow with no decoration, solid coloured divider bar. */
+    --vibe-bg: #ffffff;
+    --vibe-hero-filter: none;
+    --vibe-eyebrow-transform: none;
+    --vibe-eyebrow-tracking: 0.14em;
+    --vibe-eyebrow-decoration: none;
+    --vibe-divider-content: "";
+    --vibe-divider-style: solid-bar;
+    --vibe-hover-duration: 150ms;
+    --vibe-hover-easing: cubic-bezier(0.2, 0, 0, 1);
   }
 
   /* Traditional — classic, established, conservative. Serif body +
@@ -36,6 +79,19 @@
     --vibe-heading-weight: 700;
     --vibe-body-letter-spacing: 0.005em;
     --vibe-section-pad-y: 4.5rem;
+
+    /* Tier 1: warm cream-paper background, subtle sepia warmth on
+     * hero photos, small-caps eyebrow with thin double-rule under,
+     * classic double-rule section divider, slow fade hovers. */
+    --vibe-bg: #f8f3e8;
+    --vibe-hero-filter: sepia(0.12) saturate(0.9) brightness(0.97);
+    --vibe-eyebrow-transform: uppercase;
+    --vibe-eyebrow-tracking: 0.22em;
+    --vibe-eyebrow-decoration: double-rule;
+    --vibe-divider-content: "";
+    --vibe-divider-style: double-rule;
+    --vibe-hover-duration: 350ms;
+    --vibe-hover-easing: ease-in-out;
   }
 
   /* Premium — refined, lots of negative space, elegant typography.
@@ -53,6 +109,20 @@
     --vibe-heading-weight: 500;
     --vibe-body-letter-spacing: 0.01em;
     --vibe-section-pad-y: 6.5rem;
+
+    /* Tier 1: warm ivory background (slightly darker than modern, less
+     * yellow than traditional), greyscale hero photos with subtle warmth,
+     * UPPERCASE letterspaced eyebrows with thin gold rule beneath,
+     * centred gold diamond section dividers, slow elegant hovers. */
+    --vibe-bg: #f4f1ec;
+    --vibe-hero-filter: grayscale(0.85) brightness(0.96) contrast(1.05);
+    --vibe-eyebrow-transform: uppercase;
+    --vibe-eyebrow-tracking: 0.3em;
+    --vibe-eyebrow-decoration: gold-rule;
+    --vibe-divider-content: "\25C6"; /* ◆ */
+    --vibe-divider-style: centred-ornament;
+    --vibe-hover-duration: 500ms;
+    --vibe-hover-easing: cubic-bezier(0.25, 0.1, 0.25, 1);
   }
 
   /* Friendly — warm, approachable, rounded everything, casual but
@@ -68,6 +138,19 @@
     --vibe-heading-weight: 800;
     --vibe-body-letter-spacing: 0;
     --vibe-section-pad-y: 4.5rem;
+
+    /* Tier 1: warm peachy cream background, warm filter on hero photos
+     * (slight saturate + warmth), casual lowercase eyebrow with a bullet
+     * accent, dashed wavy section dividers, bouncy spring hovers. */
+    --vibe-bg: #fcf3eb;
+    --vibe-hero-filter: saturate(1.12) brightness(1.02) contrast(0.98);
+    --vibe-eyebrow-transform: none;
+    --vibe-eyebrow-tracking: 0.05em;
+    --vibe-eyebrow-decoration: bullet-accent;
+    --vibe-divider-content: "";
+    --vibe-divider-style: dashed-wave;
+    --vibe-hover-duration: 300ms;
+    --vibe-hover-easing: cubic-bezier(0.34, 1.56, 0.64, 1); /* overshoot */
   }
 
   html {
@@ -76,7 +159,10 @@
   }
 
   body {
-    @apply bg-cream-50 font-sans text-base leading-relaxed text-navy-900 antialiased;
+    /* Tier 1: body background tone is vibe-controlled. Falls back to
+     * cream-50 for any built before the vibe-bg variable existed. */
+    background-color: var(--vibe-bg, theme("colors.cream.50"));
+    @apply font-sans text-base leading-relaxed text-navy-900 antialiased;
     letter-spacing: var(--vibe-body-letter-spacing);
   }
 
@@ -95,10 +181,18 @@
      `btn-secondary` shape, but the primary uses the customer's
      brand-primary colour instead of the marketing site's ember.
      Corner radius is vibe-tunable: pills for modern + friendly,
-     near-square for traditional + premium. */
+     near-square for traditional + premium.
+     Tier 1: hover duration + easing are now vibe-tunable — modern
+     snaps (150ms ease-out), premium glides (500ms cubic-bezier),
+     friendly overshoots (300ms with bounce), traditional fades
+     (350ms ease-in-out). */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-4;
+    @apply inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold;
     border-radius: var(--vibe-radius-btn);
+    transition-property: transform, background-color, border-color, color, opacity, box-shadow;
+    transition-duration: var(--vibe-hover-duration);
+    transition-timing-function: var(--vibe-hover-easing);
+    @apply focus:outline-none focus-visible:ring-4;
   }
 
   .btn-primary {
@@ -131,11 +225,173 @@
     letter-spacing: var(--vibe-heading-letter-spacing);
   }
 
+  /* Eyebrow — Tier 1 makes case + tracking + per-vibe decoration
+     all controllable from CSS vars. Modern: lowercase, no decoration.
+     Traditional: UPPERCASE + thin double-rule beneath ("OUR WORK ▬▬").
+     Premium: WIDE-LETTER-SPACED UPPERCASE + gold rule beneath.
+     Friendly: lowercase + bullet-accent prefix ("• our work"). */
   .eyebrow {
-    @apply mb-4 inline-block text-sm font-semibold uppercase tracking-[0.14em] text-brand-primary-700;
+    @apply mb-4 inline-block text-sm font-semibold text-brand-primary-700;
+    text-transform: var(--vibe-eyebrow-transform);
+    letter-spacing: var(--vibe-eyebrow-tracking);
+    position: relative;
+  }
+  /* Eyebrow decoration variants — applied via the parent's
+     --vibe-eyebrow-decoration token. The selector is the data-vibe
+     itself because attr() can't drive content/border. Premium gets
+     a gold hairline; traditional gets a double-rule; friendly gets a
+     bullet prefix; modern gets nothing. */
+  html[data-vibe="traditional"] .eyebrow::after {
+    content: "";
+    display: block;
+    margin-top: 0.45rem;
+    width: 2.5rem;
+    height: 3px;
+    border-top: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+  }
+  html[data-vibe="premium"] .eyebrow::after {
+    content: "";
+    display: block;
+    margin-top: 0.5rem;
+    width: 1.75rem;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      #b08d4a 25%,
+      #b08d4a 75%,
+      transparent
+    );
+  }
+  html[data-vibe="friendly"] .eyebrow::before {
+    content: "● ";
+    color: theme("colors.brand-primary.500");
+    margin-right: 0.35em;
+    font-size: 0.7em;
+    vertical-align: 0.1em;
+  }
+
+  /* Section divider — Tier 1 component. Drop `<hr class="vibe-divider">`
+     between sections to get a per-vibe ornament without per-vibe markup.
+     Modern: thick solid bar (3px in brand-primary @ 40% opacity).
+     Traditional: classic double-rule (two thin lines).
+     Premium: centred gold diamond ornament on either side of which
+              thin gold hairlines extend.
+     Friendly: dashed wavy line (SVG background pattern). */
+  .vibe-divider {
+    border: 0;
+    margin: 3rem auto;
+    width: 100%;
+    max-width: 12rem;
+    height: 1px;
+    background: transparent;
+    position: relative;
+  }
+  html[data-vibe]:not([data-vibe="modern"]) .vibe-divider {
+    /* All non-modern vibes get a centred ornamental treatment. The
+       specifics below override per vibe. */
+  }
+  html[data-vibe="modern"] .vibe-divider,
+  html:not([data-vibe]) .vibe-divider {
+    height: 3px;
+    background: theme("colors.brand-primary.400");
+    opacity: 0.4;
+    border-radius: 999px;
+    max-width: 6rem;
+  }
+  html[data-vibe="traditional"] .vibe-divider {
+    height: 5px;
+    border-top: 1px solid theme("colors.navy.700");
+    border-bottom: 1px solid theme("colors.navy.700");
+    max-width: 10rem;
+  }
+  html[data-vibe="premium"] .vibe-divider {
+    height: auto;
+    max-width: 16rem;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  html[data-vibe="premium"] .vibe-divider::before,
+  html[data-vibe="premium"] .vibe-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      #b08d4a 50%,
+      transparent
+    );
+  }
+  html[data-vibe="premium"] .vibe-divider::after {
+    background: linear-gradient(
+      to left,
+      transparent,
+      #b08d4a 50%,
+      transparent
+    );
+  }
+  /* The diamond itself is rendered via a child span the divider
+     emits using ::marker isn't an option for <hr>. Instead we use
+     the content trick — the ::before of an inline pseudo on the
+     element via background-image (a tiny SVG diamond). */
+  html[data-vibe="premium"] .vibe-divider {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14"><path d="M7 1l4 6-4 6-4-6z" fill="%23b08d4a"/></svg>');
+    background-repeat: no-repeat;
+    background-position: center;
+    padding: 0.6rem 0;
+  }
+  html[data-vibe="friendly"] .vibe-divider {
+    height: 12px;
+    max-width: 14rem;
+    background-color: transparent;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10" viewBox="0 0 40 10"><path d="M0 5 Q 10 0, 20 5 T 40 5" stroke="%23ea7c2b" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 2" fill="none"/></svg>');
+    background-repeat: repeat-x;
+    background-size: 40px 10px;
+    background-position: center;
+  }
+
+  /* Hero photo treatment — Tier 1. Wrap hero <Image>s in a
+     `.hero-photo-wrap` div to inherit the vibe's filter.
+     Traditional: sepia warmth (10% sepia, slight desaturate).
+     Premium:     near-monochrome (85% grayscale, slight contrast).
+     Friendly:    warm filter (saturate + brightness).
+     Modern:      no filter, crisp.
+     Applies to direct <img> AND fill-positioned children (Next Image). */
+  .hero-photo-wrap > * {
+    filter: var(--vibe-hero-filter, none);
+  }
+
+  /* Image-treatment escape hatch — when a page wants to render a hero
+     photo WITHOUT the vibe filter (e.g. logo, badge, decorative
+     non-photo art), wrap in `.hero-photo-raw` instead. */
+  .hero-photo-raw > * {
+    filter: none !important;
   }
 
   .prose-body {
     @apply text-lg leading-relaxed text-navy-800 md:text-xl;
+  }
+
+  /* Drop cap — Tier 1 component for traditional + editorial-leaning
+     surfaces. Add `<p class="dropcap">…</p>` to render the first letter
+     huge and floated. Used by the editorial hero (long-form intro) and
+     the about-page body. */
+  .dropcap::first-letter {
+    @apply font-serif;
+    font-weight: var(--vibe-heading-weight);
+    font-size: 3.5em;
+    float: left;
+    line-height: 0.85;
+    margin-right: 0.08em;
+    margin-top: 0.05em;
+    color: theme("colors.navy.900");
+  }
+  html[data-vibe="premium"] .dropcap::first-letter {
+    color: #b08d4a;
   }
 }
