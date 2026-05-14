@@ -289,22 +289,35 @@ export default function IntakeForm({
     }
   }
 
+  // Scroll to the top of the page BEFORE swapping to the next step.
+  // Two reasons it must be in this order, and instant (not smooth):
+  //   1. Brand is now much longer than other sections (progressive
+  //      disclosure stacks colour + layout + style). Smooth-scrolling
+  //      from the bottom races with the new section rendering at the
+  //      top — the new section is shorter, browser clamps scroll to
+  //      maxScroll mid-animation, and the customer sees a blank flash.
+  //   2. Even without that, a 600ms smooth animation through ~3000px
+  //      of vertical real estate is a long time to be looking at the
+  //      OLD section's bottom while the new one's been rendered.
+  // Instant scroll + scroll-before-render = customer always sees the
+  // new section's header at the top of viewport with no flicker.
+  function scrollToTop() {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
   async function next() {
     const valid = await trigger(currentStep.key);
     if (!valid) return;
     const saved = await saveSection(currentStep.key);
     if (!saved) return;
+    scrollToTop();
     setStepIdx((i) => Math.min(i + 1, STEPS.length - 1));
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
   }
 
   function back() {
+    scrollToTop();
     setStepIdx((i) => Math.max(i - 1, 0));
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
   }
 
   function jumpTo(idx: number) {
@@ -312,10 +325,8 @@ export default function IntakeForm({
     // RHF state across hops; it's only persisted to Notion when the
     // user clicks "Save and continue", so jumping around freely never
     // loses their typing for the current session.
+    scrollToTop();
     setStepIdx(idx);
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
   }
 
   const onFinalSubmit = handleSubmit(async (data) => {
