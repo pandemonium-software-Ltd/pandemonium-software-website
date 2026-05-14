@@ -714,19 +714,42 @@ function SectionCard({
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
+  // Controlled open state (added 2026-05-14) — was a native <details>
+  // element. Switched to React-controlled so the in-section "Confirm"
+  // button at the bottom can collapse the section programmatically.
+  // Header click still toggles open; clicking Confirm marks it as
+  // "done" by collapsing it. Form data is kept in component state
+  // upstream so collapsing never loses anything.
+  const [open, setOpen] = useState(defaultOpen);
+  const sectionId = `section-${letter}`;
   return (
-    <details
-      className="group mt-5 rounded-2xl border border-navy-100 bg-cream-50 p-6 [&[open]>summary>.chevron]:rotate-90"
-      open={defaultOpen}
+    <section
+      className="group mt-5 rounded-2xl border border-navy-100 bg-cream-50 p-6"
+      aria-labelledby={`${sectionId}-heading`}
     >
-      <summary className="flex cursor-pointer list-none items-baseline gap-3 [&::-webkit-details-marker]:hidden">
-        <span className="chevron flex-none text-navy-500 transition-transform">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-controls={`${sectionId}-content`}
+        className="flex w-full items-baseline gap-3 text-left"
+      >
+        <span
+          aria-hidden="true"
+          className={[
+            "flex-none text-navy-500 transition-transform",
+            open ? "rotate-90" : "",
+          ].join(" ")}
+        >
           ▸
         </span>
         <span className="font-serif text-sm font-semibold text-ember-600">
           Section {letter}
         </span>
-        <h3 className="flex-1 font-serif text-lg font-semibold text-navy-900">
+        <h3
+          id={`${sectionId}-heading`}
+          className="flex-1 font-serif text-lg font-semibold text-navy-900"
+        >
           {title}
         </h3>
         <span
@@ -739,10 +762,29 @@ function SectionCard({
         >
           {filled ? "Filled in" : "Empty"}
         </span>
-      </summary>
-      <p className="mt-2 text-sm text-navy-600">{helper}</p>
-      <div className="mt-4">{children}</div>
-    </details>
+      </button>
+      {open && (
+        <div id={`${sectionId}-content`}>
+          <p className="mt-2 text-sm text-navy-600">{helper}</p>
+          <div className="mt-4">{children}</div>
+          {/* Confirm-and-collapse button (added 2026-05-14). Customer
+           *  finishes the section, clicks Confirm, and the card
+           *  collapses to free up vertical space — they immediately
+           *  see what's still open. Section data is form-state in
+           *  the parent, so collapsing never loses anything. The
+           *  customer can re-expand any time by clicking the header. */}
+          <div className="mt-6 flex items-center justify-end gap-3 border-t border-navy-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-2 rounded-full bg-navy-900 px-5 py-2 text-sm font-semibold text-white transition-all duration-150 hover:-translate-y-px hover:bg-navy-800"
+            >
+              ✓ Confirm — collapse this section
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
