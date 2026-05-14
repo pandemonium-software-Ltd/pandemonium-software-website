@@ -36,7 +36,6 @@ const optionalNumber = (v: unknown): number | undefined => {
 import { useMemo, useState } from "react";
 import {
   useForm,
-  useFieldArray,
   Controller,
   type Control,
   type FieldErrors,
@@ -80,31 +79,21 @@ import { site } from "@/lib/site";
 type StepKey =
   | "businessBasics"
   | "contactDetails"
-  | "services"
   | "brand"
   | "modules"
-  | "socialProof"
   | "legal";
 
 const STEPS: { key: StepKey; title: string; short: string }[] = [
   { key: "businessBasics", title: "Business basics", short: "Basics" },
   { key: "contactDetails", title: "Contact details", short: "Contact" },
-  { key: "services", title: "Your services", short: "Services" },
   { key: "brand", title: "Look and feel", short: "Brand" },
   { key: "modules", title: "Modules and pricing", short: "Modules" },
-  { key: "socialProof", title: "Social proof", short: "Proof" },
   { key: "legal", title: "Legal and consent", short: "Legal" },
 ];
 
-const WEEKDAYS = [
-  { key: "monday", label: "Monday" },
-  { key: "tuesday", label: "Tuesday" },
-  { key: "wednesday", label: "Wednesday" },
-  { key: "thursday", label: "Thursday" },
-  { key: "friday", label: "Friday" },
-  { key: "saturday", label: "Saturday" },
-  { key: "sunday", label: "Sunday" },
-] as const;
+// WEEKDAYS constant removed 2026-05-14 alongside the openingHours
+// fieldset — hours capture moved to the Onboarding Hub. Step4Content
+// owns its own day list.
 
 const VIBE_DETAILS: Record<
   (typeof VIBE_OPTIONS)[number],
@@ -193,27 +182,12 @@ function buildDefaultValues(
       publicEmail: saved.contactDetails?.publicEmail ?? seed.contactDetails?.publicEmail ?? "",
       address: saved.contactDetails?.address ?? "",
       serviceArea: saved.contactDetails?.serviceArea ?? "",
-      openingHours:
-        saved.contactDetails?.openingHours ??
-        Object.fromEntries(
-          WEEKDAYS.map((d) => [
-            d.key,
-            { open: d.key !== "sunday", from: "09:00", to: "17:00" },
-          ]),
-        ),
-    },
-    services: {
-      services: saved.services?.services ?? [
-        { name: "", description: "", featured: false },
-      ],
-      differentiator: saved.services?.differentiator ?? "",
     },
     brand: {
       primaryColour: saved.brand?.primaryColour ?? "#1d3a5f",
       secondaryColour: saved.brand?.secondaryColour,
       vibe: saved.brand?.vibe ?? "traditional",
       structure: saved.brand?.structure ?? "services",
-      logoFileName: saved.brand?.logoFileName ?? "",
     },
     modules: {
       baseSelected: true,
@@ -223,19 +197,16 @@ function buildDefaultValues(
       moduleOffers: saved.modules?.moduleOffers ?? seed.modules?.moduleOffers ?? false,
       gbpAddon: saved.modules?.gbpAddon ?? seed.modules?.gbpAddon ?? false,
     },
-    socialProof: {
-      testimonials: saved.socialProof?.testimonials ?? [],
-      associations: saved.socialProof?.associations ?? "",
-      yearsExperience: saved.socialProof?.yearsExperience,
-      awards: saved.socialProof?.awards ?? "",
-    },
     // The legal block is intentionally cast: the schema types
-    // isDataController + acceptsTerms as the literal `true`, but in
-    // the form they start un-checked until the user actively ticks them.
-    // RHF allows boolean here at runtime — the cast just silences TS.
+    // isDataController + acceptsTerms + acceptsRefundCancellation as
+    // the literal `true`, but in the form they start un-checked until
+    // the user actively ticks them. RHF allows boolean at runtime —
+    // the cast just silences TS.
     legal: {
       isDataController: (saved.legal?.isDataController ?? false) as true,
       acceptsTerms: (saved.legal?.acceptsTerms ?? false) as true,
+      acceptsRefundCancellation:
+        (saved.legal?.acceptsRefundCancellation ?? false) as true,
       marketingConsent: saved.legal?.marketingConsent ?? false,
     },
   };
@@ -281,6 +252,7 @@ export default function IntakeForm({
     trigger,
     getValues,
     watch,
+    setValue,
     control,
     formState: { errors },
   } = methods;
@@ -395,9 +367,6 @@ export default function IntakeForm({
         {currentStep.key === "contactDetails" && (
           <ContactDetailsSection register={register} errors={errors} />
         )}
-        {currentStep.key === "services" && (
-          <ServicesSection register={register} errors={errors} control={control} />
-        )}
         {currentStep.key === "brand" && (
           <BrandSection
             register={register}
@@ -408,10 +377,12 @@ export default function IntakeForm({
           />
         )}
         {currentStep.key === "modules" && (
-          <ModulesSection register={register} errors={errors} watch={watch} />
-        )}
-        {currentStep.key === "socialProof" && (
-          <SocialProofSection register={register} errors={errors} control={control} />
+          <ModulesSection
+            register={register}
+            errors={errors}
+            watch={watch}
+            setValue={setValue}
+          />
         )}
         {currentStep.key === "legal" && (
           <LegalSection register={register} errors={errors} prospectName={prospectName} />
@@ -671,201 +642,22 @@ function ContactDetailsSection({ register, errors }: SectionProps) {
         placeholder="e.g. Oxford, Witney, Bicester, and 30 miles around"
       />
 
-      <fieldset>
-        <legend className="mb-3 block text-sm font-semibold text-navy-900">
-          Opening hours
-        </legend>
-        <p className="mb-3 text-xs text-navy-500">
-          Tick the days you&apos;re open and set hours. Untick days you&apos;re closed.
-        </p>
-        <div className="space-y-2">
-          {WEEKDAYS.map((d) => (
-            <div
-              key={d.key}
-              className="rounded-lg border border-navy-100 bg-cream-50/50 px-3 py-2.5 sm:grid sm:grid-cols-[100px_auto_1fr_1fr] sm:items-center sm:gap-3"
-            >
-              {/* Mobile: day + open checkbox on one row.
-                  Desktop (sm:contents): each child joins the parent grid. */}
-              <div className="flex items-center justify-between sm:contents">
-                <span className="text-sm font-medium text-navy-900">
-                  {d.label}
-                </span>
-                <label className="inline-flex items-center gap-2 text-sm text-navy-700">
-                  <input
-                    type="checkbox"
-                    {...register(
-                      `contactDetails.openingHours.${d.key}.open` as const,
-                    )}
-                    className="h-4 w-4 rounded border-2 border-navy-300 text-navy-900"
-                  />
-                  Open
-                </label>
-              </div>
-              {/* Mobile: From/To labels next to full-width inputs, stacked.
-                  iOS Safari's <input type="time"> ignores `w-full` when
-                  two share a row — stacking guarantees the controls fit
-                  the viewport regardless of intrinsic min-width.
-                  Desktop (sm:contents): each input joins the parent grid. */}
-              <div className="mt-2 flex flex-col gap-2 sm:mt-0 sm:contents">
-                <div className="flex items-center gap-2 sm:contents">
-                  <span
-                    aria-hidden="true"
-                    className="w-12 shrink-0 text-xs font-medium text-navy-500 sm:hidden"
-                  >
-                    From
-                  </span>
-                  <input
-                    type="time"
-                    aria-label={`${d.label} open from`}
-                    {...register(
-                      `contactDetails.openingHours.${d.key}.from` as const,
-                    )}
-                    className="min-w-0 flex-1 rounded-md border-2 border-navy-200 bg-white px-3 py-2 text-sm focus:border-navy-900 focus:outline-none sm:w-full sm:flex-none sm:py-1.5"
-                  />
-                </div>
-                <div className="flex items-center gap-2 sm:contents">
-                  <span
-                    aria-hidden="true"
-                    className="w-12 shrink-0 text-xs font-medium text-navy-500 sm:hidden"
-                  >
-                    To
-                  </span>
-                  <input
-                    type="time"
-                    aria-label={`${d.label} open until`}
-                    {...register(
-                      `contactDetails.openingHours.${d.key}.to` as const,
-                    )}
-                    className="min-w-0 flex-1 rounded-md border-2 border-navy-200 bg-white px-3 py-2 text-sm focus:border-navy-900 focus:outline-none sm:w-full sm:flex-none sm:py-1.5"
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </fieldset>
+      <p className="rounded-lg border border-navy-100 bg-cream-50 px-4 py-3 text-xs text-navy-600">
+        Opening hours come later. You&apos;ll set them in the Onboarding Hub
+        after payment — that&apos;s where they feed directly into your live
+        site, so we don&apos;t ask twice.
+      </p>
     </div>
   );
 }
 
-// ---------- Section: Services ----------
-
-function ServicesSection({
-  register,
-  errors,
-  control,
-}: SectionProps & { control: Control<Phase3Data> }) {
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "services.services",
-  });
-  const e = errors.services;
-  return (
-    <div className="space-y-5">
-      <Textarea
-        id="sv-differentiator"
-        label="What makes you different from the competition?"
-        required
-        {...register("services.differentiator")}
-        error={e?.differentiator?.message}
-        maxLength={1000}
-        rows={3}
-        placeholder="One or two sentences a customer would actually understand. e.g. 'Family-run since 2007 — most of our work comes from word of mouth.'"
-      />
-
-      <div>
-        <h3 className="font-serif text-lg font-semibold text-navy-900">
-          Services you offer{" "}
-          <span aria-hidden="true" className="text-ember-600">*</span>
-        </h3>
-        <p className="text-sm text-navy-500">
-          At least 1, up to 10. The first 3 are featured most prominently;
-          star any others you want highlighted too.
-        </p>
-
-        <div className="mt-4 space-y-4">
-          {fields.map((f, idx) => (
-            <div
-              key={f.id}
-              className="rounded-xl border-2 border-navy-200 bg-cream-50/50 p-4"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold text-navy-900">
-                  Service #{idx + 1}
-                </span>
-                {fields.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => remove(idx)}
-                    aria-label={`Remove service #${idx + 1}`}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-navy-200 bg-white text-base leading-none text-navy-600 transition-colors hover:border-ember-500 hover:text-ember-700"
-                    title="Remove this service"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <div className="space-y-3">
-                <Field
-                  id={`sv-${idx}-name`}
-                  label="Service name"
-                  required
-                  {...register(`services.services.${idx}.name`)}
-                  error={e?.services?.[idx]?.name?.message}
-                  maxLength={100}
-                />
-                <Textarea
-                  id={`sv-${idx}-description`}
-                  label="Short description"
-                  required
-                  {...register(`services.services.${idx}.description`)}
-                  error={e?.services?.[idx]?.description?.message}
-                  maxLength={500}
-                  rows={2}
-                />
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field
-                    id={`sv-${idx}-startingPrice`}
-                    label='Starting price (£)'
-                    type="number"
-                    {...register(`services.services.${idx}.startingPrice`, {
-                      setValueAs: optionalNumber,
-                    })}
-                    error={e?.services?.[idx]?.startingPrice?.message}
-                    hint="optional"
-                  />
-                  <label className="mt-7 inline-flex select-none items-center gap-2 self-start text-sm text-navy-700">
-                    <input
-                      type="checkbox"
-                      {...register(`services.services.${idx}.featured`)}
-                      className="h-4 w-4 rounded border-2 border-navy-300 text-navy-900"
-                    />
-                    Feature this service prominently
-                  </label>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {fields.length < 10 && (
-          <button
-            type="button"
-            onClick={() =>
-              append({ name: "", description: "", featured: false })
-            }
-            className="mt-4 btn-secondary"
-          >
-            + Add another service
-          </button>
-        )}
-        {typeof e?.services?.message === "string" && (
-          <p className="mt-2 text-sm text-ember-700">{e.services.message}</p>
-        )}
-      </div>
-    </div>
-  );
-}
+// ServicesSection removed 2026-05-14 — services are now captured
+// exclusively in the Onboarding Hub Step 4 Content step where each
+// entry has richer fields (longDescription, features, pricingNotes,
+// per-service photo). The adapter already preferred Hub Content over
+// Phase 3 for services; removing the Phase 3 leg makes that explicit.
+// `differentiator` lived in this section — its only consumer was the
+// Step 4 aboutBlurb seed, which now starts blank for new customers.
 
 // ---------- Section: Brand ----------
 
@@ -1109,15 +901,6 @@ function BrandSection({
           <p className="mt-2 text-sm text-ember-700">{e.vibe.message}</p>
         )}
       </fieldset>
-
-      <Field
-        id="br-logoFileName"
-        label="Logo file name"
-        {...register("brand.logoFileName")}
-        error={e?.logoFileName?.message}
-        maxLength={200}
-        hint="optional — actual logo upload happens in the Onboarding Hub after payment"
-      />
     </div>
   );
 }
@@ -1128,13 +911,29 @@ function ModulesSection({
   register,
   errors,
   watch,
-}: SectionProps & { watch: ReturnType<typeof useForm<Phase3Data>>["watch"] }) {
+  setValue,
+}: SectionProps & {
+  watch: ReturnType<typeof useForm<Phase3Data>>["watch"];
+  setValue: ReturnType<typeof useForm<Phase3Data>>["setValue"];
+}) {
   const e = errors.modules;
   const moduleBooking = watch("modules.moduleBooking");
   const moduleEnquiry = watch("modules.moduleEnquiry");
   const moduleNewsletter = watch("modules.moduleNewsletter");
   const moduleOffers = watch("modules.moduleOffers");
   const gbpAddon = watch("modules.gbpAddon");
+
+  // Newsletter + Offers were combined into a single intake choice
+  // 2026-05-14 — they're both "promotional outbound" from the
+  // customer's POV and pricing was double-counting cognitively.
+  // The two backend modules still exist (separate billing, separate
+  // dashboard surfaces, separate Notion select options) so toggling
+  // the combined row flips BOTH flags atomically via setValue.
+  const newsletterOffersChecked = !!moduleNewsletter || !!moduleOffers;
+  const newsletterOffersSetup =
+    MODULE_NEWSLETTER_SETUP_GBP + MODULE_OFFERS_SETUP_GBP;
+  const newsletterOffersMonthly =
+    MODULE_NEWSLETTER_MONTHLY_GBP + MODULE_OFFERS_MONTHLY_GBP;
 
   const fees = calculateFees({
     moduleBooking: !!moduleBooking,
@@ -1176,19 +975,31 @@ function ModulesSection({
           register={register("modules.moduleEnquiry")}
         />
         <ModuleRow
-          label="Newsletter"
-          tagline="Email your customers monthly. I send it for you."
-          setup={`+£${MODULE_NEWSLETTER_SETUP_GBP}`}
-          monthly={`+£${MODULE_NEWSLETTER_MONTHLY_GBP}/mo`}
-          register={register("modules.moduleNewsletter")}
+          label="Newsletter + Offers"
+          tagline="A monthly newsletter sent from name@yourdomain, AND a promotional strip on your homepage (headline, dates, CTA) you control from your dashboard. We moderate each offer before it goes live."
+          setup={`+£${newsletterOffersSetup}`}
+          monthly={`+£${newsletterOffersMonthly}/mo`}
+          controlled={{
+            checked: newsletterOffersChecked,
+            onChange: (next) => {
+              // One UI toggle, two backend flags — keep them in
+              // lockstep so the rest of the system (billing, ops,
+              // admin) keeps seeing the modules it expects.
+              setValue("modules.moduleNewsletter", next, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("modules.moduleOffers", next, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+            },
+          }}
         />
-        <ModuleRow
-          label="Offers"
-          tagline="A promo strip on your homepage you control from your dashboard — set a headline, dates and CTA. We'll moderate each before it goes live."
-          setup={`+£${MODULE_OFFERS_SETUP_GBP}`}
-          monthly={`+£${MODULE_OFFERS_MONTHLY_GBP}/mo`}
-          register={register("modules.moduleOffers")}
-        />
+        {/* Hidden registrations keep RHF aware of the underlying
+            fields even though the UI controls them via setValue. */}
+        <input type="hidden" {...register("modules.moduleNewsletter")} />
+        <input type="hidden" {...register("modules.moduleOffers")} />
         <ModuleRow
           label="Google Business Profile + live reviews"
           tagline="One-off setup or audit, plus your top Google reviews refreshed on your site automatically (powered by the Google Places API)."
@@ -1233,6 +1044,7 @@ function ModuleRow({
   setup,
   monthly,
   register,
+  controlled,
   locked,
   checked,
 }: {
@@ -1241,6 +1053,14 @@ function ModuleRow({
   setup: string;
   monthly: string;
   register?: ReturnType<ReturnType<typeof useForm<Phase3Data>>["register"]>;
+  /** Alternative to `register` — drives the UI checkbox via parent
+   *  state so one toggle can flip multiple form fields (used by the
+   *  combined Newsletter+Offers row). Pass exactly one of `register`
+   *  / `controlled` / `locked`. */
+  controlled?: {
+    checked: boolean;
+    onChange: (next: boolean) => void;
+  };
   locked?: boolean;
   checked?: boolean;
 }) {
@@ -1255,9 +1075,14 @@ function ModuleRow({
     >
       <input
         type="checkbox"
-        {...(register ?? {})}
+        {...(controlled
+          ? {
+              checked: controlled.checked,
+              onChange: (e) => controlled.onChange(e.target.checked),
+            }
+          : register ?? {})}
         disabled={locked}
-        defaultChecked={checked}
+        defaultChecked={controlled ? undefined : checked}
         className="mt-0.5 h-5 w-5 flex-none rounded border-2 border-navy-300 text-navy-900 disabled:opacity-60"
       />
       <div className="flex-1">
@@ -1280,124 +1105,11 @@ function ModuleRow({
 
 // ---------- Section: Social proof ----------
 
-function SocialProofSection({
-  register,
-  errors,
-  control,
-}: SectionProps & { control: Control<Phase3Data> }) {
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "socialProof.testimonials",
-  });
-  const e = errors.socialProof;
-  return (
-    <div className="space-y-5">
-      <p className="text-sm text-navy-700">
-        Whatever you&apos;ve got. Optional — but the more, the more your site
-        sells you while you&apos;re working.
-      </p>
-
-      <div>
-        <h3 className="font-serif text-lg font-semibold text-navy-900">
-          Customer testimonials
-          <span className="ml-2 text-sm font-normal text-navy-500">
-            (up to 3)
-          </span>
-        </h3>
-        <div className="mt-4 space-y-4">
-          {fields.map((f, idx) => (
-            <div
-              key={f.id}
-              className="rounded-xl border-2 border-navy-200 bg-cream-50/50 p-4"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-semibold text-navy-900">
-                  Testimonial #{idx + 1}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => remove(idx)}
-                  className="text-sm text-ember-700 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Field
-                    id={`sp-${idx}-name`}
-                    label="Customer name"
-                    {...register(`socialProof.testimonials.${idx}.name`)}
-                    error={e?.testimonials?.[idx]?.name?.message}
-                    maxLength={100}
-                  />
-                  <Field
-                    id={`sp-${idx}-location`}
-                    label="Location"
-                    {...register(`socialProof.testimonials.${idx}.location`)}
-                    error={e?.testimonials?.[idx]?.location?.message}
-                    maxLength={100}
-                    hint='e.g. "Oxford"'
-                  />
-                </div>
-                <Textarea
-                  id={`sp-${idx}-quote`}
-                  label="Their words"
-                  {...register(`socialProof.testimonials.${idx}.quote`)}
-                  error={e?.testimonials?.[idx]?.quote?.message}
-                  maxLength={500}
-                  rows={3}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-        {fields.length < 3 && (
-          <button
-            type="button"
-            onClick={() =>
-              append({ name: "", location: "", quote: "" })
-            }
-            className="mt-4 btn-secondary"
-          >
-            + Add a testimonial
-          </button>
-        )}
-      </div>
-
-      <Textarea
-        id="sp-associations"
-        label="Trade associations or accreditations"
-        {...register("socialProof.associations")}
-        error={e?.associations?.message}
-        maxLength={500}
-        rows={2}
-        hint="optional — e.g. Gas Safe, NICEIC, FMB"
-      />
-
-      <Field
-        id="sp-yearsExperience"
-        label="Years of experience"
-        type="number"
-        {...register("socialProof.yearsExperience", {
-          setValueAs: optionalNumber,
-        })}
-        error={e?.yearsExperience?.message}
-        hint="optional"
-      />
-
-      <Textarea
-        id="sp-awards"
-        label="Awards or recognition"
-        {...register("socialProof.awards")}
-        error={e?.awards?.message}
-        maxLength={500}
-        rows={2}
-        hint="optional"
-      />
-    </div>
-  );
-}
+// SocialProofSection removed 2026-05-14 — testimonials + associations
+// are now captured in the Onboarding Hub (Step 6 Content) where the
+// data actually flows into the customer's live site. The Phase 3
+// fields were duplicating that input and the operator never used
+// them directly. See `socialProofSchema` removal in src/lib/schemas.ts.
 
 // ---------- Section: Legal ----------
 
@@ -1410,7 +1122,7 @@ function LegalSection({
   return (
     <div className="space-y-6">
       <p className="text-sm text-navy-700">
-        Two boxes we need {prospectName.split(/\s+/)[0] ?? "you"} to tick
+        Three boxes we need {prospectName.split(/\s+/)[0] ?? "you"} to tick
         before we can build your site. Plain English; no fine print.
       </p>
 
@@ -1431,12 +1143,38 @@ function LegalSection({
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="link">
               {site.url}/terms
             </a>
-            . Highlights: 30-day notice to cancel, you own everything,
-            48-hour refund window on the setup fee.
+            . Plain English; no fine print.
           </>
         }
         register={register("legal.acceptsTerms")}
         error={e?.acceptsTerms?.message}
+      />
+
+      <CheckboxBlock
+        id="lg-acceptsRefundCancellation"
+        label="I accept the refund and cancellation terms"
+        body={
+          <>
+            <strong>Refunds:</strong> 48-hour refund window on the setup
+            fee from payment time — full refund, no questions asked.
+            After 48 hours, the setup fee is non-refundable as we&apos;ll
+            have started work. Monthly subscription fees aren&apos;t refunded
+            for partial months.
+            <br />
+            <br />
+            <strong>Cancellation:</strong> 30 days&apos; notice to cancel
+            your monthly subscription at any time. Your site stays live
+            through the notice period. After cancellation, we transfer
+            the domain to you and hand over your assets — you own
+            everything we built. Full terms at{" "}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="link">
+              {site.url}/terms
+            </a>
+            .
+          </>
+        }
+        register={register("legal.acceptsRefundCancellation")}
+        error={e?.acceptsRefundCancellation?.message}
       />
 
       <CheckboxBlock

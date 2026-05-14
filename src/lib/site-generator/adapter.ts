@@ -289,8 +289,13 @@ export function adaptProspect(prospect: ProspectRecord): {
   }
 
   if (services.length === 0) {
+    // Services were removed from Phase 3 intake on 2026-05-14 — the
+    // ONLY canonical source now is the Hub Step 4 Content step. The
+    // legacy Phase 3 fallback (`phase3Services`) still exists in this
+    // adapter for prospects (like Lucas) who completed intake before
+    // the removal; for everyone else, services come from Step 4.
     throw new AdapterError(
-      "At least one service is required. Add one in the Hub Step 4 Content step, or fill in the Phase 3 intake services list.",
+      "No services on file yet. Add at least one service in your Onboarding Hub Step 4 (Site Content) before requesting a preview.",
     );
   }
 

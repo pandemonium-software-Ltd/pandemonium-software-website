@@ -130,8 +130,19 @@ export default async function IntakePage({
         savedPartial.modules?.moduleEnquiry ??
         prospect.phase2Data?.modulesInterest?.includes("Enquiry Form") ??
         false,
+      // Newsletter + Offers were combined into a single intake toggle
+      // 2026-05-14. They remain separate backend modules but always
+      // travel together — seed both from EITHER Phase 2 interest
+      // signal so the combined UI row matches what the customer
+      // actually gets at submission time.
       moduleNewsletter:
         savedPartial.modules?.moduleNewsletter ??
+        prospect.phase2Data?.modulesInterest?.includes("Newsletter") ??
+        prospect.phase2Data?.modulesInterest?.includes("Offers") ??
+        false,
+      moduleOffers:
+        savedPartial.modules?.moduleOffers ??
+        prospect.phase2Data?.modulesInterest?.includes("Offers") ??
         prospect.phase2Data?.modulesInterest?.includes("Newsletter") ??
         false,
       gbpAddon:
@@ -152,9 +163,10 @@ export default async function IntakePage({
             Everything I need to build your site.
           </h1>
           <p className="prose-body mx-auto mt-6 max-w-2xl">
-            Seven short sections. Saves as you go, so you can close the tab
-            and come back any time. Allow about 15 minutes — and have your
-            logo handy if you have one.
+            Five short sections. Saves as you go, so you can close the tab
+            and come back any time. Allow about 8 minutes — you&apos;ll add
+            services, opening hours and assets in your Onboarding Hub
+            after payment.
           </p>
         </div>
       </section>

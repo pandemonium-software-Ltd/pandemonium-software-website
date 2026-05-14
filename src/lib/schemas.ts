@@ -223,33 +223,30 @@ const contactDetailsSchema = z.object({
   publicEmail: z.string().trim().email().max(254),
   address: z.string().trim().min(1).max(500),
   serviceArea: z.string().trim().min(1).max(500),
-  openingHours: z.record(
-    z.string(),
-    z
-      .object({
-        open: z.boolean(),
-        from: z.string().optional(),
-        to: z.string().optional(),
-      })
-      .optional(),
-  ),
+  // openingHours removed from Phase 3 intake 2026-05-14 — the per-day
+  // grid was a tedious filler at intake time. Hours are now captured
+  // exclusively in the Onboarding Hub (Step 4 Content) where they
+  // also drive the live customer site's JSON-LD + opening-hours
+  // strip. See src/components/onboarding/Step4Content.tsx for the
+  // canonical capture.
 });
 
-const serviceSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().min(1).max(500),
-  startingPrice: z.number().nonnegative().optional(),
-  featured: z.boolean().default(false),
-  icon: z.string().max(10).optional(),
-});
-
-const servicesSchema = z.object({
-  services: z
-    .array(serviceSchema)
-    .min(1, "Please add at least 1 service.")
-    .max(10, "Template displays up to 10 services."),
-  differentiator: z.string().trim().min(1).max(1000),
-});
+// serviceSchema + servicesSchema removed from Phase 3 intake 2026-05-14.
+// Services are now captured exclusively in the Onboarding Hub Step 4
+// Content step, where they have richer fields (longDescription,
+// features list, pricing notes, per-service photos) anyway. The
+// adapter (src/lib/site-generator/adapter.ts) already preferred the
+// Hub Content version as canonical; removing the Phase 3 leg makes
+// that explicit.
+//
+// Operator scope-check is preserved via Phase 2 compatibility rules
+// (SB2: more than 10 services; HB6: features outside template).
+//
+// `differentiator` (formerly a required free-text alongside services)
+// was unused on the live customer site — its only consumer was the
+// Hub Step 4 aboutBlurb seeding, which now starts blank for new
+// customers (legacy customers still have it in their phase3Data JSON
+// blob, so back-compat seeding remains intact).
 
 const brandSchema = z.object({
   primaryColour: z
@@ -265,7 +262,10 @@ const brandSchema = z.object({
    *  the field is optional in the schema (back-compat). New
    *  intakes set it explicitly. */
   structure: z.enum(STRUCTURE_OPTIONS).optional(),
-  logoFileName: z.string().max(200).optional(),
+  // logoFileName intentionally removed 2026-05-14: the actual logo
+  // upload happens in Onboarding Hub Step 4 after payment, so asking
+  // for the filename at intake-time was redundant noise. The Hub
+  // captures both the file and its display metadata.
 });
 
 const moduleSelectionSchema = z.object({
@@ -277,18 +277,11 @@ const moduleSelectionSchema = z.object({
   gbpAddon: z.boolean().default(false),
 });
 
-const testimonialSchema = z.object({
-  name: z.string().trim().max(100),
-  location: z.string().trim().max(100),
-  quote: z.string().trim().max(500),
-});
-
-const socialProofSchema = z.object({
-  testimonials: z.array(testimonialSchema).max(3).default([]),
-  associations: z.string().trim().max(500).optional(),
-  yearsExperience: z.number().int().min(0).max(100).optional(),
-  awards: z.string().trim().max(500).optional(),
-});
+// socialProofSchema + testimonialSchema removed 2026-05-14: customer
+// testimonials + accreditations are captured in the Onboarding Hub
+// (Step 6 Content) where they end up on the live site anyway. Asking
+// at intake-time was redundant — operator never used the Phase 3
+// values directly because Hub data took precedence.
 
 const legalComplianceSchema = z.object({
   isDataController: z.literal(true, {
@@ -301,16 +294,25 @@ const legalComplianceSchema = z.object({
       message: "You need to accept the Terms of Service to proceed.",
     }),
   }),
+  // Refund + cancellation surfaced as a separate explicit checkbox
+  // (added 2026-05-14). T&Cs already cover these terms by reference,
+  // but small-print acknowledgement is easy to miss — putting it on
+  // its own line gives customers a clear "I saw this" moment + makes
+  // it easier to demonstrate informed acceptance if disputed.
+  acceptsRefundCancellation: z.literal(true, {
+    errorMap: () => ({
+      message:
+        "You need to accept the refund and cancellation terms to proceed.",
+    }),
+  }),
   marketingConsent: z.boolean().default(false),
 });
 
 export const phase3Schema = z.object({
   businessBasics: businessBasicsSchema,
   contactDetails: contactDetailsSchema,
-  services: servicesSchema,
   brand: brandSchema,
   modules: moduleSelectionSchema,
-  socialProof: socialProofSchema,
   legal: legalComplianceSchema,
 });
 
@@ -318,10 +320,8 @@ export const phase3Schema = z.object({
 export const phase3PartialSchema = z.object({
   businessBasics: businessBasicsSchema.partial().optional(),
   contactDetails: contactDetailsSchema.partial().optional(),
-  services: servicesSchema.partial().optional(),
   brand: brandSchema.partial().optional(),
   modules: moduleSelectionSchema.partial().optional(),
-  socialProof: socialProofSchema.partial().optional(),
   legal: legalComplianceSchema.partial().optional(),
 });
 
