@@ -1311,11 +1311,13 @@ export async function markProspectAsPaid(pageId: string): Promise<void> {
 
 /**
  * Submit a module change. Atomically:
- *   - appends an entry (status="pending-stripe") to the audit log
+ *   - appends an entry to the audit log (status set by the entry
+ *     itself — typically "applied" in the Stripe-placeholder world,
+ *     "pending-stripe" once Stripe Phase 2 is live)
  *   - stamps Module Change Round Used At (locks the round)
- *   - DOES NOT yet update Module Selections — that flips when the
- *     operator confirms the Stripe op (or a future webhook handler
- *     does it automatically)
+ *   - if `applyImmediately` is set: ALSO writes Module Selections +
+ *     Setup Fee + Monthly Fee in the same Notion PATCH so the
+ *     customer's selection updates instantly with no operator step
  *
  * Read-modify-write on the rich_text log. Concurrent submits from
  * the same prospect are vanishingly unlikely (one customer, server-
@@ -1323,26 +1325,45 @@ export async function markProspectAsPaid(pageId: string): Promise<void> {
  *
  * Returns the appended entry so the API route can echo it back to
  * the UI for the "your change is being processed" state.
+ *
+ * Phase-2-Stripe consideration: when Stripe is wired, drop the
+ * `applyImmediately` path and revert to the operator-driven
+ * "pending-stripe → applied" two-step flow (see
+ * docs/STRIPE-PHASE-2.md).
  */
 export async function submitModuleChange(
   pageId: string,
   entry: ModuleChangeLogEntry,
+  applyImmediately?: {
+    appliedSelection: string[];
+    appliedFees: { setup: number; monthly: number };
+  },
 ): Promise<ModuleChangeLogEntry> {
   const page = (await notionFetch(`/pages/${pageId}`)) as NotionPage;
   const existing = parseModuleChangeLog(
     readRichTextProp(page.properties["Module Change Log"]),
   );
   const next = [...existing, entry];
+  const properties: Record<string, unknown> = {
+    "Module Change Log": rt(JSON.stringify(next)),
+    "Module Change Round Used At": {
+      date: { start: entry.submittedAt },
+    },
+  };
+  if (applyImmediately) {
+    properties["Module Selections"] = multiSelectProp(
+      applyImmediately.appliedSelection,
+    );
+    properties["Setup Fee Calculated"] = {
+      number: applyImmediately.appliedFees.setup,
+    };
+    properties["Monthly Fee Calculated"] = {
+      number: applyImmediately.appliedFees.monthly,
+    };
+  }
   await notionFetch(`/pages/${pageId}`, {
     method: "PATCH",
-    body: {
-      properties: {
-        "Module Change Log": rt(JSON.stringify(next)),
-        "Module Change Round Used At": {
-          date: { start: entry.submittedAt },
-        },
-      },
-    },
+    body: { properties },
   });
   return entry;
 }

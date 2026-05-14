@@ -2,18 +2,61 @@
 
 ## Status
 
-**Phase 1 (current)**: customer-initiated module change → Notion log
-entry → manual operator action via `/admin/[token]` → operator does
-the Stripe op (charge, refund, sub-update) by hand → operator clicks
-"Apply" / "Billing failed" / "Reject" → customer email auto-sent.
+**Phase 1A (legacy, no longer in production)**: customer-initiated
+module change → Notion log entry as `pending-stripe` → manual
+operator action via `/admin/[token]` → operator does the Stripe op
+(charge, refund, sub-update) by hand → operator clicks "Apply" /
+"Billing failed" / "Reject" → customer email auto-sent.
 
-**Phase 2 (this doc)**: same customer flow, but the Stripe op runs
-automatically the moment the customer hits Confirm. Operator only
-gets involved when something fails or the policy needs human review.
+**Phase 1B (current — 2026-05-14 onward, Stripe-placeholder mode)**:
+customer-initiated module change → Notion log entry as `applied`
+DIRECTLY in the same atomic write that flips Module Selections +
+Setup Fee + Monthly Fee. No operator step. A `[STRIPE-TODO]` line
+gets written to `wrangler tail` for each money movement (charge /
+refund / subscription update) so the operator can manually
+reconcile until Stripe is wired. Customer gets the
+`module-change-applied` email confirming immediate apply. **No
+actual Stripe ops happen — the operator is on the hook to charge /
+refund manually for now.**
 
-The Phase 1 architecture is intentionally compatible with Phase 2 —
+**Phase 2 (this doc — TODO)**: same customer flow as Phase 1B but
+real Stripe ops fire automatically when the customer hits Confirm.
+Operator only gets involved when something fails or the policy
+needs human review.
+
+The Phase 1B architecture is intentionally compatible with Phase 2 —
 all the Phase 2 pieces drop into existing seams. This doc is the
 contract.
+
+### Switching from Phase 1B → Phase 2 (when Stripe is wired)
+
+In `src/app/api/onboarding/module-change/route.ts`:
+
+1. Change `entry.status = "applied"` → `"pending-stripe"`.
+2. Drop `resolutionNote: "Auto-applied (Stripe Phase 1 placeholder mode)"`
+   and `resolvedAt: submittedAt` from the entry (they get set later
+   by `resolveModuleChange`).
+3. Replace the `[STRIPE-TODO]` console.warn block with the actual
+   Stripe SDK calls (charge / refund / sub-update). Use
+   `idempotencyKey: mc-${entry.id}-{setup,refund,sub}` exactly as
+   the placeholders are formatted today — keeps the audit trail
+   continuous.
+4. Drop the `applyImmediately` argument from `submitModuleChange`
+   so Module Selections + fees no longer flip in the same write
+   (the Stripe webhook handler will call `resolveModuleChange` to
+   flip them once the charge/refund completes).
+5. Switch `sendCustomerEmail(env, prospect.email, "module-change-applied", ...)`
+   back to `"module-change-pending"` so the customer is told their
+   change is in flight (correct UX once there's a real wait).
+6. In `src/app/onboarding/[token]/page.tsx`, the
+   `pendingModuleChange` filter on `status === "pending-stripe"`
+   already handles the in-flight UI — no change needed.
+
+In `src/lib/notion-prospects.ts`:
+
+7. The `applyImmediately` parameter on `submitModuleChange` can stay
+   in place for any future "skip operator step for $reason" flow,
+   or be removed entirely for cleanliness. Either is fine.
 
 ---
 

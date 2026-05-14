@@ -9,15 +9,28 @@
 //   - newModules differs from current selection (no-op rejected — we
 //     don't burn the round on accidental no-op confirms)
 //
-// Side effects on success:
-//   - Append a `pending-stripe` row to Module Change Log
+// Side effects on success (immediate-apply, 2026-05-14 — Stripe
+// placeholder mode):
+//   - Append an `applied` row to Module Change Log (atomically
+//     stamping resolvedAt = submittedAt, since there's no operator
+//     gap)
 //   - Stamp Module Change Round Used At (locks the round)
-//   - DOES NOT yet flip Module Selections — operator confirms via
-//     /admin once the Stripe op is done (or, in Phase 2, the webhook
-//     handler does it automatically — see docs/STRIPE-PHASE-2.md)
-//   - Email Ben with the diff + manual-Stripe checklist
-//   - Email customer "received, processing" via the
-//     module-change-pending template
+//   - IMMEDIATELY flip Module Selections + Setup Fee + Monthly Fee
+//     to the new totals (same Notion PATCH as the log write — see
+//     submitModuleChange's applyImmediately option)
+//   - Log a Stripe placeholder line for each money movement that
+//     would happen if Stripe were wired (charge for added modules,
+//     refund for removed). The placeholder is a console.warn line
+//     visible in `wrangler tail` so the operator can manually
+//     reconcile until Stripe lands.
+//   - Email Ben with the diff + reconciliation reminder
+//   - Email customer "applied — here's what's new" via the
+//     module-change-applied template
+//
+// FUTURE — when Stripe Phase 2 lands (see docs/STRIPE-PHASE-2.md):
+// revert this back to the operator-driven pending-stripe → applied
+// two-step flow. The atomic-apply path is a temporary shortcut that
+// trades reconciliation safety for customer immediacy.
 //
 // On failure: returns 400/403/404 with a customer-friendly reason.
 // Email failures are logged but don't fail the response — the row
@@ -124,6 +137,10 @@ export async function POST(request: Request) {
 
   // Build the change log entry. Use crypto.randomUUID so the id is
   // also useful as a Stripe idempotency key suffix.
+  // 2026-05-14: status starts as "applied" (not "pending-stripe")
+  // because the immediate-apply shortcut writes Module Selections
+  // + fees in the same Notion PATCH. resolvedAt = submittedAt
+  // since there's no operator gap.
   const submittedAt = new Date().toISOString();
   const entry: ModuleChangeLogEntry = {
     id: crypto.randomUUID(),
@@ -134,11 +151,50 @@ export async function POST(request: Request) {
     monthlyDelta: delta.monthlyDelta,
     newSetupTotal: delta.toFees.setup,
     newMonthlyTotal: delta.toFees.monthly,
-    status: "pending-stripe",
+    status: "applied",
+    resolutionNote: "Auto-applied (Stripe Phase 1 placeholder mode)",
+    resolvedAt: submittedAt,
   };
 
+  // ============================================================
+  // STRIPE PLACEHOLDER (2026-05-14)
+  // ============================================================
+  // When Stripe Phase 2 lands (see docs/STRIPE-PHASE-2.md), replace
+  // this block with the actual charge/refund/sub-update operations.
+  // For now: we emit a structured log line that the operator can
+  // grep out of `wrangler tail` to manually reconcile each money
+  // movement until Stripe is wired.
+  //
+  // Three money movements possible per change:
+  //   1. setupDelta > 0  → ONE-OFF charge for added module setup fees
+  //   2. setupDelta < 0  → ONE-OFF refund for removed module setup fees
+  //   3. monthlyDelta != 0 → SUBSCRIPTION update (proration handled by
+  //                          Stripe automatically when sub items change)
+  // ============================================================
+  if (delta.setupDelta > 0) {
+    console.warn(
+      `[STRIPE-TODO] charge customer=${prospect.email} amount=£${delta.setupDelta} reason="module-add setup fee" idempotencyKey=mc-${entry.id}-setup`,
+    );
+  } else if (delta.setupDelta < 0) {
+    console.warn(
+      `[STRIPE-TODO] refund customer=${prospect.email} amount=£${Math.abs(delta.setupDelta)} reason="module-remove setup-fee refund" idempotencyKey=mc-${entry.id}-refund`,
+    );
+  }
+  if (delta.monthlyDelta !== 0) {
+    console.warn(
+      `[STRIPE-TODO] subscription-update customer=${prospect.email} new-monthly=£${delta.toFees.monthly} delta=£${delta.monthlyDelta > 0 ? "+" : ""}${delta.monthlyDelta} reason="module-change proration" idempotencyKey=mc-${entry.id}-sub`,
+    );
+  }
+
   try {
-    await submitModuleChange(prospect.pageId, entry);
+    await submitModuleChange(prospect.pageId, entry, {
+      // The atomic immediate-apply: Module Selections + fees flip
+      // in the same Notion PATCH as the log entry. See submitModule-
+      // Change in src/lib/notion-prospects.ts. Drop this argument
+      // when reverting to the operator-driven flow post-Stripe.
+      appliedSelection: delta.toModules,
+      appliedFees: { setup: delta.toFees.setup, monthly: delta.toFees.monthly },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/onboarding/module-change] Notion update error:", msg);
@@ -178,13 +234,16 @@ export async function POST(request: Request) {
   }
 
   // Customer confirmation email — fail-soft. Translate the deltas
-  // into customer-friendly headline copy.
+  // into customer-friendly headline copy. Template switched
+  // 2026-05-14 from "module-change-pending" to "module-change-
+  // applied" to match the immediate-apply behaviour. When Stripe
+  // Phase 2 lands, swap back to "-pending".
   const env = getServerEnv();
   try {
     await sendCustomerEmail(
       env,
       prospect.email,
-      "module-change-pending",
+      "module-change-applied",
       {
         customerName: firstName(prospect.name),
         addedSummary: delta.added.length ? delta.added.join(", ") : "(none)",
@@ -234,12 +293,16 @@ function firstName(fullName: string): string {
   return trimmed.split(/\s+/)[0];
 }
 
+// Customer-facing headline copy. Phrased in PAST tense to match the
+// immediate-apply UX (the change is already live by the time they
+// read this). When Stripe Phase 2 lands and there's an actual gap
+// between confirm and charge-completion, swap to future tense.
 function setupHeadlineForCustomer(setupDelta: number): string {
   if (setupDelta > 0) {
-    return `we'll charge you £${setupDelta} for the new module setup`;
+    return `a £${setupDelta} charge will land on your card for the new module setup`;
   }
   if (setupDelta < 0) {
-    return `you'll get a £${Math.abs(setupDelta)} refund on the setup fee`;
+    return `a £${Math.abs(setupDelta)} refund is on its way (typically 3-5 business days to your card)`;
   }
   return "no money moves (the new module costs the same as the old)";
 }

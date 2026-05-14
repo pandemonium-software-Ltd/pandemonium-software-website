@@ -89,8 +89,14 @@ export default async function OnboardingPage({
   const r2PublicUrlBase = env.R2_PUBLIC_URL_BASE ?? "";
 
   // Module change eligibility (1-round-only, pre-commit only). Pure
-  // policy lookup — see src/lib/billing/module-policy.ts. The latest
-  // pending entry (if any) drives the in-flight UI in Step 3.
+  // policy lookup — see src/lib/billing/module-policy.ts.
+  //
+  // The "pending" entry filter below matters only when Stripe Phase 2
+  // is live (entries land as "pending-stripe" until the operator or
+  // webhook confirms). In Stripe Phase 1 placeholder mode (current —
+  // since 2026-05-14) entries land as "applied" directly, so this
+  // filter returns null and the in-flight UI is never shown. Kept in
+  // place so the Stripe Phase 2 swap-back is a one-line change.
   const moduleChangeEligibility = canChangeModules(prospect);
   const pendingModuleChange =
     [...prospect.moduleChangeLog]

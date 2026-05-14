@@ -30,6 +30,7 @@ import { changeRequestAppliedLive } from "./templates/change-request-applied-liv
 import { reviewEditApplied } from "./templates/review-edit-applied";
 import { passwordReset } from "./templates/password-reset";
 import { moduleChangePending } from "./templates/module-change-pending";
+import { moduleChangeApplied } from "./templates/module-change-applied";
 import { moduleChangeConfirmed } from "./templates/module-change-confirmed";
 import { paymentMethodUpdateNeeded } from "./templates/payment-method-update-needed";
 import { previewRequestReceived } from "./templates/preview-request-received";
@@ -65,6 +66,7 @@ const TEMPLATES = new Map<string, Template>([
   [reviewEditApplied.id, reviewEditApplied],
   [passwordReset.id, passwordReset],
   [moduleChangePending.id, moduleChangePending],
+  [moduleChangeApplied.id, moduleChangeApplied],
   [moduleChangeConfirmed.id, moduleChangeConfirmed],
   [paymentMethodUpdateNeeded.id, paymentMethodUpdateNeeded],
   [previewRequestReceived.id, previewRequestReceived],

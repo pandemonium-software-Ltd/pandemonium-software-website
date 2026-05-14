@@ -1,0 +1,18 @@
+{
+  "description": "Module change applied immediately — adding Newsletter, removing Booking; setup +£0, monthly +£2",
+  "template": "module-change-applied",
+  "values": {
+    "customerName": "Alex",
+    "addedSummary": "Newsletter",
+    "removedSummary": "Online Booking",
+    "chargeOrRefundLine": "no money moves (the new module costs the same as the old)",
+    "monthlyDeltaLine": "your subscription goes up by £2/month from next billing cycle",
+    "newSetupTotal": 207,
+    "newMonthlyTotal": 29,
+    "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
+  },
+  "expected": {
+    "subject": "Your module change is live",
+    "body": "Hi Alex,\n\nYour module change is applied — the new selection is live on your\naccount already.\n\nWhat changed:\n  • Added: Newsletter\n  • Removed: Online Booking\n\nMoney side:\n  • Setup: no money moves (the new module costs the same as the old)\n  • Monthly subscription: your subscription goes up by £2/month from next billing cycle\n\nYour new totals:\n  • Setup fee: £207\n  • Monthly: £29/month\n\nWhat's next:\n  • Any new modules are now visible on your Hub — head over to\n    set them up. Removed modules are gone immediately; we keep\n    your data safe in case you change your mind later.\n  • Heads-up: you only get one module change before launch, so\n    this is it. Anything else needs to wait until after you go\n    live.\n\nIf anything looks wrong above, hit reply and we'll sort it out.\n\n— ModuForge"
+  }
+}
