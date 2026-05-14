@@ -1102,6 +1102,17 @@ function ModulesSection({
               // One UI toggle, two backend flags — keep them in
               // lockstep so the rest of the system (billing, ops,
               // admin) keeps seeing the modules it expects.
+              //
+              // NB no <input type="hidden" register=...> companion
+              // for these fields — that pattern was a 2026-05-14
+              // bug that string-coerced the booleans on submit
+              // (RHF reads .value off type="hidden", which is a
+              // string, breaking z.boolean() validation server-
+              // side and showing as "Couldn't save your modules"
+              // to the customer). Both fields are in
+              // buildDefaultValues, which is enough for RHF to
+              // track them; setValue here keeps internal state
+              // in sync.
               setValue("modules.moduleNewsletter", next, {
                 shouldDirty: true,
                 shouldValidate: true,
@@ -1113,10 +1124,6 @@ function ModulesSection({
             },
           }}
         />
-        {/* Hidden registrations keep RHF aware of the underlying
-            fields even though the UI controls them via setValue. */}
-        <input type="hidden" {...register("modules.moduleNewsletter")} />
-        <input type="hidden" {...register("modules.moduleOffers")} />
         <ModuleRow
           label="Google Business Profile + live reviews"
           tagline="One-off setup or audit, plus your top Google reviews refreshed on your site automatically (powered by the Google Places API)."
