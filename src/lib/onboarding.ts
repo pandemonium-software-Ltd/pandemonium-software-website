@@ -256,13 +256,30 @@ export function pickInitialStep(
 // requires the user-filled fields (per-step required-when-done
 // helper below).
 
+// Empty-string preprocessor: turns "" into undefined BEFORE the
+// underlying validator runs. Critical because each Hub step's
+// component sends a FULL patch on every save — including blank
+// fields the customer hasn't filled yet. Without this, .url() /
+// .email() / .regex() reject the empty strings and the customer
+// sees "couldn't save" even when they're trying to save partial
+// progress in good faith. Real "is this complete?" gating happens
+// in canMarkStepDone, not here.
+const optionalString = (
+  inner: z.ZodTypeAny,
+): z.ZodEffects<z.ZodOptional<z.ZodTypeAny>> =>
+  z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    inner.optional(),
+  );
+
 const step1CloudflareSchema = z.object({
-  cloudflareEmail: z
-    .string()
-    .trim()
-    .max(254)
-    .email("That doesn't look like an email address.")
-    .optional(),
+  cloudflareEmail: optionalString(
+    z
+      .string()
+      .trim()
+      .max(254)
+      .email("That doesn't look like an email address."),
+  ),
   notes: z.string().trim().max(2000).optional(),
 });
 
@@ -278,15 +295,16 @@ const step1CloudflareSchema = z.object({
 // Resend, Cal.com and GBP setup all moved to Step 3 (Modules) since
 // they're customer-purchased modules, not universal infrastructure.
 const step2DomainSchema = z.object({
-  domain: z
-    .string()
-    .trim()
-    .max(253)
-    .regex(
-      /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i,
-      "Domain looks malformed (e.g. yourbusiness.co.uk).",
-    )
-    .optional(),
+  domain: optionalString(
+    z
+      .string()
+      .trim()
+      .max(253)
+      .regex(
+        /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i,
+        "Domain looks malformed (e.g. yourbusiness.co.uk).",
+      ),
+  ),
   registrar: z.enum(["already-have", "cloudflare", "external"]).optional(),
   notes: z.string().trim().max(2000).optional(),
 });
@@ -313,14 +331,15 @@ const step2DomainSchema = z.object({
 const step3ToolsSchema = z.object({
   // Cal.com — URL-only capture (embed). Schema is loose; the gate
   // enforces the cal.com / cal.eu host check (both accepted: UK
-  // customers route to the EU instance for GDPR).
-  calcomBookingUrl: z.string().trim().url().max(500).optional(),
+  // customers route to the EU instance for GDPR). Empty string
+  // pre-processed to undefined so partial saves don't 400.
+  calcomBookingUrl: optionalString(z.string().trim().url().max(500)),
   // GBP — URL + manager-invite confirmation.
-  gbpUrl: z.string().trim().url().max(500).optional(),
+  gbpUrl: optionalString(z.string().trim().url().max(500)),
   gbpManagerInvited: z.boolean().optional(),
   // Resend — signup email + team-invite confirmation. Domain DNS is
   // handled by Cowork once both fields are in.
-  resendSignupEmail: z.string().trim().email().max(254).optional(),
+  resendSignupEmail: optionalString(z.string().trim().email().max(254)),
   resendInvitedMe: z.boolean().optional(),
   notes: z.string().trim().max(2000).optional(),
 });
