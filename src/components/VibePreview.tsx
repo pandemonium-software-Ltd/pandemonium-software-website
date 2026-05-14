@@ -4,6 +4,15 @@
 // the customer can SEE the difference rather than read a tagline
 // and guess.
 //
+// Mirrors the customer-site-template visual treatment across THREE
+// tiers (2026-05-14):
+//   Tier 1 — per-vibe surface differentiation (bg tone, image
+//            filter, eyebrow decoration, divider ornament)
+//   Tier 2 — per-structure hero archetypes (trust strip, gallery
+//            cycle hint, dominant calendar, drop-cap + pull-quote)
+//   Tier 3 — per-structure body section (cards / text list / book
+//            rows / numbered points)
+//
 // Design notes:
 //  - Uses a single fixed colour for the "primary" + "secondary" CTA
 //    so the preview is about typography + layout feel, not the
@@ -21,12 +30,13 @@
 //    site-template, just inline style + a few utility classes.
 //    Renders the same way regardless of where it's embedded.
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactElement } from "react";
 
 export type Vibe = "modern" | "traditional" | "premium" | "friendly";
 
 /** Per-vibe style tokens. Mirror of the [data-vibe="..."] CSS
- *  variable overrides in the customer-site-template. */
+ *  variable overrides in the customer-site-template globals.css.
+ *  When that file changes, mirror the visual difference here. */
 const VIBE_STYLES: Record<
   Vibe,
   {
@@ -38,6 +48,19 @@ const VIBE_STYLES: Record<
     btnRadius: string;
     cardRadius: string;
     inputRadius: string;
+    /** Body background tone — Tier 1. Modern: pure white;
+     *  Traditional: warm cream-paper; Premium: ivory; Friendly:
+     *  warm peachy cream. */
+    bgTone: string;
+    /** CSS filter applied to hero/gallery photo blocks — Tier 1.
+     *  Modern: none; Traditional: subtle sepia; Premium: near-
+     *  monochrome; Friendly: warm saturate. */
+    imageFilter: string;
+    /** Eyebrow decoration class — Tier 1. Drives the visual
+     *  ornament under/before the small section eyebrow text. */
+    eyebrowStyle: "none" | "rule-under" | "gold-rule" | "bullet-prefix";
+    /** Divider ornament between sections — Tier 1. */
+    dividerStyle: "solid-bar" | "double-rule" | "gold-diamond" | "dashed-wave";
     summary: string;
     label: string;
   }
@@ -51,6 +74,10 @@ const VIBE_STYLES: Record<
     btnRadius: "9999px",
     cardRadius: "1rem",
     inputRadius: "0.75rem",
+    bgTone: "#ffffff",
+    imageFilter: "none",
+    eyebrowStyle: "none",
+    dividerStyle: "solid-bar",
     label: "Modern",
     summary:
       "Clean, contemporary, lots of whitespace. The current ModuForge default — best for new businesses building a first impression.",
@@ -64,6 +91,10 @@ const VIBE_STYLES: Record<
     btnRadius: "0.25rem",
     cardRadius: "0.375rem",
     inputRadius: "0.25rem",
+    bgTone: "#f8f3e8",
+    imageFilter: "sepia(0.12) saturate(0.9) brightness(0.97)",
+    eyebrowStyle: "rule-under",
+    dividerStyle: "double-rule",
     label: "Traditional",
     summary:
       "Classic, established, set-in-print feel. Best for businesses with years of history they want visitors to feel.",
@@ -77,6 +108,10 @@ const VIBE_STYLES: Record<
     btnRadius: "0.125rem",
     cardRadius: "0.5rem",
     inputRadius: "0.25rem",
+    bgTone: "#f4f1ec",
+    imageFilter: "grayscale(0.85) brightness(0.96) contrast(1.05)",
+    eyebrowStyle: "gold-rule",
+    dividerStyle: "gold-diamond",
     label: "Premium",
     summary:
       "Refined, airy, sophisticated. Lots of negative space, light typography. Best for higher-ticket / luxury / craft businesses.",
@@ -90,6 +125,10 @@ const VIBE_STYLES: Record<
     btnRadius: "9999px",
     cardRadius: "1.5rem",
     inputRadius: "1rem",
+    bgTone: "#fcf3eb",
+    imageFilter: "saturate(1.12) brightness(1.02) contrast(0.98)",
+    eyebrowStyle: "bullet-prefix",
+    dividerStyle: "dashed-wave",
     label: "Friendly",
     summary:
       "Warm, approachable, rounded-everything. Best for community-facing / family-run / customer-service-led businesses.",
@@ -102,6 +141,8 @@ const VIBE_STYLES: Record<
  *  dual-colour pairing isn't pre-empted. */
 const PREVIEW_ACCENT = "#0f766e"; // teal-700
 const PREVIEW_ACCENT_TEXT = "#ffffff";
+/** Premium-only gold accent (matches customer-site Tier 1 #b08d4a). */
+const PREMIUM_GOLD = "#b08d4a";
 
 export const VIBE_PREVIEW_LIST: Vibe[] = [
   "modern",
@@ -172,7 +213,7 @@ export default function VibePreview({
     letterSpacing: s.bodyLetterSpacing,
     fontSize: `${bodyPx}px`,
     color: "#0f172a", // navy-900
-    background: "#fefdf8", // cream-50
+    background: s.bgTone, // Tier 1 — per-vibe body background
     borderRadius: s.cardRadius,
     overflow: "hidden",
     boxShadow:
@@ -224,14 +265,143 @@ export default function VibePreview({
     letterSpacing: s.bodyLetterSpacing,
   };
 
-  const serviceCardStyle: CSSProperties = {
-    background: "#ffffff",
-    borderRadius: s.cardRadius,
-    border: "1px solid rgba(15,23,42,0.08)",
-    padding: `${Math.round(14 * scale)}px ${Math.round(12 * scale)}px`,
-    flex: "1 1 0",
-    minWidth: 0,
-  };
+  // Tier 1 — eyebrow decoration helper. Renders the small section
+  // label ("OUR WORK", "Recent work", etc.) with per-vibe ornament.
+  function Eyebrow({ children }: { children: string }) {
+    const baseStyle: CSSProperties = {
+      fontFamily: s.bodyFont,
+      fontWeight: 600,
+      fontSize: `${Math.round(8 * scale)}px`,
+      color: PREVIEW_ACCENT,
+      display: "inline-block",
+      textTransform: s.eyebrowStyle === "none" ? "none" :
+        s.eyebrowStyle === "bullet-prefix" ? "none" : "uppercase",
+      letterSpacing: s.eyebrowStyle === "gold-rule" ? "0.3em" :
+        s.eyebrowStyle === "rule-under" ? "0.22em" : "0.14em",
+    };
+    return (
+      <span style={{ position: "relative", display: "inline-block" }}>
+        {s.eyebrowStyle === "bullet-prefix" && (
+          <span
+            aria-hidden="true"
+            style={{
+              color: PREVIEW_ACCENT,
+              marginRight: `${Math.round(4 * scale)}px`,
+              fontSize: `${Math.round(7 * scale)}px`,
+              verticalAlign: "0.1em",
+            }}
+          >
+            ●
+          </span>
+        )}
+        <span style={baseStyle}>{children}</span>
+        {s.eyebrowStyle === "rule-under" && (
+          <span
+            aria-hidden="true"
+            style={{
+              display: "block",
+              marginTop: `${Math.round(3 * scale)}px`,
+              width: `${Math.round(20 * scale)}px`,
+              height: "3px",
+              borderTop: "1px solid currentColor",
+              borderBottom: "1px solid currentColor",
+              color: PREVIEW_ACCENT,
+            }}
+          />
+        )}
+        {s.eyebrowStyle === "gold-rule" && (
+          <span
+            aria-hidden="true"
+            style={{
+              display: "block",
+              marginTop: `${Math.round(3 * scale)}px`,
+              width: `${Math.round(16 * scale)}px`,
+              height: "1px",
+              background: `linear-gradient(to right, transparent, ${PREMIUM_GOLD} 25%, ${PREMIUM_GOLD} 75%, transparent)`,
+            }}
+          />
+        )}
+      </span>
+    );
+  }
+
+  // Tier 1 — divider ornament between hero and body. Visible at
+  // both thumb + full size to telegraph the section break style.
+  function Divider() {
+    const wrap: CSSProperties = {
+      margin: `${Math.round(10 * scale)}px auto`,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    };
+    if (s.dividerStyle === "double-rule") {
+      return (
+        <span
+          style={{
+            ...wrap,
+            width: `${Math.round(50 * scale)}px`,
+            height: "5px",
+            borderTop: `1px solid #475569`,
+            borderBottom: `1px solid #475569`,
+          }}
+        />
+      );
+    }
+    if (s.dividerStyle === "gold-diamond") {
+      return (
+        <span style={{ ...wrap, gap: `${Math.round(4 * scale)}px` }}>
+          <span
+            style={{
+              flex: 1,
+              maxWidth: `${Math.round(25 * scale)}px`,
+              height: "1px",
+              background: `linear-gradient(to right, transparent, ${PREMIUM_GOLD})`,
+            }}
+          />
+          <span style={{ color: PREMIUM_GOLD, fontSize: `${Math.round(9 * scale)}px`, lineHeight: 1 }}>
+            ◆
+          </span>
+          <span
+            style={{
+              flex: 1,
+              maxWidth: `${Math.round(25 * scale)}px`,
+              height: "1px",
+              background: `linear-gradient(to left, transparent, ${PREMIUM_GOLD})`,
+            }}
+          />
+        </span>
+      );
+    }
+    if (s.dividerStyle === "dashed-wave") {
+      return (
+        <span
+          style={{
+            ...wrap,
+            width: `${Math.round(70 * scale)}px`,
+            height: `${Math.round(8 * scale)}px`,
+            backgroundImage:
+              `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="10" viewBox="0 0 40 10"><path d="M0 5 Q 10 0, 20 5 T 40 5" stroke="${encodeURIComponent("#ea7c2b")}" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 2" fill="none"/></svg>')`,
+            backgroundRepeat: "repeat-x",
+            backgroundSize: `${Math.round(20 * scale)}px ${Math.round(8 * scale)}px`,
+            backgroundPosition: "center",
+          }}
+        />
+      );
+    }
+    // solid-bar (modern default)
+    return (
+      <span
+        style={{
+          ...wrap,
+          width: `${Math.round(28 * scale)}px`,
+          height: "3px",
+          background: PREVIEW_ACCENT,
+          opacity: 0.4,
+          borderRadius: "9999px",
+        }}
+      />
+    );
+  }
 
   return (
     <div
@@ -252,30 +422,9 @@ export default function VibePreview({
             borderBottom: "1px solid rgba(15,23,42,0.06)",
           }}
         >
-          <span
-            style={{
-              width: `${Math.round(8 * scale)}px`,
-              height: `${Math.round(8 * scale)}px`,
-              borderRadius: "9999px",
-              background: "#ef4444",
-            }}
-          />
-          <span
-            style={{
-              width: `${Math.round(8 * scale)}px`,
-              height: `${Math.round(8 * scale)}px`,
-              borderRadius: "9999px",
-              background: "#f59e0b",
-            }}
-          />
-          <span
-            style={{
-              width: `${Math.round(8 * scale)}px`,
-              height: `${Math.round(8 * scale)}px`,
-              borderRadius: "9999px",
-              background: "#10b981",
-            }}
-          />
+          <span style={chromeDot("#ef4444", scale)} />
+          <span style={chromeDot("#f59e0b", scale)} />
+          <span style={chromeDot("#10b981", scale)} />
           <span
             style={{
               marginLeft: `${Math.round(8 * scale)}px`,
@@ -344,267 +493,81 @@ export default function VibePreview({
           </div>
         </div>
 
-        {/* Hero — shape varies per structure. Each variant uses
-         *  the same scale tokens + typography vars so a customer
-         *  comparing structures sees a real layout difference,
-         *  not just a font swap. */}
-        <div
-          style={{
-            padding: `${Math.round(20 * scale)}px ${Math.round(18 * scale)}px`,
-          }}
-        >
-          {structure === "showcase" ? (
-            // Gallery mosaic — 1 dominant + 3 small tiles.
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "2fr 1fr",
-                gridTemplateRows: "1fr 1fr",
-                gap: `${Math.round(4 * scale)}px`,
-                height: `${Math.round(108 * scale)}px`,
-                marginBottom: `${Math.round(12 * scale)}px`,
-              }}
-            >
-              <span
-                style={{
-                  gridRow: "span 2",
-                  background:
-                    "linear-gradient(135deg, #94a3b8 0%, #475569 100%)",
-                  borderRadius: s.cardRadius,
-                }}
-              />
-              <span
-                style={{
-                  background:
-                    "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
-                  borderRadius: s.cardRadius,
-                }}
-              />
-              <span
-                style={{
-                  background:
-                    "linear-gradient(135deg, #a3b8cb 0%, #6b7e94 100%)",
-                  borderRadius: s.cardRadius,
-                }}
-              />
-            </div>
-          ) : structure === "editorial" ? (
-            // Editorial — two-column: text-rich left, portrait right.
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.5fr 1fr",
-                gap: `${Math.round(10 * scale)}px`,
-                marginBottom: `${Math.round(10 * scale)}px`,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    height: `${Math.round(6 * scale)}px`,
-                    width: "70%",
-                    background: "#e2e8f0",
-                    borderRadius: "2px",
-                    marginBottom: `${Math.round(6 * scale)}px`,
-                  }}
-                />
-                <div
-                  style={{
-                    height: `${Math.round(6 * scale)}px`,
-                    width: "85%",
-                    background: "#e2e8f0",
-                    borderRadius: "2px",
-                    marginBottom: `${Math.round(6 * scale)}px`,
-                  }}
-                />
-                <div
-                  style={{
-                    height: `${Math.round(6 * scale)}px`,
-                    width: "60%",
-                    background: "#e2e8f0",
-                    borderRadius: "2px",
-                  }}
-                />
-              </div>
-              <span
-                style={{
-                  background:
-                    "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
-                  borderRadius: s.cardRadius,
-                  aspectRatio: "4 / 5",
-                }}
-              />
-            </div>
-          ) : (
-            // Services + booking share the wide hero photo. Booking
-            // gets a calendar mockup below instead of services
-            // (rendered further down in the body section).
-            <div
-              style={{
-                background:
-                  "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
-                borderRadius: s.cardRadius,
-                height: `${Math.round(96 * scale)}px`,
-                marginBottom: `${Math.round(14 * scale)}px`,
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <span
-                aria-hidden="true"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  background:
-                    "linear-gradient(115deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 35%, rgba(15,23,42,0.1) 100%)",
-                }}
-              />
-            </div>
-          )}
+        {/* ---------- HERO — per-structure (Tier 2) ---------- */}
+        {structure === "showcase" ? (
+          <ShowcaseHeroPreview
+            scale={scale}
+            s={s}
+            businessName={businessName}
+            headingStyle={headingStyle}
+            btnStyle={btnStyle}
+          />
+        ) : structure === "booking" ? (
+          <BookingHeroPreview
+            scale={scale}
+            s={s}
+            businessName={businessName}
+            headingStyle={headingStyle}
+            btnStyle={btnStyle}
+            navItemStyle={navItemStyle}
+            captionPx={captionPx}
+          />
+        ) : structure === "editorial" ? (
+          <EditorialHeroPreview
+            scale={scale}
+            s={s}
+            businessName={businessName}
+            headingStyle={headingStyle}
+            btnStyle={btnStyle}
+            bodyPx={bodyPx}
+            captionPx={captionPx}
+          />
+        ) : (
+          <ServicesHeroPreview
+            scale={scale}
+            s={s}
+            businessName={businessName}
+            headingStyle={headingStyle}
+            btnStyle={btnStyle}
+            btnSecondaryStyle={btnSecondaryStyle}
+            bodyPx={bodyPx}
+            captionPx={captionPx}
+          />
+        )}
 
-          <h1
-            style={
-              structure === "editorial"
-                ? { ...headingStyle, fontSize: `${Math.round(22 * scale)}px` }
-                : headingStyle
-            }
-          >
-            {structure === "booking"
-              ? `Book with ${businessName}.`
-              : `Trusted ${businessName}.`}{" "}
-            {structure !== "booking" && (
-              <span style={{ color: PREVIEW_ACCENT }}>
-                {structure === "showcase"
-                  ? "See the work."
-                  : structure === "editorial"
-                    ? "Built on trust."
-                    : "Built for results."}
-              </span>
-            )}
-          </h1>
-          {structure !== "editorial" && (
-            <p
-              style={{
-                fontSize: `${bodyPx}px`,
-                color: "#475569",
-                marginTop: `${Math.round(8 * scale)}px`,
-                lineHeight: 1.5,
-                fontFamily: s.bodyFont,
-                letterSpacing: s.bodyLetterSpacing,
-              }}
-            >
-              {structure === "booking"
-                ? "Pick a time below — most slots confirm instantly."
-                : structure === "showcase"
-                  ? "A look at recent work, plus how to start a project of your own."
-                  : "A short, confident promise about what the business does, for whom, and where."}
-            </p>
-          )}
-          <div
-            style={{
-              marginTop: `${Math.round(14 * scale)}px`,
-              display: "flex",
-              flexWrap: "wrap",
-              gap: `${Math.round(8 * scale)}px`,
-            }}
-          >
-            <span style={btnStyle}>
-              {structure === "booking"
-                ? "Book a time"
-                : structure === "editorial"
-                  ? "Get in touch"
-                  : structure === "showcase"
-                    ? "Start a project"
-                    : "Get in touch"}
-            </span>
-            <span style={btnSecondaryStyle}>
-              {structure === "booking"
-                ? "Send a message"
-                : "View services"}
-            </span>
-          </div>
+        {/* ---------- DIVIDER (Tier 1) — between hero + body ---------- */}
+        <Divider />
 
-          {/* Booking-only — mini calendar mockup beneath the buttons
-           *  so the preview reads as "calendar is the centrepiece". */}
-          {structure === "booking" && (
-            <div
-              style={{
-                marginTop: `${Math.round(12 * scale)}px`,
-                background: "#ffffff",
-                border: "1px solid rgba(15,23,42,0.1)",
-                borderRadius: s.cardRadius,
-                padding: `${Math.round(8 * scale)}px`,
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                gap: `${Math.round(3 * scale)}px`,
-              }}
-            >
-              {Array.from({ length: 14 }).map((_, i) => (
-                <span
-                  key={i}
-                  style={{
-                    height: `${Math.round(12 * scale)}px`,
-                    borderRadius: "3px",
-                    background:
-                      [3, 5, 9, 12].includes(i)
-                        ? PREVIEW_ACCENT
-                        : "#f1f5f9",
-                    opacity: [3, 5, 9, 12].includes(i) ? 1 : 0.6,
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Services grid — 3 mini cards. Demonstrates the vibe's
-            corner radius + spacing without needing real content. */}
-        <div
-          style={{
-            padding: `0 ${Math.round(18 * scale)}px ${Math.round(20 * scale)}px ${Math.round(18 * scale)}px`,
-            display: "flex",
-            gap: `${Math.round(10 * scale)}px`,
-          }}
-        >
-          {[1, 2, 3].map((i) => (
-            <div key={i} style={serviceCardStyle}>
-              <span
-                style={{
-                  display: "inline-block",
-                  width: `${Math.round(22 * scale)}px`,
-                  height: `${Math.round(22 * scale)}px`,
-                  background: PREVIEW_ACCENT,
-                  opacity: 0.15,
-                  borderRadius: s.btnRadius,
-                  marginBottom: `${Math.round(8 * scale)}px`,
-                }}
-              />
-              <p
-                style={{
-                  fontFamily: s.headingFont,
-                  fontWeight: s.headingWeight,
-                  fontSize: `${Math.round(12 * scale)}px`,
-                  color: "#0f172a",
-                  margin: 0,
-                  letterSpacing: s.headingLetterSpacing,
-                }}
-              >
-                Service {i}
-              </p>
-              <p
-                style={{
-                  fontSize: `${captionPx}px`,
-                  color: "#64748b",
-                  marginTop: `${Math.round(3 * scale)}px`,
-                  margin: `${Math.round(3 * scale)}px 0 0 0`,
-                  lineHeight: 1.4,
-                }}
-              >
-                One-line teaser
-              </p>
-            </div>
-          ))}
-        </div>
+        {/* ---------- BODY — per-structure (Tier 3) ---------- */}
+        {structure === "showcase" ? (
+          <ShowcaseBodyPreview
+            scale={scale}
+            s={s}
+            captionPx={captionPx}
+            Eyebrow={Eyebrow}
+          />
+        ) : structure === "booking" ? (
+          <BookingBodyPreview
+            scale={scale}
+            s={s}
+            captionPx={captionPx}
+            Eyebrow={Eyebrow}
+          />
+        ) : structure === "editorial" ? (
+          <EditorialBodyPreview
+            scale={scale}
+            s={s}
+            captionPx={captionPx}
+            Eyebrow={Eyebrow}
+          />
+        ) : (
+          <ServicesBodyPreview
+            scale={scale}
+            s={s}
+            captionPx={captionPx}
+            Eyebrow={Eyebrow}
+          />
+        )}
 
         {/* Footer band — NAP strip, all one row. */}
         <div
@@ -624,6 +587,866 @@ export default function VibePreview({
           <span style={{ opacity: 0.7 }}>hello@…  ·  0xxxx xxx xxx</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+function chromeDot(color: string, scale: number): CSSProperties {
+  return {
+    width: `${Math.round(8 * scale)}px`,
+    height: `${Math.round(8 * scale)}px`,
+    borderRadius: "9999px",
+    background: color,
+  };
+}
+
+type StyleTokens = (typeof VIBE_STYLES)[Vibe];
+
+// ============================================================
+// HERO variants — Tier 2 archetypes
+// ============================================================
+
+function ServicesHeroPreview({
+  scale,
+  s,
+  businessName,
+  headingStyle,
+  btnStyle,
+  btnSecondaryStyle,
+  bodyPx,
+  captionPx,
+}: {
+  scale: number;
+  s: StyleTokens;
+  businessName: string;
+  headingStyle: CSSProperties;
+  btnStyle: CSSProperties;
+  btnSecondaryStyle: CSSProperties;
+  bodyPx: number;
+  captionPx: number;
+}) {
+  return (
+    <>
+      <div style={{ padding: `${Math.round(20 * scale)}px ${Math.round(18 * scale)}px ${Math.round(14 * scale)}px` }}>
+        {/* Hero photo banner with vibe-tunable filter (Tier 1) */}
+        <div
+          style={{
+            background:
+              "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
+            borderRadius: s.cardRadius,
+            height: `${Math.round(96 * scale)}px`,
+            marginBottom: `${Math.round(14 * scale)}px`,
+            position: "relative",
+            overflow: "hidden",
+            filter: s.imageFilter,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(115deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 35%, rgba(15,23,42,0.1) 100%)",
+            }}
+          />
+        </div>
+
+        <h1 style={headingStyle}>
+          Trusted {businessName}.{" "}
+          <span style={{ color: PREVIEW_ACCENT }}>Built for results.</span>
+        </h1>
+        <p
+          style={{
+            fontSize: `${bodyPx}px`,
+            color: "#475569",
+            marginTop: `${Math.round(8 * scale)}px`,
+            lineHeight: 1.5,
+            fontFamily: s.bodyFont,
+            letterSpacing: s.bodyLetterSpacing,
+          }}
+        >
+          A short, confident promise about what the business does, for whom, and where.
+        </p>
+        <div
+          style={{
+            marginTop: `${Math.round(14 * scale)}px`,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: `${Math.round(8 * scale)}px`,
+          }}
+        >
+          <span style={btnStyle}>Get a quote</span>
+          <span style={btnSecondaryStyle}>Call us</span>
+        </div>
+      </div>
+
+      {/* Tier 2 — TRUST STRIP. 5 small cells of "at a glance" stats.
+       *  Anchors the hero with social proof + click-to-call before
+       *  the customer scrolls anywhere. */}
+      <div
+        style={{
+          background: "rgba(15,23,42,0.03)",
+          borderTop: "1px solid rgba(15,23,42,0.08)",
+          borderBottom: "1px solid rgba(15,23,42,0.08)",
+          display: "grid",
+          gridTemplateColumns: "repeat(5, 1fr)",
+          gap: 0,
+        }}
+      >
+        {[
+          { val: "15+", lbl: "Years" },
+          { val: "FMB", lbl: "Member" },
+          { val: "Oxon", lbl: "Area" },
+          { val: "24h", lbl: "Reply" },
+          { val: "Call", lbl: "Now" },
+        ].map((c, i) => (
+          <div
+            key={i}
+            style={{
+              padding: `${Math.round(8 * scale)}px ${Math.round(4 * scale)}px`,
+              textAlign: "center",
+              borderLeft: i > 0 ? "1px solid rgba(15,23,42,0.06)" : undefined,
+            }}
+          >
+            <p
+              style={{
+                fontFamily: s.headingFont,
+                fontWeight: s.headingWeight,
+                fontSize: `${Math.round(12 * scale)}px`,
+                color: "#0f172a",
+                margin: 0,
+                lineHeight: 1.1,
+              }}
+            >
+              {c.val}
+            </p>
+            <p
+              style={{
+                fontSize: `${Math.round(8 * scale)}px`,
+                color: "#64748b",
+                margin: `${Math.round(2 * scale)}px 0 0 0`,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              {c.lbl}
+            </p>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ShowcaseHeroPreview({
+  scale,
+  s,
+  businessName,
+  headingStyle,
+  btnStyle,
+}: {
+  scale: number;
+  s: StyleTokens;
+  businessName: string;
+  headingStyle: CSSProperties;
+  btnStyle: CSSProperties;
+}) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        background:
+          "linear-gradient(135deg, #475569 0%, #1e293b 100%)",
+        height: `${Math.round(150 * scale)}px`,
+        overflow: "hidden",
+        filter: s.imageFilter,
+      }}
+    >
+      {/* Faux "next photo peek" — a thin sliver on the right hinting
+       *  at the auto-cycle behaviour. */}
+      <div
+        style={{
+          position: "absolute",
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: `${Math.round(20 * scale)}px`,
+          background:
+            "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)",
+          opacity: 0.55,
+          borderLeft: "2px solid rgba(255,255,255,0.4)",
+        }}
+      />
+      {/* Top-left business label */}
+      <div
+        style={{
+          position: "absolute",
+          left: `${Math.round(12 * scale)}px`,
+          top: `${Math.round(10 * scale)}px`,
+          color: "#fef3c7",
+          fontSize: `${Math.round(8 * scale)}px`,
+          letterSpacing: "0.25em",
+          textTransform: "uppercase",
+        }}
+      >
+        {businessName}
+      </div>
+      {/* Bottom-edge gradient + tagline + CTA */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "linear-gradient(to top, rgba(15,23,42,0.85) 0%, rgba(15,23,42,0.2) 50%, transparent 100%)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: `${Math.round(12 * scale)}px`,
+          right: `${Math.round(12 * scale)}px`,
+          bottom: `${Math.round(10 * scale)}px`,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: `${Math.round(8 * scale)}px`,
+          color: "#ffffff",
+        }}
+      >
+        <h1
+          style={{
+            ...headingStyle,
+            fontSize: `${Math.round(18 * scale)}px`,
+            color: "#ffffff",
+            maxWidth: "65%",
+          }}
+        >
+          See the work.
+        </h1>
+        <span style={{ ...btnStyle, background: "#ffffff", color: "#0f172a" }}>
+          See the work →
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function BookingHeroPreview({
+  scale,
+  s,
+  businessName,
+  headingStyle,
+  btnStyle,
+  navItemStyle,
+  captionPx,
+}: {
+  scale: number;
+  s: StyleTokens;
+  businessName: string;
+  headingStyle: CSSProperties;
+  btnStyle: CSSProperties;
+  navItemStyle: CSSProperties;
+  captionPx: number;
+}) {
+  return (
+    <>
+      {/* "Next available" pulse bar */}
+      <div
+        style={{
+          background: PREVIEW_ACCENT,
+          color: PREVIEW_ACCENT_TEXT,
+          padding: `${Math.round(4 * scale)}px ${Math.round(18 * scale)}px`,
+          fontSize: `${Math.round(8 * scale)}px`,
+          fontWeight: 600,
+        }}
+      >
+        ● Next available — usually within 48 hours
+      </div>
+      <div
+        style={{
+          padding: `${Math.round(14 * scale)}px ${Math.round(18 * scale)}px`,
+          display: "grid",
+          gridTemplateColumns: "1fr 1.6fr",
+          gap: `${Math.round(10 * scale)}px`,
+          alignItems: "stretch",
+        }}
+      >
+        {/* Left rail — compressed business info */}
+        <div>
+          <h1
+            style={{
+              ...headingStyle,
+              fontSize: `${Math.round(15 * scale)}px`,
+              lineHeight: 1.15,
+            }}
+          >
+            Book with {businessName}.
+          </h1>
+          <p
+            style={{
+              fontSize: `${captionPx}px`,
+              color: "#475569",
+              marginTop: `${Math.round(6 * scale)}px`,
+              lineHeight: 1.4,
+            }}
+          >
+            Pick a time below — confirms instantly.
+          </p>
+          <div
+            style={{
+              marginTop: `${Math.round(8 * scale)}px`,
+              fontSize: `${captionPx}px`,
+              color: "#475569",
+            }}
+          >
+            <p style={{ margin: 0 }}>📍 Oxford</p>
+            <p style={{ margin: `${Math.round(2 * scale)}px 0 0 0` }}>
+              📞 0xxxx xxx xxx
+            </p>
+          </div>
+        </div>
+        {/* Calendar dominates right column — with vibe filter applied
+         *  to the surface so premium reads cool/refined */}
+        <div
+          style={{
+            background: "#ffffff",
+            border: "1px solid rgba(15,23,42,0.1)",
+            borderRadius: s.cardRadius,
+            padding: `${Math.round(8 * scale)}px`,
+            display: "grid",
+            gridTemplateColumns: "repeat(7, 1fr)",
+            gap: `${Math.round(3 * scale)}px`,
+            filter: s.imageFilter,
+          }}
+        >
+          {Array.from({ length: 21 }).map((_, i) => (
+            <span
+              key={i}
+              style={{
+                aspectRatio: "1",
+                borderRadius: "3px",
+                background: [3, 5, 9, 12, 15, 19].includes(i)
+                  ? PREVIEW_ACCENT
+                  : "#f1f5f9",
+                opacity: [3, 5, 9, 12, 15, 19].includes(i) ? 1 : 0.6,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      <div
+        style={{
+          padding: `0 ${Math.round(18 * scale)}px ${Math.round(8 * scale)}px`,
+          display: "flex",
+          gap: `${Math.round(8 * scale)}px`,
+        }}
+      >
+        <span style={btnStyle}>Book a time</span>
+      </div>
+    </>
+  );
+}
+
+function EditorialHeroPreview({
+  scale,
+  s,
+  businessName,
+  headingStyle,
+  btnStyle,
+  bodyPx,
+  captionPx,
+}: {
+  scale: number;
+  s: StyleTokens;
+  businessName: string;
+  headingStyle: CSSProperties;
+  btnStyle: CSSProperties;
+  bodyPx: number;
+  captionPx: number;
+}) {
+  return (
+    <div style={{ padding: `${Math.round(20 * scale)}px ${Math.round(18 * scale)}px ${Math.round(14 * scale)}px` }}>
+      {/* Headline + byline (italic, like a magazine subtitle) */}
+      <h1 style={{ ...headingStyle, fontSize: `${Math.round(22 * scale)}px` }}>
+        {businessName}.
+      </h1>
+      <p
+        style={{
+          fontFamily: s.headingFont,
+          fontStyle: "italic",
+          color: "#64748b",
+          fontSize: `${captionPx}px`,
+          marginTop: `${Math.round(6 * scale)}px`,
+          paddingLeft: `${Math.round(6 * scale)}px`,
+          borderLeft: "2px solid #cbd5e1",
+        }}
+      >
+        Established 2010 · FMB · Oxfordshire
+      </p>
+      {/* Two-column body: drop-cap text + portrait */}
+      <div
+        style={{
+          marginTop: `${Math.round(12 * scale)}px`,
+          display: "grid",
+          gridTemplateColumns: "1.6fr 1fr",
+          gap: `${Math.round(10 * scale)}px`,
+        }}
+      >
+        <div>
+          {/* Drop-cap mock — tight cluster of text lines with the
+           *  first letter visually dominant */}
+          <div style={{ display: "flex", gap: `${Math.round(4 * scale)}px` }}>
+            <span
+              style={{
+                fontFamily: s.headingFont,
+                fontWeight: s.headingWeight,
+                fontSize: `${Math.round(28 * scale)}px`,
+                lineHeight: 0.85,
+                color: s.dividerStyle === "gold-diamond" ? PREMIUM_GOLD : "#0f172a",
+              }}
+            >
+              W
+            </span>
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  height: `${Math.round(5 * scale)}px`,
+                  width: "95%",
+                  background: "#cbd5e1",
+                  borderRadius: "2px",
+                }}
+              />
+              <div
+                style={{
+                  height: `${Math.round(5 * scale)}px`,
+                  width: "85%",
+                  background: "#cbd5e1",
+                  borderRadius: "2px",
+                  marginTop: `${Math.round(3 * scale)}px`,
+                }}
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              height: `${Math.round(5 * scale)}px`,
+              width: "100%",
+              background: "#cbd5e1",
+              borderRadius: "2px",
+              marginTop: `${Math.round(4 * scale)}px`,
+            }}
+          />
+          <div
+            style={{
+              height: `${Math.round(5 * scale)}px`,
+              width: "75%",
+              background: "#cbd5e1",
+              borderRadius: "2px",
+              marginTop: `${Math.round(3 * scale)}px`,
+            }}
+          />
+          <div style={{ marginTop: `${Math.round(10 * scale)}px` }}>
+            <span
+              style={{
+                ...btnStyle,
+                background: "#0f172a",
+                color: "#ffffff",
+                borderRadius: "2px",
+              }}
+            >
+              Read the story
+            </span>
+          </div>
+        </div>
+        {/* Portrait + pull-quote stacked */}
+        <div style={{ display: "flex", flexDirection: "column", gap: `${Math.round(6 * scale)}px` }}>
+          <span
+            style={{
+              background:
+                "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)",
+              borderRadius: "2px",
+              aspectRatio: "4 / 5",
+              filter: s.imageFilter,
+            }}
+          />
+          <blockquote
+            style={{
+              borderLeft: `2px solid ${PREVIEW_ACCENT}`,
+              padding: `${Math.round(4 * scale)}px ${Math.round(6 * scale)}px`,
+              fontSize: `${captionPx}px`,
+              fontStyle: "italic",
+              color: "#0f172a",
+              fontFamily: s.headingFont,
+              margin: 0,
+              lineHeight: 1.3,
+            }}
+          >
+            “Couldn’t recommend enough.”
+          </blockquote>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BODY variants — Tier 3 per-structure section
+// ============================================================
+
+function ServicesBodyPreview({
+  scale,
+  s,
+  captionPx,
+  Eyebrow,
+}: {
+  scale: number;
+  s: StyleTokens;
+  captionPx: number;
+  Eyebrow: (props: { children: string }) => ReactElement;
+}) {
+  const cardStyle: CSSProperties = {
+    background: "#ffffff",
+    borderRadius: s.cardRadius,
+    border: "1px solid rgba(15,23,42,0.08)",
+    padding: `${Math.round(12 * scale)}px ${Math.round(10 * scale)}px`,
+    flex: "1 1 0",
+    minWidth: 0,
+  };
+  return (
+    <div
+      style={{
+        padding: `0 ${Math.round(18 * scale)}px ${Math.round(20 * scale)}px ${Math.round(18 * scale)}px`,
+      }}
+    >
+      <div style={{ marginBottom: `${Math.round(8 * scale)}px` }}>
+        <Eyebrow>WHAT WE DO</Eyebrow>
+      </div>
+      <div style={{ display: "flex", gap: `${Math.round(10 * scale)}px` }}>
+        {[1, 2, 3].map((i) => (
+          <div key={i} style={cardStyle}>
+            <span
+              style={{
+                display: "inline-block",
+                width: `${Math.round(20 * scale)}px`,
+                height: `${Math.round(20 * scale)}px`,
+                background: PREVIEW_ACCENT,
+                opacity: 0.15,
+                borderRadius: s.btnRadius,
+                marginBottom: `${Math.round(8 * scale)}px`,
+              }}
+            />
+            <p
+              style={{
+                fontFamily: s.headingFont,
+                fontWeight: s.headingWeight,
+                fontSize: `${Math.round(11 * scale)}px`,
+                color: "#0f172a",
+                margin: 0,
+                letterSpacing: s.headingLetterSpacing,
+              }}
+            >
+              Service {i}
+            </p>
+            <p
+              style={{
+                fontSize: `${captionPx}px`,
+                color: "#64748b",
+                margin: `${Math.round(3 * scale)}px 0 0 0`,
+                lineHeight: 1.4,
+              }}
+            >
+              One-line teaser
+            </p>
+            <p
+              style={{
+                fontSize: `${Math.round(9 * scale)}px`,
+                color: PREVIEW_ACCENT,
+                margin: `${Math.round(4 * scale)}px 0 0 0`,
+                fontWeight: 600,
+              }}
+            >
+              From £—
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ShowcaseBodyPreview({
+  scale,
+  s,
+  captionPx,
+  Eyebrow,
+}: {
+  scale: number;
+  s: StyleTokens;
+  captionPx: number;
+  Eyebrow: (props: { children: string }) => ReactElement;
+}) {
+  return (
+    <div
+      style={{
+        padding: `0 ${Math.round(18 * scale)}px ${Math.round(18 * scale)}px ${Math.round(18 * scale)}px`,
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 2fr",
+          gap: `${Math.round(12 * scale)}px`,
+          marginBottom: `${Math.round(10 * scale)}px`,
+        }}
+      >
+        <div>
+          <Eyebrow>WHAT WE DO</Eyebrow>
+          <p
+            style={{
+              fontFamily: s.headingFont,
+              fontWeight: s.headingWeight,
+              fontSize: `${Math.round(11 * scale)}px`,
+              color: "#0f172a",
+              margin: `${Math.round(6 * scale)}px 0 0 0`,
+            }}
+          >
+            A short list →
+          </p>
+        </div>
+        {/* Tiny services list — TEXT only, no cards */}
+        <ul
+          style={{
+            margin: 0,
+            padding: 0,
+            listStyle: "none",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: `${Math.round(5 * scale)}px ${Math.round(10 * scale)}px`,
+          }}
+        >
+          {["Weddings", "Portraits", "Events", "Editorial"].map((n, i) => (
+            <li
+              key={i}
+              style={{
+                borderLeft: "2px solid #cbd5e1",
+                paddingLeft: `${Math.round(5 * scale)}px`,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: `${Math.round(10 * scale)}px`,
+                  fontWeight: 600,
+                  color: "#0f172a",
+                  margin: 0,
+                  fontFamily: s.bodyFont,
+                }}
+              >
+                {n}
+              </p>
+              <p
+                style={{
+                  fontSize: `${captionPx}px`,
+                  color: "#64748b",
+                  margin: 0,
+                  lineHeight: 1.3,
+                }}
+              >
+                One-line note
+              </p>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {/* Big secondary gallery panel — 3-col grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: `${Math.round(4 * scale)}px`,
+          filter: s.imageFilter,
+        }}
+      >
+        {[1, 2, 3].map((i) => (
+          <span
+            key={i}
+            style={{
+              aspectRatio: "4 / 5",
+              background:
+                i === 1
+                  ? "linear-gradient(135deg, #94a3b8 0%, #475569 100%)"
+                  : i === 2
+                    ? "linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%)"
+                    : "linear-gradient(135deg, #a3b8cb 0%, #6b7e94 100%)",
+              borderRadius: s.cardRadius,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BookingBodyPreview({
+  scale,
+  s,
+  captionPx,
+  Eyebrow,
+}: {
+  scale: number;
+  s: StyleTokens;
+  captionPx: number;
+  Eyebrow: (props: { children: string }) => ReactElement;
+}) {
+  return (
+    <div
+      style={{
+        padding: `0 ${Math.round(18 * scale)}px ${Math.round(18 * scale)}px ${Math.round(18 * scale)}px`,
+      }}
+    >
+      <div style={{ marginBottom: `${Math.round(8 * scale)}px` }}>
+        <Eyebrow>BOOKABLE SERVICES</Eyebrow>
+      </div>
+      {/* Vertical list of bookable rows — each with a Book button */}
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid rgba(15,23,42,0.1)",
+          borderRadius: s.cardRadius,
+          overflow: "hidden",
+        }}
+      >
+        {["60 min consultation", "Quick check-in", "Discovery call"].map(
+          (svc, i) => (
+            <div
+              key={i}
+              style={{
+                padding: `${Math.round(8 * scale)}px ${Math.round(10 * scale)}px`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: `${Math.round(8 * scale)}px`,
+                borderTop: i > 0 ? "1px solid rgba(15,23,42,0.06)" : undefined,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <p
+                  style={{
+                    fontFamily: s.headingFont,
+                    fontWeight: s.headingWeight,
+                    fontSize: `${Math.round(10 * scale)}px`,
+                    color: "#0f172a",
+                    margin: 0,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {svc}
+                </p>
+                <p
+                  style={{
+                    fontSize: `${captionPx}px`,
+                    color: "#64748b",
+                    margin: `${Math.round(2 * scale)}px 0 0 0`,
+                  }}
+                >
+                  From £— · 60 min
+                </p>
+              </div>
+              <span
+                style={{
+                  background: PREVIEW_ACCENT,
+                  color: PREVIEW_ACCENT_TEXT,
+                  borderRadius: s.btnRadius,
+                  padding: `${Math.round(4 * scale)}px ${Math.round(10 * scale)}px`,
+                  fontSize: `${Math.round(9 * scale)}px`,
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                Book
+              </span>
+            </div>
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditorialBodyPreview({
+  scale,
+  s,
+  captionPx,
+  Eyebrow,
+}: {
+  scale: number;
+  s: StyleTokens;
+  captionPx: number;
+  Eyebrow: (props: { children: string }) => ReactElement;
+}) {
+  return (
+    <div
+      style={{
+        padding: `0 ${Math.round(18 * scale)}px ${Math.round(18 * scale)}px ${Math.round(18 * scale)}px`,
+      }}
+    >
+      <div style={{ marginBottom: `${Math.round(8 * scale)}px` }}>
+        <Eyebrow>WHAT WE DO</Eyebrow>
+      </div>
+      {/* Numbered services list — no cards, no prices */}
+      <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+        {[1, 2, 3].map((i) => (
+          <li
+            key={i}
+            style={{
+              display: "flex",
+              gap: `${Math.round(8 * scale)}px`,
+              marginBottom: `${Math.round(8 * scale)}px`,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: s.headingFont,
+                fontWeight: s.headingWeight,
+                fontSize: `${Math.round(18 * scale)}px`,
+                color: PREVIEW_ACCENT,
+                lineHeight: 0.9,
+                flexShrink: 0,
+                minWidth: `${Math.round(20 * scale)}px`,
+              }}
+            >
+              0{i}
+            </span>
+            <div style={{ borderLeft: "1px solid #cbd5e1", paddingLeft: `${Math.round(8 * scale)}px`, minWidth: 0 }}>
+              <p
+                style={{
+                  fontFamily: s.headingFont,
+                  fontWeight: s.headingWeight,
+                  fontSize: `${Math.round(11 * scale)}px`,
+                  color: "#0f172a",
+                  margin: 0,
+                }}
+              >
+                Practice area {i}
+              </p>
+              <p
+                style={{
+                  fontSize: `${captionPx}px`,
+                  color: "#64748b",
+                  margin: `${Math.round(2 * scale)}px 0 0 0`,
+                  lineHeight: 1.3,
+                }}
+              >
+                One-line description of the discipline.
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
