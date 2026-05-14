@@ -312,54 +312,79 @@ export default function Step3Modules({
         pendingChange={pendingModuleChange}
       />
 
+      {/* Per-card id chain so each ModuleCard's Confirm button knows
+       *  which sibling to scroll to. Computed from the customer's
+       *  actual module selection (Cal.com only renders if they bought
+       *  Online Booking, etc.) so the chain skips absent modules. */}
       <section className="mt-7 space-y-4">
-        {hasCalcom && (
-          <ModuleCard
-            title="Online booking"
-            subtitle="Cal.com"
-            status={calcomStatus}
-          >
-            <ModuleCalcom
-              url={calcomUrl}
-              onUrlChange={setCalcomUrl}
-              disabled={disabled}
-            />
-          </ModuleCard>
-        )}
+        {(() => {
+          const renderedIds: string[] = [];
+          if (hasCalcom) renderedIds.push("module-calcom");
+          if (hasResend) renderedIds.push("module-resend");
+          if (hasGbp) renderedIds.push("module-gbp");
+          const nextOf = (id: string): string | undefined => {
+            const idx = renderedIds.indexOf(id);
+            if (idx === -1 || idx === renderedIds.length - 1) return undefined;
+            return renderedIds[idx + 1];
+          };
+          return (
+            <>
+              {hasCalcom && (
+                <ModuleCard
+                  cardId="module-calcom"
+                  nextSectionId={nextOf("module-calcom")}
+                  title="Online booking"
+                  subtitle="Cal.com"
+                  status={calcomStatus}
+                >
+                  <ModuleCalcom
+                    url={calcomUrl}
+                    onUrlChange={setCalcomUrl}
+                    disabled={disabled}
+                  />
+                </ModuleCard>
+              )}
 
-        {hasResend && (
-          <ModuleCard
-            title="Sender email"
-            subtitle="Resend"
-            status={resendStatus}
-          >
-            <ModuleResend
-              email={resendEmail}
-              invited={resendInvited}
-              onEmailChange={setResendEmail}
-              onInvitedChange={setResendInvited}
-              benEmail={benEmail}
-              disabled={disabled}
-            />
-          </ModuleCard>
-        )}
+              {hasResend && (
+                <ModuleCard
+                  cardId="module-resend"
+                  nextSectionId={nextOf("module-resend")}
+                  title="Sender email"
+                  subtitle="Resend"
+                  status={resendStatus}
+                >
+                  <ModuleResend
+                    email={resendEmail}
+                    invited={resendInvited}
+                    onEmailChange={setResendEmail}
+                    onInvitedChange={setResendInvited}
+                    benEmail={benEmail}
+                    disabled={disabled}
+                  />
+                </ModuleCard>
+              )}
 
-        {hasGbp && (
-          <ModuleCard
-            title="Google Business Profile"
-            subtitle="business.google.com"
-            status={gbpStatus}
-          >
-            <ModuleGbp
-              url={gbpUrl}
-              invited={gbpInvited}
-              onUrlChange={setGbpUrl}
-              onInvitedChange={setGbpInvited}
-              benEmail={benEmail}
-              disabled={disabled}
-            />
-          </ModuleCard>
-        )}
+              {hasGbp && (
+                <ModuleCard
+                  cardId="module-gbp"
+                  nextSectionId={nextOf("module-gbp")}
+                  title="Google Business Profile"
+                  subtitle="business.google.com"
+                  status={gbpStatus}
+                >
+                  <ModuleGbp
+                    url={gbpUrl}
+                    invited={gbpInvited}
+                    onUrlChange={setGbpUrl}
+                    onInvitedChange={setGbpInvited}
+                    benEmail={benEmail}
+                    disabled={disabled}
+                  />
+                </ModuleCard>
+              )}
+            </>
+          );
+        })()}
 
         {/* Offers — moved from Step 4 Content May 2026. Self-
          *  contained card with its own save button (writes into
@@ -508,11 +533,20 @@ export default function Step3Modules({
 // ---------- Collapsible module shell ----------
 
 function ModuleCard({
+  cardId,
+  nextSectionId,
   title,
   subtitle,
   status,
   children,
 }: {
+  /** DOM id used as the scroll target by the previous card's
+   *  Confirm button. Required so per-card scroll-chains work. */
+  cardId: string;
+  /** DOM id of the next module card to scroll to when this card's
+   *  Confirm button fires. Undefined for the final card in the
+   *  rendered chain (Confirm just collapses, no scroll). */
+  nextSectionId?: string;
   title: string;
   subtitle: string;
   status: ModuleStatus;
@@ -522,10 +556,25 @@ function ModuleCard({
   // unfinished work); default-collapsed when green.
   const [expanded, setExpanded] = useState(status !== "complete");
 
+  function handleConfirm() {
+    setExpanded(false);
+    if (!nextSectionId) return;
+    // Defer to next paint so the just-collapsed card has its new
+    // height before the smooth-scroll calculation runs (otherwise
+    // the browser sometimes overshoots / undershoots the target).
+    requestAnimationFrame(() => {
+      const target = document.getElementById(nextSectionId);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
+
   return (
     <div
+      id={cardId}
       className={[
-        "overflow-hidden rounded-2xl border-2 transition-colors",
+        "overflow-hidden rounded-2xl border-2 transition-colors scroll-mt-6",
         status === "complete"
           ? "border-green-200 bg-green-50/40"
           : status === "in-progress"
@@ -551,6 +600,22 @@ function ModuleCard({
       {expanded && (
         <div className="border-t border-navy-100/60 bg-white px-5 py-5 md:px-6 md:py-6">
           {children}
+          {/* Confirm-and-collapse button (added 2026-05-14). Customer
+           *  finishes configuring this module, clicks Confirm, the
+           *  card collapses and the page smooth-scrolls down to the
+           *  next module card (if there is one). Doesn't auto-save —
+           *  the page-level Save / Mark Done / Update buttons in the
+           *  footer keep their existing semantics. State is local
+           *  only; collapsing never loses input. */}
+          <div className="mt-6 flex items-center justify-end gap-3 border-t border-navy-100 pt-4">
+            <button
+              type="button"
+              onClick={handleConfirm}
+              className="inline-flex items-center gap-2 rounded-full bg-navy-900 px-5 py-2 text-sm font-semibold text-white transition-all duration-150 hover:-translate-y-px hover:bg-navy-800"
+            >
+              ✓ Confirm{nextSectionId ? " — next module" : " — collapse"}
+            </button>
+          </div>
         </div>
       )}
     </div>
