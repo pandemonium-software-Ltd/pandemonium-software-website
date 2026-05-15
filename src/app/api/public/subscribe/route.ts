@@ -28,6 +28,7 @@ import { getProspectByToken } from "@/lib/notion-prospects";
 import { updateProspectOnboarding } from "@/lib/notion-prospects";
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { customerSenderBrand } from "@/lib/email-branding";
 import { site } from "@/lib/site";
 import {
   SUBSCRIBER_CAP_PER_CUSTOMER,
@@ -228,6 +229,11 @@ export async function POST(request: Request) {
         confirmUrl,
         unsubscribeUrl,
       },
+      // Customer-branded: subscriber's inbox shows the customer's
+      // business name in the From header, header uses their primary
+      // colour, footer shows their domain. The email is from THEIR
+      // newsletter, not from ModuForge.
+      { senderBrand: customerSenderBrand(prospect) },
     );
   } catch (e) {
     console.warn(

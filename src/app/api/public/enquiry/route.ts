@@ -48,10 +48,12 @@ export const runtime = "nodejs";
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Same brand FROM as the other customer-facing emails (see
-// src/lib/email.ts). When Stage 3 ships the dedicated transactional
-// sender domain we update both at once.
-const FROM_BRAND = "ModuForge <ben@modu-forge.co.uk>";
+// Verified Resend sender. The DISPLAY NAME swaps per-customer so
+// the recipient (the customer themselves — they're the inbox
+// owner here) sees "MyGem website" or similar in their inbox,
+// not "ModuForge". Verified domain stays modu-forge.co.uk until
+// per-customer Resend domain verification is built (Stage 2C C5+).
+const FROM_SENDER_EMAIL = "ben@modu-forge.co.uk";
 
 const NAME_MAX = 100;
 const PHONE_MAX = 30;
@@ -168,9 +170,10 @@ export async function POST(request: Request) {
   // kindly + so the customer's reply-all behaviour is predictable
   // (HTML bodies sometimes pull the wrong "from" address into the
   // To: line on reply).
-  const businessName = prospect.business?.trim() ?? prospect.name;
+  const businessName =
+    prospect.business?.trim() || prospect.name?.trim() || "Your website";
   const lines = [
-    `You've got a new enquiry${businessName ? ` for ${businessName}` : ""} via your website.`,
+    `You've got a new enquiry for ${businessName} via your website.`,
     "",
     "─".repeat(48),
     `From:    ${name}`,
@@ -186,10 +189,16 @@ export async function POST(request: Request) {
     "Reply to this email and your message goes straight back to",
     `${name}.`,
     "",
-    "— ModuForge",
+    `— ${businessName} website`,
   ];
   const body = lines.join("\n");
   const subjectLabel = name.length > 40 ? name.slice(0, 40) + "…" : name;
+  // From display: "MyGem website" — Lucas's inbox shows it as
+  // coming from HIS site, not from "ModuForge". Reply-to is
+  // still the visitor's email so hitting reply goes straight back
+  // to them.
+  const fromHeader = `${businessName} website <${FROM_SENDER_EMAIL}>`;
+  const subject = `[${businessName}] New enquiry from ${subjectLabel}`;
 
   // Send via Resend. We use the SDK directly here (not
   // sendCustomerNotification) because that helper doesn't expose
@@ -203,10 +212,10 @@ export async function POST(request: Request) {
   try {
     const resend = new Resend(env.RESEND_API_KEY);
     const { error } = await resend.emails.send({
-      from: FROM_BRAND,
+      from: fromHeader,
       to: recipientEmail,
       replyTo: email,
-      subject: `New enquiry from ${subjectLabel}`,
+      subject,
       text: body,
     });
     if (error) {

@@ -18,6 +18,7 @@
 import { getProspectByToken } from "@/lib/notion-prospects";
 import { updateProspectOnboarding } from "@/lib/notion-prospects";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { customerSenderBrand } from "@/lib/email-branding";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
 
@@ -129,6 +130,11 @@ export default async function ConfirmSubscriptionPage({
           senderName,
           unsubscribeUrl,
         },
+        // Customer-branded — same reasoning as the confirm-subscribe
+        // email: the subscriber signed up to the customer's
+        // newsletter, so this welcome should look like it's from
+        // the customer's business, not ModuForge.
+        { senderBrand: customerSenderBrand(prospect) },
       );
     } catch (e) {
       console.warn(

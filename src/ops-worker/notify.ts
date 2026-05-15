@@ -27,7 +27,41 @@ import type { ServerEnv } from "../lib/env";
 // us has one identity. Local-part `ben@` reads as personal-from-
 // founder rather than automation-y; reply-to lands at OPS_EMAIL
 // regardless.
+//
+// FROM_NOTIFICATIONS is the default — used for ModuForge-product
+// emails (phase1/phase2/phase3 receipts, hub-ready, signoff,
+// password reset, module-change-applied, etc.). For emails sent
+// ON BEHALF OF the customer's site to THEIR visitors (newsletter
+// confirm/welcome/unsubscribed), the caller passes a
+// `fromDisplayName` override so the inbox shows the customer's
+// business name + their domain in the From header. Technical
+// sender stays modu-forge.co.uk until customer-domain Resend
+// verification is built (Stage 2C C5+).
 const FROM_NOTIFICATIONS = "Ben @ ModuForge <ben@modu-forge.co.uk>";
+const FROM_SENDER_EMAIL = "ben@modu-forge.co.uk";
+
+/**
+ * Sender brand identity used to render the email's HTML header
+ * and footer. ModuForge is the default — used for any email about
+ * the ModuForge product itself (sent FROM us TO our customers).
+ * Customer is for emails sent ON BEHALF OF a customer's site TO
+ * their visitors (newsletter signup, etc.) — header shows the
+ * customer's business name + their primary brand colour + their
+ * domain in the footer.
+ */
+export type SenderBrand =
+  | { kind: "moduforge" }
+  | {
+      kind: "customer";
+      businessName: string;
+      /** Customer's primary brand colour as a hex string (e.g.
+       *  "#791a3e"). Used for the accent underline + button
+       *  background so the email visually matches their site. */
+      primaryColor: string;
+      /** Customer's domain (e.g. "mygem.co.uk"). Shown in the
+       *  footer "from yourdomain.co.uk" line. */
+      domain: string;
+    };
 
 export type SendResult = {
   /** Resend's message id — useful for audit logs and tracing. */
@@ -46,9 +80,27 @@ export async function sendCustomerEmail(
   recipientEmail: string,
   templateId: string,
   values: TemplateValues,
+  options?: {
+    /** When provided, the email is rendered with customer branding
+     *  instead of ModuForge branding. Header shows businessName +
+     *  uses primaryColor for accents; footer shows the customer's
+     *  domain instead of modu-forge.co.uk. */
+    senderBrand?: SenderBrand;
+  },
 ): Promise<SendResult> {
   const template = getTemplate(templateId);
   const rendered = renderTemplate(template, values);
+  const senderBrand: SenderBrand = options?.senderBrand ?? { kind: "moduforge" };
+
+  // From-header display name. ModuForge default vs customer's
+  // business name. Verified sender domain is the same either way
+  // (modu-forge.co.uk) until per-customer Resend verification
+  // ships — until then, subscribers see "MyGem <ben@modu-forge.co.uk>"
+  // in their inbox, with "MyGem" being the visible part.
+  const fromHeader =
+    senderBrand.kind === "customer"
+      ? `${senderBrand.businessName} <${FROM_SENDER_EMAIL}>`
+      : FROM_NOTIFICATIONS;
 
   const opsEmail =
     env.BEN_OPS_EMAIL ?? "pandamoniumsoftwareltd@gmail.com";
@@ -75,8 +127,13 @@ export async function sendCustomerEmail(
     body: rendered.body,
     cta: rendered.cta,
     secondaryCta: rendered.secondaryCta,
+    senderBrand,
   });
 
+  // Reply-to: for customer-branded emails, replies should land
+  // with the operator (we don't have the customer's inbox plumbed
+  // for visitor-side replies). ModuForge-branded emails reply
+  // to OPS_EMAIL too. Same handler either way.
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -84,7 +141,7 @@ export async function sendCustomerEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: FROM_NOTIFICATIONS,
+      from: fromHeader,
       to: recipientEmail,
       reply_to: opsEmail,
       subject: rendered.subject,
@@ -135,9 +192,16 @@ type WrapOpts = {
    *  two natural next steps (e.g. View site + Open dashboard).
    *  Ignored when `cta` is absent. */
   secondaryCta?: { url: string; label: string };
+  /** Sender branding — defaults to ModuForge for product emails.
+   *  Newsletter / on-behalf-of-customer emails pass a customer
+   *  brand so the header reads as the customer's business + their
+   *  primary colour drives the accent + their domain replaces
+   *  modu-forge.co.uk in the footer. */
+  senderBrand?: SenderBrand;
 };
 
 export function wrapInBrandedHtml(opts: WrapOpts): string {
+  const senderBrand: SenderBrand = opts.senderBrand ?? { kind: "moduforge" };
   const paragraphs = opts.body
     .split(/\n\n+/)
     .map((p) => p.trim())
@@ -145,19 +209,28 @@ export function wrapInBrandedHtml(opts: WrapOpts): string {
     .map((p) => paragraphToHtml(p))
     .join("\n");
 
-  // Primary first, secondary directly underneath. Secondary uses
-  // the ghost variant so the visual hierarchy is obvious — primary
-  // dominates, secondary is the "or…" alternative.
+  // Primary CTA colour follows the brand: ModuForge uses navy, the
+  // customer-branded variant uses the customer's primaryColor so
+  // the button visually matches their site.
+  const ctaPrimaryColor =
+    senderBrand.kind === "customer" ? senderBrand.primaryColor : "#0f1d30";
   const ctaParts: string[] = [];
   if (opts.cta) {
-    ctaParts.push(buttonHtml(opts.cta.url, opts.cta.label));
+    ctaParts.push(buttonHtml(opts.cta.url, opts.cta.label, ctaPrimaryColor));
   }
   if (opts.cta && opts.secondaryCta) {
     ctaParts.push(
-      ghostButtonHtml(opts.secondaryCta.url, opts.secondaryCta.label),
+      ghostButtonHtml(
+        opts.secondaryCta.url,
+        opts.secondaryCta.label,
+        ctaPrimaryColor,
+      ),
     );
   }
   const cta = ctaParts.join("\n");
+
+  const header = renderHeader(senderBrand);
+  const footer = renderFooter(senderBrand);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -173,9 +246,7 @@ export function wrapInBrandedHtml(opts: WrapOpts): string {
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background-color:#ffffff;border-radius:12px;border:1px solid #dae3ef;">
         <tr>
           <td style="padding:36px 40px 28px;text-align:center;border-bottom:1px solid #f0f4f9;">
-            <div style="font-family:Georgia,serif;font-size:26px;font-weight:600;color:#0f1d30;letter-spacing:-0.02em;line-height:1;">ModuForge</div>
-            <div style="margin-top:6px;font-size:11px;color:#5d82ab;text-transform:uppercase;letter-spacing:0.12em;">by Pandamonium Software</div>
-            <div style="margin:18px auto 0;width:32px;height:2px;background-color:#f97316;border-radius:1px;"></div>
+            ${header}
           </td>
         </tr>
         <tr>
@@ -186,8 +257,7 @@ export function wrapInBrandedHtml(opts: WrapOpts): string {
         ${cta ? `<tr><td style="padding:8px 40px 32px;">${cta}</td></tr>` : ""}
         <tr>
           <td style="padding:24px 40px;border-top:1px solid #f0f4f9;font-size:13px;color:#5d82ab;text-align:center;line-height:1.5;">
-            Just hit reply — your message lands in my inbox.<br>
-            <a href="https://modu-forge.co.uk" style="color:#5d82ab;text-decoration:none;border-bottom:1px solid #b4c6dd;">modu-forge.co.uk</a>
+            ${footer}
           </td>
         </tr>
       </table>
@@ -196,6 +266,39 @@ export function wrapInBrandedHtml(opts: WrapOpts): string {
 </table>
 </body>
 </html>`;
+}
+
+/** Email header — businessName + accent rule. Two variants:
+ *  ModuForge (the product email default) shows "ModuForge / by
+ *  Pandamonium Software" with the ember accent. Customer-branded
+ *  shows the customer's business name with their primary colour
+ *  as the accent rule. */
+function renderHeader(senderBrand: SenderBrand): string {
+  if (senderBrand.kind === "customer") {
+    const safeName = escapeHtml(senderBrand.businessName);
+    const safeColor = escapeHtml(senderBrand.primaryColor);
+    return `<div style="font-family:Georgia,serif;font-size:26px;font-weight:600;color:#0f1d30;letter-spacing:-0.02em;line-height:1;">${safeName}</div>
+            <div style="margin:18px auto 0;width:32px;height:2px;background-color:${safeColor};border-radius:1px;"></div>`;
+  }
+  return `<div style="font-family:Georgia,serif;font-size:26px;font-weight:600;color:#0f1d30;letter-spacing:-0.02em;line-height:1;">ModuForge</div>
+            <div style="margin-top:6px;font-size:11px;color:#5d82ab;text-transform:uppercase;letter-spacing:0.12em;">by Pandamonium Software</div>
+            <div style="margin:18px auto 0;width:32px;height:2px;background-color:#f97316;border-radius:1px;"></div>`;
+}
+
+/** Email footer — points the recipient back to the sender's
+ *  identity. ModuForge variant says "reply lands in my inbox"
+ *  with modu-forge.co.uk URL. Customer variant says "from
+ *  yourdomain" so subscribers know it's from the customer's site,
+ *  not ModuForge. */
+function renderFooter(senderBrand: SenderBrand): string {
+  if (senderBrand.kind === "customer") {
+    const safeDomain = escapeHtml(senderBrand.domain);
+    const safeName = escapeHtml(senderBrand.businessName);
+    return `Sent from <strong>${safeName}</strong><br>
+            <a href="https://${safeDomain}" style="color:#5d82ab;text-decoration:none;border-bottom:1px solid #b4c6dd;">${safeDomain}</a>`;
+  }
+  return `Just hit reply — your message lands in my inbox.<br>
+            <a href="https://modu-forge.co.uk" style="color:#5d82ab;text-decoration:none;border-bottom:1px solid #b4c6dd;">modu-forge.co.uk</a>`;
 }
 
 /**
@@ -225,14 +328,19 @@ function paragraphToHtml(text: string): string {
  * The branded CTA button. Styled as a "bulletproof button" — a
  * styled <a> wrapped in a table for Outlook compatibility (Outlook
  * historically renders padded inline-block <a> badly).
+ *
+ * `primaryColor` defaults to navy (#0f1d30) for ModuForge-branded
+ * emails. Customer-branded emails pass the customer's primaryColour
+ * so the button matches their site palette.
  */
-function buttonHtml(url: string, label: string): string {
+function buttonHtml(url: string, label: string, primaryColor = "#0f1d30"): string {
+  const safeColor = escapeHtml(primaryColor);
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
   <tr>
     <td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td style="border-radius:8px;background-color:#0f1d30;">
+          <td style="border-radius:8px;background-color:${safeColor};">
             <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;letter-spacing:0.01em;border-radius:8px;">${escapeHtml(label)}</a>
           </td>
         </tr>
@@ -243,20 +351,20 @@ function buttonHtml(url: string, label: string): string {
 }
 
 /**
- * Secondary "ghost" button — transparent fill with navy outline.
- * Lighter visual weight than the primary so the customer's eye
- * lands on the primary action first. Same bulletproof-button
- * structure (table-wrapped <a>) for Outlook compatibility. Sits
- * directly below the primary with a small vertical gap.
+ * Secondary "ghost" button — transparent fill with colour outline.
+ * Outline + text colour match the primary so the visual identity
+ * stays cohesive. Lighter visual weight than the primary so the
+ * recipient's eye lands on the primary action first.
  */
-function ghostButtonHtml(url: string, label: string): string {
+function ghostButtonHtml(url: string, label: string, primaryColor = "#0f1d30"): string {
+  const safeColor = escapeHtml(primaryColor);
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:10px;">
   <tr>
     <td align="center">
       <table role="presentation" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td style="border-radius:8px;background-color:#ffffff;border:2px solid #0f1d30;">
-            <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:12px 28px;color:#0f1d30;text-decoration:none;font-size:15px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;letter-spacing:0.01em;border-radius:6px;">${escapeHtml(label)}</a>
+          <td style="border-radius:8px;background-color:#ffffff;border:2px solid ${safeColor};">
+            <a href="${escapeHtml(url)}" target="_blank" style="display:inline-block;padding:12px 28px;color:${safeColor};text-decoration:none;font-size:15px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;letter-spacing:0.01em;border-radius:6px;">${escapeHtml(label)}</a>
           </td>
         </tr>
       </table>

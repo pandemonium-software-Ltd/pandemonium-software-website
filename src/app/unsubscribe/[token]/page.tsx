@@ -16,6 +16,7 @@
 import { getProspectByToken } from "@/lib/notion-prospects";
 import { updateProspectOnboarding } from "@/lib/notion-prospects";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { customerSenderBrand } from "@/lib/email-branding";
 import { getServerEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -111,6 +112,12 @@ export default async function UnsubscribePage({
           firstName: (subscriber.firstName as string) ?? "there",
           senderName,
         },
+        // Customer-branded — last touchpoint between the customer
+        // and the (former) subscriber. The unsubscribe confirmation
+        // should look like it's from the customer's site too, not
+        // from "ModuForge by Pandamonium Software" (which would
+        // confuse the subscriber: "who's that?").
+        { senderBrand: customerSenderBrand(prospect) },
       );
     } catch (e) {
       console.warn(
