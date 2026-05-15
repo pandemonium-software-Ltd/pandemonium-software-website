@@ -23,6 +23,7 @@ import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import { dispatchRepositoryEvent, GithubApiError } from "@/lib/github";
 import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
+import { revertChangeRequestPatches } from "@/lib/change-requests/revert-patches";
 
 /** Anti-spam latch — same window step5-review uses. If a build
  *  was triggered in the last 15 minutes, skip rather than queue
@@ -40,6 +41,17 @@ const requestSchema = z.object({
   changeRequestId: z.string().min(1),
   status: z.enum(["pending", "in-progress", "resolved", "rejected"]),
   reply: z.string().trim().max(5000).optional(),
+  /** Operator-only meta-actions (added 2026-05-15):
+   *    "unlock"  re-opens a terminal CR back to pending/in-progress
+   *              without requiring a customer reply or sending an
+   *              email. Audit-stamps unlockedAt + unlockedBy.
+   *    "revert"  forces status=rejected, walks the CR's
+   *              coworkPatches in reverse and writes each
+   *              previousValue back to onboardingData, dispatches
+   *              a fresh live build, sends the customer the
+   *              "rejected" email with an auto-generated reply
+   *              about the revert. */
+  action: z.enum(["unlock", "revert"]).optional(),
 });
 
 export async function PATCH(request: Request) {
@@ -62,11 +74,17 @@ export async function PATCH(request: Request) {
       { status: 400 },
     );
   }
-  const { token, changeRequestId, status, reply } = parsed.data;
+  const { token, changeRequestId, status, reply, action } = parsed.data;
 
   // Block resolution / rejection without a reply — customer always
   // gets a human-readable explanation when their request closes.
-  if ((status === "resolved" || status === "rejected") && !reply) {
+  // The "unlock" action is exempt because the CR is RE-OPENING, not
+  // closing — no customer-facing reason needed yet. The "revert"
+  // action is also exempt because we auto-generate the reply text
+  // about the revert.
+  const needsReply =
+    (status === "resolved" || status === "rejected") && action !== "unlock" && action !== "revert";
+  if (needsReply && !reply) {
     return NextResponse.json(
       {
         error:
@@ -81,11 +99,67 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Prospect not found." }, { status: 404 });
   }
 
+  // ----- Action: REVERT (admin reverts an applied change) -----
+  // Walks the CR's coworkPatches in reverse and writes each
+  // previousValue back to onboardingData, then dispatches a fresh
+  // live build to deploy the reverted state. Status is forced to
+  // "rejected" with an auto-generated reply.
+  let revertReport: {
+    revertedCount: number;
+    skipped: { target: string; reason: string }[];
+  } | null = null;
+  if (action === "revert") {
+    const cr = prospect.changeRequests.find((c) => c.id === changeRequestId);
+    if (!cr) {
+      return NextResponse.json(
+        { error: `Change request ${changeRequestId} not found on prospect.` },
+        { status: 404 },
+      );
+    }
+    if (!cr.coworkPatches || cr.coworkPatches.length === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "This change request has no captured patches to revert (was never auto-applied by Cowork).",
+        },
+        { status: 400 },
+      );
+    }
+    const result = await revertChangeRequestPatches({
+      prospect,
+      patches: cr.coworkPatches,
+    });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: `Revert failed: ${result.reason}` },
+        { status: 500 },
+      );
+    }
+    revertReport = {
+      revertedCount: result.revertedCount,
+      skipped: result.skipped,
+    };
+  }
+
+  // For "revert", overwrite incoming status to "rejected" + auto-
+  // generate a customer-facing reply explaining the revert. Operator
+  // doesn't need to type anything; the action implies the message.
+  // Skipped fields (if any) are mentioned so the customer knows to
+  // check their dashboard if something didn't fully unwind.
+  const effectiveStatus = action === "revert" ? "rejected" : status;
+  const effectiveReply =
+    action === "revert"
+      ? reply ??
+        (revertReport && revertReport.skipped.length === 0
+          ? "We've reverted this change. Your site is back to how it was before."
+          : `We've reverted what we could of this change (${revertReport?.revertedCount ?? 0} of ${(revertReport?.revertedCount ?? 0) + (revertReport?.skipped.length ?? 0)} fields). Anything that didn't unwind cleanly is flagged in your dashboard — let us know if it needs another pass.`)
+      : reply;
+
   let updateResult;
   try {
     updateResult = await updateChangeRequest(prospect.pageId, changeRequestId, {
-      status,
-      reply,
+      status: effectiveStatus,
+      reply: effectiveReply,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -104,11 +178,22 @@ export async function PATCH(request: Request) {
   // Routes through the branded HTML wrapper (sendCustomerEmail)
   // for visual parity with all other customer-facing emails.
   let emailErr: string | null = null;
-  const operatorTerminal = status === "resolved" || status === "rejected";
-  if (updateResult.transitionedToTerminal && operatorTerminal && reply) {
+  // Unlock skips the email — re-opening a CR shouldn't notify the
+  // customer (the operator is mid-investigation, not closing).
+  // Revert sends the rejected-template email with the auto-generated
+  // reply about the revert.
+  const operatorTerminal =
+    effectiveStatus === "resolved" || effectiveStatus === "rejected";
+  const skipCustomerEmail = action === "unlock";
+  if (
+    !skipCustomerEmail &&
+    updateResult.transitionedToTerminal &&
+    operatorTerminal &&
+    effectiveReply
+  ) {
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
     const templateId =
-      status === "resolved"
+      effectiveStatus === "resolved"
         ? "change-request-resolved"
         : "change-request-rejected";
     // siteUrl is required by the resolved template (primary CTA).
@@ -131,7 +216,7 @@ export async function PATCH(request: Request) {
         {
           customerName: firstName(prospect.name),
           originalMessage: updateResult.updated.message,
-          reply,
+          reply: effectiveReply ?? "",
           siteUrl,
           accountUrl: `${baseUrl}/account/${token}`,
         },
@@ -163,7 +248,14 @@ export async function PATCH(request: Request) {
     | { dispatched: true; via: "change-request-resolve" }
     | { dispatched: false; reason: string }
     | null = null;
-  if (status === "resolved" && updateResult.transitionedToTerminal) {
+  // Rebuild on first resolve transition (existing behaviour) AND
+  // on revert (so the reverted state actually deploys to the live
+  // site — without this the data revert lands in Notion but the
+  // built site keeps showing the old applied value).
+  const shouldRebuild =
+    (effectiveStatus === "resolved" && updateResult.transitionedToTerminal) ||
+    action === "revert";
+  if (shouldRebuild) {
     rebuildStatus = await maybeDispatchRebuild(prospect);
   }
 
@@ -171,12 +263,24 @@ export async function PATCH(request: Request) {
   try {
     const env = getServerEnv();
     const lines: string[] = [];
-    lines.push(`Action: status → ${status.toUpperCase()}`);
+    const actionLabel =
+      action === "unlock"
+        ? `UNLOCK → ${effectiveStatus.toUpperCase()} (re-opened)`
+        : action === "revert"
+          ? `REVERT → ${effectiveStatus.toUpperCase()} (${revertReport?.revertedCount ?? 0} field(s) reverted${revertReport && revertReport.skipped.length > 0 ? `; ${revertReport.skipped.length} skipped` : ""})`
+          : `status → ${effectiveStatus.toUpperCase()}`;
+    lines.push(`Action: ${actionLabel}`);
     lines.push(`Change request: ${changeRequestId.slice(0, 8)}…`);
     lines.push(`Customer: ${prospect.name} <${prospect.email}>`);
     lines.push(`Original message:\n  "${updateResult.updated.message}"`);
-    if (reply) lines.push(`Your reply:\n  "${reply}"`);
-    if (status === "resolved") {
+    if (effectiveReply) lines.push(`Reply:\n  "${effectiveReply}"`);
+    if (revertReport && revertReport.skipped.length > 0) {
+      lines.push(`Revert skipped:`);
+      for (const s of revertReport.skipped) {
+        lines.push(`  • ${s.target}: ${s.reason}`);
+      }
+    }
+    if (effectiveStatus === "resolved") {
       if (rebuildStatus?.dispatched) {
         lines.push(`Rebuild: dispatched (${rebuildStatus.via}).`);
       } else if (rebuildStatus && !rebuildStatus.dispatched) {
@@ -189,14 +293,21 @@ export async function PATCH(request: Request) {
             : `Customer emailed (change-request-resolved template).`,
         );
       }
-    } else if (status === "rejected") {
-      if (updateResult.transitionedToTerminal && reply) {
+    } else if (effectiveStatus === "rejected") {
+      if (rebuildStatus?.dispatched) {
+        lines.push(`Rebuild: dispatched (${rebuildStatus.via}).`);
+      } else if (rebuildStatus && !rebuildStatus.dispatched) {
+        lines.push(`Rebuild SKIPPED: ${rebuildStatus.reason}`);
+      }
+      if (updateResult.transitionedToTerminal && effectiveReply) {
         lines.push(
           emailErr
             ? `Customer email FAILED: ${emailErr}`
             : `Customer emailed (change-request-rejected template).`,
         );
       }
+    } else if (action === "unlock") {
+      lines.push(`Customer NOT emailed (unlock action — internal only).`);
     }
     lines.push("");
     lines.push(adminFooter({
@@ -205,7 +316,7 @@ export async function PATCH(request: Request) {
       anchor: `cr-${changeRequestId.slice(0, 8)}`,
     }));
     await notifyAdmin(env, {
-      subject: `${status === "resolved" ? "Resolved" : status === "rejected" ? "Rejected" : "Updated"} change request — ${prospect.name}`,
+      subject: `${action === "unlock" ? "Unlocked" : action === "revert" ? "Reverted" : effectiveStatus === "resolved" ? "Resolved" : effectiveStatus === "rejected" ? "Rejected" : "Updated"} change request — ${prospect.name}`,
       body: lines.join("\n"),
       category: "change-request",
     });

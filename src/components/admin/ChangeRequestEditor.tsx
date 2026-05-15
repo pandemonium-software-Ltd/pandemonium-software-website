@@ -42,6 +42,13 @@ export default function ChangeRequestEditor({ token, request }: Props) {
 
   const isTerminal =
     current.status === "resolved" || current.status === "rejected";
+  // Revert is only meaningful when Cowork actually applied patches
+  // (which captured previousValues at apply-time). Manual operator-
+  // resolved CRs have no patches to revert.
+  const isRevertable =
+    isTerminal &&
+    Array.isArray(current.coworkPatches) &&
+    current.coworkPatches.length > 0;
 
   function startEdit() {
     setDraftStatus(current.status);
@@ -55,6 +62,69 @@ export default function ChangeRequestEditor({ token, request }: Props) {
     setEditing(false);
     setError(null);
     setSuccess(null);
+  }
+
+  // Shared POST helper for the action buttons (unlock / revert).
+  // The same /api/admin/change-request endpoint handles all three
+  // verbs — `action` flag changes the server-side behaviour. This
+  // factors out the spinner + error + success-message plumbing.
+  async function postAction(args: {
+    action: "unlock" | "revert";
+    nextStatus: ChangeRequest["status"];
+    confirmMessage: string;
+  }) {
+    if (!confirm(args.confirmMessage)) return;
+    setError(null);
+    setSuccess(null);
+    setPending(true);
+    try {
+      const res = await fetch("/api/admin/change-request", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          changeRequestId: current.id,
+          status: args.nextStatus,
+          action: args.action,
+        }),
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        request?: ChangeRequest;
+        customerNotified?: boolean;
+        emailWarning?: string | null;
+        rebuild?:
+          | { dispatched: true; via: string }
+          | { dispatched: false; reason: string }
+          | null;
+        error?: string;
+      };
+      if (!res.ok || !json.success || !json.request) {
+        setError(json.error ?? "Action failed. Try again.");
+        return;
+      }
+      setCurrent(json.request);
+      const parts: string[] = [];
+      if (args.action === "unlock") {
+        parts.push("Unlocked.");
+      } else {
+        parts.push("Reverted.");
+        if (json.customerNotified) parts.push("Customer emailed.");
+        else if (json.emailWarning)
+          parts.push(`Customer email FAILED (${json.emailWarning}).`);
+      }
+      if (json.rebuild?.dispatched) {
+        parts.push("Site rebuild dispatched — live in ~90s.");
+      } else if (json.rebuild && !json.rebuild.dispatched) {
+        parts.push(`Rebuild skipped: ${json.rebuild.reason}`);
+      }
+      setSuccess(parts.join(" "));
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPending(false);
+    }
   }
 
   async function handleSave() {
@@ -139,13 +209,59 @@ export default function ChangeRequestEditor({ token, request }: Props) {
           </span>
         )}
         {!editing && (
-          <button
-            type="button"
-            onClick={startEdit}
-            className="ml-auto rounded-lg bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-navy-700"
-          >
-            {current.reply ? "Edit reply / status" : "Update status"}
-          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* Unlock — re-opens a closed CR back to in-progress
+             *  without firing a customer email. Used when operator
+             *  needs to re-investigate / re-classify after closing. */}
+            {isTerminal && (
+              <button
+                type="button"
+                onClick={() =>
+                  postAction({
+                    action: "unlock",
+                    nextStatus: "in-progress",
+                    confirmMessage:
+                      "Re-open this change request? Status flips back to 'in-progress'. Customer is NOT emailed.",
+                  })
+                }
+                disabled={pending}
+                className="rounded-lg border-2 border-navy-200 px-3 py-1.5 text-xs font-semibold text-navy-900 transition-colors hover:border-navy-400 disabled:opacity-60"
+                title="Re-open this CR for further editing"
+              >
+                Unlock
+              </button>
+            )}
+            {/* Revert — only when Cowork actually applied patches
+             *  (we have previousValues to write back). Walks coworkPatches
+             *  in reverse, writes previousValue to onboardingData,
+             *  triggers a rebuild, status → rejected, customer
+             *  emailed with auto-reply about the revert. */}
+            {isRevertable && (
+              <button
+                type="button"
+                onClick={() =>
+                  postAction({
+                    action: "revert",
+                    nextStatus: "rejected",
+                    confirmMessage:
+                      `REVERT: write back the previous values for ${current.coworkPatches?.length ?? 0} field(s) and trigger a fresh build? Status flips to 'rejected'. Customer is emailed about the revert. This is the safest way to undo a Cowork-applied change.`,
+                  })
+                }
+                disabled={pending}
+                className="rounded-lg border-2 border-ember-300 bg-ember-50 px-3 py-1.5 text-xs font-semibold text-ember-800 transition-colors hover:border-ember-500 disabled:opacity-60"
+                title={`Revert ${current.coworkPatches?.length ?? 0} applied patch(es) by writing previousValue back`}
+              >
+                ↺ Revert
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={startEdit}
+              className="rounded-lg bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-navy-700"
+            >
+              {current.reply ? "Edit reply / status" : "Update status"}
+            </button>
+          </div>
         )}
       </div>
 
