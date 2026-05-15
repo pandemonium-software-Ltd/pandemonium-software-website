@@ -161,7 +161,20 @@ export async function POST(request: Request) {
     );
   }
 
-  // Build From line from customer config or fallback to default.
+  // Build From line. Display name uses the customer's senderName /
+  // business name; technical sender domain has to be modu-forge.co.uk
+  // because that's the only domain verified with Resend right now.
+  // Subscribers' inboxes show "MyGem" (display name) — the technical
+  // <…@modu-forge.co.uk> appears only in raw headers / on hover.
+  //
+  // 2026-05-15: was using customerDomain (`news@<customer>.tld`)
+  // which produced 403 "domain not verified" from Resend on every
+  // send. When per-customer Resend domain verification ships
+  // (Stage 2C C5+), restore the customer-domain From line — until
+  // then verifiedDomain is the only way the send actually goes out.
+  //
+  // Reply-to is set further down to the customer's public email so
+  // subscriber replies go to them, not to us.
   const customerDomain =
     (ob.domain as { domain?: string } | undefined)?.domain ?? null;
   const senderName =
@@ -180,7 +193,18 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  const fromAddress = `${senderName} <${senderLocal}@${customerDomain}>`;
+  const VERIFIED_SENDER_DOMAIN = "modu-forge.co.uk";
+  const fromAddress = `${senderName} <${senderLocal}@${VERIFIED_SENDER_DOMAIN}>`;
+  // Reply-to: subscriber hits Reply → message lands with the
+  // customer (their public email), not with us. Falls back to the
+  // prospect's main email if no public override is set.
+  const contentBusiness = (
+    (ob.content ?? {}) as { business?: { publicEmail?: unknown } }
+  ).business;
+  const replyToAddress =
+    (typeof contentBusiness?.publicEmail === "string" &&
+      contentBusiness.publicEmail.trim()) ||
+    prospect.email;
 
   const env = getServerEnv();
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
@@ -243,6 +267,7 @@ export async function POST(request: Request) {
         chunk.map((m) => ({
           from: fromAddress,
           to: [m.to],
+          reply_to: replyToAddress,
           subject: m.subject,
           html: m.html,
           text: m.text,
