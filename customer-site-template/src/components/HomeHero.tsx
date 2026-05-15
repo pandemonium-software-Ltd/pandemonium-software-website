@@ -239,12 +239,21 @@ function ShowcaseHero({ data }: Props) {
           </div>
         ))}
         {/* Inline keyframes — kept in JS so the component stays
-         *  self-contained without polluting globals.css. */}
+         *  self-contained without polluting globals.css.
+         *
+         *  Crossfade pattern (fixed 2026-05-15): each photo is
+         *  visible for (100/N)% of the cycle, with a 5% overlap
+         *  into the next photo's slot. The 5% overlap is the
+         *  crossfade window — the outgoing photo fades out while
+         *  the incoming photo (offset by animation-delay) fades
+         *  in, so there's never a moment where both are invisible.
+         *  Earlier version used a tight 1%-visible window which
+         *  rendered as a "blink" instead of a hold. */}
         <style>{`
           @keyframes gallery-cycle {
-            0%, ${100 / cyclePhotos.length - 4}% { opacity: 0; }
-            ${100 / cyclePhotos.length - 1}%, ${100 / cyclePhotos.length}% { opacity: 1; }
-            ${100 / cyclePhotos.length + 4}%, 100% { opacity: 0; }
+            0% { opacity: 0; }
+            5%, ${100 / cyclePhotos.length}% { opacity: 1; }
+            ${100 / cyclePhotos.length + 5}%, 100% { opacity: 0; }
           }
         `}</style>
       </div>
