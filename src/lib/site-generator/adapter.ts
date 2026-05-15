@@ -158,9 +158,22 @@ export function adaptProspect(prospect: ProspectRecord): {
     );
   }
 
+  // Phase 3 brand sub-slice — `phase3Schema.brand` lives nested under
+  // .brand, NOT at the top level. Pre-2026-05-15 the adapter read
+  // top-level `intake.vibe` / `intake.brandColorPrimary` / etc.
+  // which silently returned undefined for every modern intake (the
+  // schema nests these), throwing the customer's build at the
+  // adapter's vibe/colour validation gate. Fixed here. Legacy
+  // top-level reads stay as fallbacks so any pre-nested-schema
+  // data still lands. Same logic for the legacy field names
+  // (brandColorPrimary vs the schema's primaryColour).
+  const intakeBrand = (intake.brand ?? {}) as Record<string, unknown>;
+
   // --- Vibe (style axis) ---
   const vibeRaw =
-    optionalString(intake.vibe) ?? optionalString(branding.vibe);
+    optionalString(intakeBrand.vibe) ??
+    optionalString(intake.vibe) ??
+    optionalString(branding.vibe);
   if (!vibeRaw || !VALID_VIBES.has(vibeRaw as Vibe)) {
     throw new AdapterError(
       `Vibe missing or invalid (got ${JSON.stringify(vibeRaw)}). ` +
@@ -181,34 +194,47 @@ export function adaptProspect(prospect: ProspectRecord): {
     "editorial",
   ]);
   const structureRaw =
-    optionalString(intake.structure) ?? optionalString(branding.structure);
+    optionalString(intakeBrand.structure) ??
+    optionalString(intake.structure) ??
+    optionalString(branding.structure);
   const structure: Structure =
     structureRaw && VALID_STRUCTURES.has(structureRaw as Structure)
       ? (structureRaw as Structure)
       : "services";
 
   // --- Colours ---
-  // Sourced from intake (where the colour wheel lives) or the
-  // branding sub-blob if a future UI puts them elsewhere. Required.
+  // Phase 3 brand schema names them primaryColour / secondaryColour
+  // (nested under .brand). Adapter previously read intake.brandColor*
+  // at the top level — wrong path AND wrong field names. Fixed here.
+  // Legacy `intake.brandColorPrimary` etc. preserved as fallbacks
+  // for any pre-schema-rename data. Secondary is OPTIONAL in the
+  // schema (the IntakeForm marks it "optional") — fall back to
+  // primary if missing so the customer-site doesn't lose its
+  // accent colour.
   const primaryRaw =
+    optionalString(intakeBrand.primaryColour) ??
     optionalString(intake.brandColorPrimary) ??
     optionalString(branding.brandColorPrimary);
   const secondaryRaw =
+    optionalString(intakeBrand.secondaryColour) ??
     optionalString(intake.brandColorSecondary) ??
     optionalString(branding.brandColorSecondary);
   if (!primaryRaw || !HEX_RE.test(primaryRaw)) {
     throw new AdapterError(
-      `Brand primary colour missing or not a valid hex (got ${JSON.stringify(primaryRaw)}).`,
+      `Brand primary colour missing or not a valid hex (got ${JSON.stringify(primaryRaw)}). ` +
+        `Customer needs to pick one in the Phase 3 intake Brand step.`,
     );
   }
-  if (!secondaryRaw || !HEX_RE.test(secondaryRaw)) {
-    throw new AdapterError(
-      `Brand secondary colour missing or not a valid hex (got ${JSON.stringify(secondaryRaw)}).`,
-    );
-  }
+  // Secondary fallback: if customer left it blank, use primary.
+  // Better than throwing — gives a coherent monochrome palette
+  // and lets the build complete.
+  const secondary: HexColor =
+    secondaryRaw && HEX_RE.test(secondaryRaw)
+      ? (secondaryRaw as HexColor)
+      : (primaryRaw as HexColor);
   const colors: BrandColors = {
     primary: primaryRaw as HexColor,
-    secondary: secondaryRaw as HexColor,
+    secondary,
   };
 
   // --- Services ---
