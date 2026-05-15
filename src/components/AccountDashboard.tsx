@@ -61,6 +61,17 @@ export type AccountDashboardProps = {
    *  monthly send count. Driven by content.newsletter.* on the
    *  prospect record. */
   newsletterSummary?: NewsletterSummary;
+  /** Effective monthly caps for this customer this month — default
+   *  cap PLUS any admin-granted bonus from
+   *  onboardingData.adminGrants[YYYY-MM]. Server-side caller
+   *  computes via effectiveMonthlyCap + getAdminGrant. Optional —
+   *  legacy callers fall back to the hardcoded defaults so the UI
+   *  keeps rendering even before the page-level wiring lands. */
+  effectiveCaps?: {
+    changeRequests?: number;
+    offers?: number;
+    newsletters?: number;
+  };
 };
 
 // Stage groupings — used to gate which blocks render.
@@ -137,9 +148,21 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     hubApplicableStepIds,
     currentOffer,
     newsletterSummary,
+    effectiveCaps,
   } = props;
   const hasOffersModule = modules.includes("Offers");
   const hasNewsletterModule = modules.includes("Newsletter");
+
+  // Resolve each effective cap from props, falling back to the
+  // hardcoded default if the caller hasn't supplied one yet. Each
+  // child card that displays a cap reads from these locals so the
+  // admin-granted bonus shows up consistently across the UI.
+  const effectiveCrCap =
+    effectiveCaps?.changeRequests ?? MONTHLY_CHANGE_REQUEST_LIMIT;
+  const effectiveOfferCap =
+    effectiveCaps?.offers ?? MONTHLY_OFFER_UPDATE_LIMIT;
+  const effectiveNewsletterCap =
+    effectiveCaps?.newsletters ?? NEWSLETTER_MONTHLY_SEND_LIMIT;
 
   const firstName = (name.split(/\s+/)[0] ?? name).trim();
   const statusBadge = STATUS_LABEL[status] ?? {
@@ -464,11 +487,15 @@ export default function AccountDashboard(props: AccountDashboardProps) {
 
                     {isSiteLive ? (
                       // Live composers — full interactive cards.
+                      // Pass through the effective caps so the
+                      // composer pills show the right "X of Y" total
+                      // (default + admin grant).
                       <div className="mt-4 grid gap-4">
                         {hasNewsletterModule && newsletterSummary && (
                           <NewsletterCard
                             token={token}
                             summary={newsletterSummary}
+                            cap={effectiveNewsletterCap}
                           />
                         )}
                         {hasOffersModule && (
@@ -476,6 +503,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                             token={token}
                             current={currentOffer ?? null}
                             changeRequests={changeRequests}
+                            cap={effectiveOfferCap}
                           />
                         )}
                       </div>
@@ -494,7 +522,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                               <strong className="text-navy-900">
                                 Newsletter sends
                               </strong>{" "}
-                              — send {NEWSLETTER_MONTHLY_SEND_LIMIT}{" "}
+                              — send {effectiveNewsletterCap}{" "}
                               emails a month to your subscribers,
                               including an image upload.
                             </span>
@@ -512,7 +540,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                               <strong className="text-navy-900">
                                 Offer updates
                               </strong>{" "}
-                              — schedule {MONTHLY_OFFER_UPDATE_LIMIT}{" "}
+                              — schedule {effectiveOfferCap}{" "}
                               promotional strips a month on your
                               homepage with a headline, dates and CTA.
                             </span>
@@ -567,7 +595,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   <UsageRow
                     label="Newsletter sends"
                     used={newsletterSummary.sentThisMonth}
-                    cap={NEWSLETTER_MONTHLY_SEND_LIMIT}
+                    cap={effectiveNewsletterCap}
                   />
                 )}
                 {hasOffersModule && (
@@ -577,7 +605,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                       requests,
                       "offer-update",
                     )}
-                    cap={MONTHLY_OFFER_UPDATE_LIMIT}
+                    cap={effectiveOfferCap}
                   />
                 )}
                 <UsageRow
@@ -586,7 +614,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                     requests,
                     "free-text",
                   )}
-                  cap={MONTHLY_CHANGE_REQUEST_LIMIT}
+                  cap={effectiveCrCap}
                 />
               </dl>
             </DashCard>
@@ -649,6 +677,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               <ChangeRequestsBlock
                 token={token}
                 requests={requests}
+                cap={effectiveCrCap}
                 onSubmitted={(req) => setRequests((prev) => [req, ...prev])}
                 onRetracted={(id) =>
                   setRequests((prev) =>
@@ -934,11 +963,16 @@ function NextStepCard({
 function ChangeRequestsBlock({
   token,
   requests,
+  cap,
   onSubmitted,
   onRetracted,
 }: {
   token: string;
   requests: ChangeRequest[];
+  /** Effective monthly cap (default + any admin-granted bonus this
+   *  month). The block displays this number in the usage pill,
+   *  the at-cap banner and the friendly intro paragraph. */
+  cap: number;
   onSubmitted: (req: ChangeRequest) => void;
   onRetracted: (id: string) => void;
 }) {
@@ -961,10 +995,7 @@ function ChangeRequestsBlock({
   const [retracting, setRetracting] = useState(false);
 
   const usedThisMonth = countActiveChangeRequestsThisMonth(requests);
-  const remaining = Math.max(
-    0,
-    MONTHLY_CHANGE_REQUEST_LIMIT - usedThisMonth,
-  );
+  const remaining = Math.max(0, cap - usedThisMonth);
   const atCap = remaining === 0;
 
   /**
@@ -1089,7 +1120,7 @@ function ChangeRequestsBlock({
                   : "bg-cream-100 text-navy-800 ring-1 ring-navy-200",
             ].join(" ")}
           >
-            {usedThisMonth} of {MONTHLY_CHANGE_REQUEST_LIMIT} used
+            {usedThisMonth} of {cap} used
             this month
           </span>
         </div>
@@ -1101,7 +1132,7 @@ function ChangeRequestsBlock({
         Tell me what you&apos;d like updated — a phone number, a new
         photo, a price tweak, a fresh testimonial. You get{" "}
         <strong>
-          {MONTHLY_CHANGE_REQUEST_LIMIT} changes a month
+          {cap} changes a month
         </strong>{" "}
         included. You can bundle a few related tweaks into one
         request (&ldquo;update my phone AND email&rdquo; counts as
@@ -1129,7 +1160,7 @@ function ChangeRequestsBlock({
       {atCap ? (
         <div className="mt-5 rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm leading-relaxed text-navy-700">
           <p className="font-semibold text-navy-900">
-            All {MONTHLY_CHANGE_REQUEST_LIMIT} requests used this
+            All {cap} requests used this
             month.
           </p>
           <p className="mt-2">

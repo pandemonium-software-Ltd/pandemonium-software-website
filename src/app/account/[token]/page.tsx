@@ -22,8 +22,12 @@
 import type { Metadata } from "next";
 import {
   getProspectByToken,
+  MONTHLY_CHANGE_REQUEST_LIMIT,
+  MONTHLY_OFFER_UPDATE_LIMIT,
   type ProspectStatus,
 } from "@/lib/notion-prospects";
+import { NEWSLETTER_MONTHLY_SEND_LIMIT } from "@/lib/newsletter/limits";
+import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import { deriveStepList, getDoneFlags } from "@/lib/onboarding";
 import AccountDashboard from "@/components/AccountDashboard";
 import { site } from "@/lib/site";
@@ -198,6 +202,29 @@ export default async function AccountPage({
   const doneFlags = getDoneFlags(prospect);
   const applicableStepIds = hubSteps.filter((s) => s.applicable).map((s) => s.id);
 
+  // Effective monthly caps for this customer. Default cap PLUS any
+  // bonus the admin granted via /admin/[token] this month. The cap
+  // counters in the API routes already use these — we just need to
+  // surface them in the dashboard so the customer's "X of Y" display
+  // matches what the server actually allows.
+  const effectiveCaps = {
+    changeRequests: effectiveMonthlyCap({
+      prospect,
+      defaultCap: MONTHLY_CHANGE_REQUEST_LIMIT,
+      kind: "changeRequests",
+    }),
+    offers: effectiveMonthlyCap({
+      prospect,
+      defaultCap: MONTHLY_OFFER_UPDATE_LIMIT,
+      kind: "offers",
+    }),
+    newsletters: effectiveMonthlyCap({
+      prospect,
+      defaultCap: NEWSLETTER_MONTHLY_SEND_LIMIT,
+      kind: "newsletters",
+    }),
+  };
+
   return (
     <AccountDashboard
       token={token}
@@ -216,6 +243,7 @@ export default async function AccountPage({
       hubApplicableStepIds={applicableStepIds}
       currentOffer={currentOffer}
       newsletterSummary={newsletterSummary}
+      effectiveCaps={effectiveCaps}
     />
   );
 }

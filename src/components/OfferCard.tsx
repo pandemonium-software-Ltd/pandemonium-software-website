@@ -48,6 +48,10 @@ type Props = {
   current: OfferView | null;
   /** Change-request list — used for the monthly-cap check. */
   changeRequests: ChangeRequest[];
+  /** Effective monthly offer-update cap = default + admin grant
+   *  bonus. Caller computes; falls back to MONTHLY_OFFER_UPDATE_LIMIT
+   *  when not provided so legacy callers keep working. */
+  cap?: number;
 };
 
 type Draft = {
@@ -111,7 +115,12 @@ export default function OfferCard({
   token,
   current,
   changeRequests,
+  cap: capProp,
 }: Props) {
+  // Effective cap = default + any admin-granted bonus this month.
+  // Falls back to the hardcoded default so callers that haven't
+  // been updated yet still render correctly.
+  const cap = capProp ?? MONTHLY_OFFER_UPDATE_LIMIT;
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft());
   const [pending, setPending] = useState(false);
@@ -125,7 +134,7 @@ export default function OfferCard({
     changeRequests,
     "offer-update",
   );
-  const remaining = Math.max(0, MONTHLY_OFFER_UPDATE_LIMIT - usedThisMonth);
+  const remaining = Math.max(0, cap - usedThisMonth);
   const atCap = remaining === 0;
 
   function openComposer() {
@@ -190,10 +199,10 @@ export default function OfferCard({
       const remainingAfter = remaining - 1;
       setSuccess(
         json.autoApplied && !json.buildWarning
-          ? `Done — your offer is being deployed and will be live on your site in about 2 minutes. (${remainingAfter} of ${MONTHLY_OFFER_UPDATE_LIMIT} changes remaining this month.)`
+          ? `Done — your offer is being deployed and will be live on your site in about 2 minutes. (${remainingAfter} of ${cap} changes remaining this month.)`
           : json.autoApplied && json.buildWarning
-            ? `Saved your offer details — there's a hiccup with the build (${json.buildWarning}). We've been notified and will sort it. (${remainingAfter} of ${MONTHLY_OFFER_UPDATE_LIMIT} remaining this month.)`
-            : `Submitted. (${remainingAfter} of ${MONTHLY_OFFER_UPDATE_LIMIT} changes remaining this month.)`,
+            ? `Saved your offer details — there's a hiccup with the build (${json.buildWarning}). We've been notified and will sort it. (${remainingAfter} of ${cap} remaining this month.)`
+            : `Submitted. (${remainingAfter} of ${cap} changes remaining this month.)`,
       );
       setTimeout(() => setSuccess(null), 12000);
       // Soft refresh so the updated offer shows up on the card.
@@ -250,7 +259,7 @@ export default function OfferCard({
           No active offer right now. Use the button below to schedule
           a promotional strip for your homepage — a headline, dates and
           optional button. Counts as one of your{" "}
-          <strong>{MONTHLY_OFFER_UPDATE_LIMIT} changes a month</strong>.
+          <strong>{cap} changes a month</strong>.
         </p>
       )}
 
@@ -274,7 +283,7 @@ export default function OfferCard({
         </button>
         <span className="text-xs text-navy-500">
           {atCap
-            ? `All ${MONTHLY_OFFER_UPDATE_LIMIT} monthly changes used — resets on the 1st`
+            ? `All ${cap} monthly changes used — resets on the 1st`
             : `Uses 1 of ${remaining} remaining this month`}
         </span>
       </div>
@@ -288,7 +297,7 @@ export default function OfferCard({
             {current ? "Update your offer" : "Schedule an offer"}
           </h2>
           <p className="mt-1 text-sm text-navy-600">
-            This counts as 1 of your {MONTHLY_OFFER_UPDATE_LIMIT}{" "}
+            This counts as 1 of your {cap}{" "}
             monthly offer updates. Once you save, it&apos;ll be live on
             your site within a couple of minutes.
           </p>

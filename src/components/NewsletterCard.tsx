@@ -41,6 +41,11 @@ export type NewsletterSummary = {
 type Props = {
   token: string;
   summary: NewsletterSummary;
+  /** Effective monthly send cap = default + admin grant bonus.
+   *  Caller computes from prospect.onboardingData.adminGrants[mm]
+   *  + NEWSLETTER_MONTHLY_SEND_LIMIT. Falls back to the bare
+   *  default if not provided so legacy callers keep working. */
+  cap?: number;
 };
 
 type TemplateId =
@@ -92,7 +97,15 @@ function emptyDraft(): Draft {
   };
 }
 
-export default function NewsletterCard({ token, summary }: Props) {
+export default function NewsletterCard({
+  token,
+  summary,
+  cap: capProp,
+}: Props) {
+  // Effective cap = caller-provided (admin-granted bonus included)
+  // or default. Internal references use this so admin grants flow
+  // through without changing the call sites.
+  const cap = capProp ?? NEWSLETTER_MONTHLY_SEND_LIMIT;
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const subscribersDialogRef = useRef<HTMLDialogElement | null>(null);
   // Hidden <input type=file> the "Upload image" button triggers.
@@ -207,7 +220,7 @@ export default function NewsletterCard({ token, summary }: Props) {
 
   const remaining = Math.max(
     0,
-    NEWSLETTER_MONTHLY_SEND_LIMIT - summary.sentThisMonth,
+    cap - summary.sentThisMonth,
   );
   const atCap = remaining === 0;
   const noSubscribers = summary.subscriberCount === 0;
@@ -292,7 +305,7 @@ export default function NewsletterCard({ token, summary }: Props) {
         <Stat label="Subscribers" value={summary.subscriberCount} />
         <Stat
           label="Sent this month"
-          value={`${summary.sentThisMonth}/${NEWSLETTER_MONTHLY_SEND_LIMIT}`}
+          value={`${summary.sentThisMonth}/${cap}`}
         />
         <Stat
           label="Last sent"
@@ -334,7 +347,7 @@ export default function NewsletterCard({ token, summary }: Props) {
             ? "Need subscribers first — your homepage signup widget will collect them, or add manually"
             : atCap
               ? "Monthly send used — resets on the 1st"
-              : `${remaining} of ${NEWSLETTER_MONTHLY_SEND_LIMIT} send remaining this month`}
+              : `${remaining} of ${cap} send remaining this month`}
         </span>
       </div>
 
