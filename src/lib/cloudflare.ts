@@ -61,7 +61,20 @@ export class CloudflareApiError extends Error {
  *
  * Throws CloudflareApiError on non-2xx (with the first error
  * message), AbortError on timeout, TypeError on network failures.
+ *
+ * Auto-retries on HTTP 429 (rate-limited) — Ben's user-scoped
+ * token is shared across this Worker AND any other Cloudflare
+ * tooling Ben runs (his marketing zones, wrangler deploys, etc.),
+ * so transient bursts can throttle individual requests. We retry
+ * up to RETRY_429_MAX times with linear backoff (RETRY_429_DELAY_MS
+ * × attempt). After exhausting retries, the final 429 propagates
+ * as a CloudflareApiError so the caller can decide to skip vs
+ * surface-as-incident. Non-429 errors are NOT retried — they're
+ * usually deterministic (auth, missing scope, malformed body).
  */
+const RETRY_429_MAX = 3;
+const RETRY_429_DELAY_MS = 4_000;
+
 export async function cloudflareFetch<T = unknown>(
   path: string,
   init: { method?: string; body?: unknown } = {},
@@ -77,44 +90,61 @@ export async function cloudflareFetch<T = unknown>(
     );
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let lastErr: CloudflareApiError | undefined;
+  for (let attempt = 1; attempt <= RETRY_429_MAX; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  try {
-    const res = await fetch(`${CLOUDFLARE_API_BASE}${path}`, {
-      method: init.method ?? "GET",
-      headers: {
-        Authorization: `Bearer ${env.BEN_CLOUDFLARE_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-      signal: controller.signal,
-    });
+    try {
+      const res = await fetch(`${CLOUDFLARE_API_BASE}${path}`, {
+        method: init.method ?? "GET",
+        headers: {
+          Authorization: `Bearer ${env.BEN_CLOUDFLARE_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: init.body ? JSON.stringify(init.body) : undefined,
+        signal: controller.signal,
+      });
 
-    if (!res.ok) {
-      // Cloudflare error responses are JSON:
-      // { success: false, errors: [{ code, message }], messages: [], result: null }
-      let code: number | undefined;
-      let message = res.statusText;
-      try {
-        const errBody = (await res.json()) as {
-          errors?: { code?: number; message?: string }[];
-        };
-        if (errBody?.errors?.[0]?.message) message = errBody.errors[0].message;
-        if (errBody?.errors?.[0]?.code) code = errBody.errors[0].code;
-      } catch {
-        // body wasn't JSON — keep the statusText
+      if (!res.ok) {
+        // Cloudflare error responses are JSON:
+        // { success: false, errors: [{ code, message }], messages: [], result: null }
+        let code: number | undefined;
+        let message = res.statusText;
+        try {
+          const errBody = (await res.json()) as {
+            errors?: { code?: number; message?: string }[];
+          };
+          if (errBody?.errors?.[0]?.message) message = errBody.errors[0].message;
+          if (errBody?.errors?.[0]?.code) code = errBody.errors[0].code;
+        } catch {
+          // body wasn't JSON — keep the statusText
+        }
+        const err = new CloudflareApiError(res.status, message, code);
+        // Retry only on 429 — other errors are deterministic.
+        if (res.status === 429 && attempt < RETRY_429_MAX) {
+          lastErr = err;
+          // Linear backoff: 4s, 8s, 12s. Stays well under any
+          // single-prospect tick budget (~30s) but gives the bucket
+          // time to refill if we tripped over Ben's other usage.
+          await new Promise((r) =>
+            setTimeout(r, RETRY_429_DELAY_MS * attempt),
+          );
+          continue;
+        }
+        throw err;
       }
-      throw new CloudflareApiError(res.status, message, code);
-    }
 
-    // Cloudflare wraps successful responses in { success: true, result: ..., ... }.
-    // Caller types T as the unwrapped result shape.
-    const body = (await res.json()) as { result: T };
-    return body.result;
-  } finally {
-    clearTimeout(timeout);
+      // Cloudflare wraps successful responses in { success: true, result: ..., ... }.
+      // Caller types T as the unwrapped result shape.
+      const body = (await res.json()) as { result: T };
+      return body.result;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+  // All retries exhausted on 429 — surface the last error.
+  throw lastErr ?? new CloudflareApiError(429, "Rate limited (retries exhausted)");
 }
 
 // ---------- Domain types (only the fields we read) ----------

@@ -69,7 +69,18 @@ export const step1Cloudflare: Step = {
     try {
       pending = await listMemberships("pending");
     } catch (e) {
-      // CloudflareApiError: surface to fail handler so Ben sees it via gmail.
+      // 429 after auto-retry exhaustion is a transient state (Ben's
+      // user-scoped CF token is shared with other tooling — see
+      // src/lib/cloudflare.ts head comment). Skip this tick rather
+      // than triggering an [INCIDENT] email; the next tick will
+      // retry naturally. Other Cloudflare errors (auth, scope,
+      // network) ARE worth surfacing — re-throw so Ben sees them.
+      if (e instanceof CloudflareApiError && e.status === 429) {
+        return {
+          status: "skip",
+          reason: `Cloudflare API rate-limited (429) on listMemberships after ${3} retries. Will retry next tick.`,
+        };
+      }
       throw new Error(
         `listMemberships(pending) failed: ${e instanceof Error ? e.message : String(e)}`,
       );
