@@ -189,6 +189,24 @@ export async function POST(request: Request) {
           );
         });
       }
+      // Same idea for post-commit auto-apply failures (changeRequestId
+      // set, since 2026-05-15). Stamp the CR with the failure
+      // reason so it surfaces in /admin + the customer's dashboard
+      // — without this the CR sits in "in-progress" forever after
+      // a live build dies.
+      if (parsed.data.changeRequestId) {
+        await patchChangeRequest(
+          prospect.pageId,
+          parsed.data.changeRequestId,
+          {
+            coworkReasoning: `[live build failed] ${parsed.data.errorMessage}`,
+          },
+        ).catch((e) => {
+          console.warn(
+            `[build-callback] couldn't stamp CR failure: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        });
+      }
       console.error(
         `[build-callback] LIVE build FAILED for ${parsed.data.token}${isFinalLaunchFailure ? " (LAUNCH DAY)" : ""}: ${parsed.data.errorMessage}`,
       );
@@ -460,6 +478,63 @@ export async function POST(request: Request) {
         reviewEditId: parsed.data.reviewEditId,
         customerNotified: !emailWarning,
         emailWarning,
+      });
+    }
+
+    // Sub-case (d): post-commit auto-apply by Cowork (changeRequestId
+    // set, no reviewEditId, no finalLaunch). Step6 dispatches mode=live
+    // for ALL post-commit changes since 2026-05-15 — preview-then-
+    // approve gate was removed in favour of direct apply (matches the
+    // operator-Apply path in /admin). Mark the CR resolved + send the
+    // customer the "your change is live" email.
+    if (parsed.data.changeRequestId && parsed.data.changeRequestId.length > 0) {
+      const merged = await patchChangeRequest(
+        prospect.pageId,
+        parsed.data.changeRequestId,
+        {
+          status: "resolved",
+          coworkPatchAppliedAt: new Date().toISOString(),
+          reply:
+            "Applied — your change is now live on your site.",
+        },
+      );
+      if (!merged) {
+        return NextResponse.json(
+          {
+            error: `Change request ${parsed.data.changeRequestId} not found on prospect.`,
+          },
+          { status: 404 },
+        );
+      }
+      let crEmailWarning: string | null = null;
+      try {
+        await sendCustomerEmail(
+          env,
+          prospect.email,
+          "change-request-applied-live",
+          {
+            customerName: firstName(prospect.name),
+            originalMessage: merged.message,
+            siteUrl: parsed.data.previewUrl,
+            accountUrl: `${baseUrl}/account/${parsed.data.token}`,
+          },
+        );
+      } catch (e) {
+        crEmailWarning = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[build-callback] change-request-applied-live email failed: ${crEmailWarning}`,
+        );
+      }
+      console.log(
+        `[build-callback] LIVE auto-apply for ${parsed.data.token} cr=${parsed.data.changeRequestId}`,
+      );
+      return NextResponse.json({
+        success: true,
+        action: "change-request-applied-live",
+        mode: "live",
+        changeRequestId: parsed.data.changeRequestId,
+        customerNotified: !crEmailWarning,
+        emailWarning: crEmailWarning,
       });
     }
 

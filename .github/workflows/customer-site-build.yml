@@ -236,15 +236,21 @@ jobs:
             # live mode — include reviewEditId if this is a pre-commit
             # auto-apply build so the callback can email the customer
             # the right "your edit is applied" template. Include
-            # finalLaunch when this is the launch-day build dispatched
-            # by step7-go-live; the callback uses that to flip status
-            # to "Live" + send the "you're live" announcement.
+            # changeRequestId for POST-commit auto-apply (Cowork
+            # step6 now dispatches mode=live for these too — the
+            # preview-then-approve gate was removed 2026-05-15;
+            # callback marks the CR resolved + sends the customer
+            # the "applied live" email). Include finalLaunch when
+            # this is the launch-day build dispatched by step7-
+            # go-live; the callback uses that to flip status to
+            # "Live" + send the "you're live" announcement.
             PAYLOAD=$(jq -nc \
               --arg token "${{ steps.token.outputs.value }}" \
               --arg url "${{ steps.fetch.outputs.preview_url }}" \
               --arg reid "${{ steps.token.outputs.review_edit_id }}" \
+              --arg crid "${{ steps.token.outputs.change_request_id }}" \
               --arg fl "${{ steps.token.outputs.final_launch }}" \
-              '{token: $token, status: "success", mode: "live", previewUrl: $url, reviewEditId: $reid, finalLaunch: $fl}')
+              '{token: $token, status: "success", mode: "live", previewUrl: $url, reviewEditId: $reid, changeRequestId: $crid, finalLaunch: $fl}')
           fi
           curl -sS -X POST \
             -H "Content-Type: application/json" \

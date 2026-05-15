@@ -450,7 +450,20 @@ async function tryAutoApply(args: {
         "Customer has no per-customer Worker yet — build dispatch skipped",
     };
   }
-  const mode = args.item.kind === "post-commit" ? "preview" : "live";
+  // 2026-05-15: post-commit now ALSO uses mode="live" — direct
+  // apply, no preview-then-approve gate. Customer is already in
+  // the loop (they submitted the request). The preview was a
+  // nice-to-have visual confirmation, but added a 2nd email + an
+  // approve click before changes took effect, AND broke entirely
+  // for customer accounts without workers.dev subdomains. Direct
+  // apply matches the operator-Apply path in /admin and is the
+  // simpler default.
+  //
+  // mode=live + changeRequestId in the workflow payload tells the
+  // build-callback to mark the CR resolved + send the customer
+  // the "your change is live" email after the live build succeeds.
+  // Pre-commit Hub Step 5 review edits keep mode=live (unchanged).
+  const mode = "live";
   const itemIdField =
     args.item.kind === "post-commit"
       ? { changeRequestId: args.item.request.id }
