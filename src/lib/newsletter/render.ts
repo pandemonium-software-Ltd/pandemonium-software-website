@@ -168,10 +168,20 @@ function renderPersonalNote(
   brand: NewsletterBrand,
   footer: NewsletterFooter,
 ): string {
-  // Minimal — just logo + body + sign-off. Feels like a personal
-  // email, not a marketing send.
+  // Minimal — just logo + (optional) image + body + sign-off.
+  // Feels like a personal email, not a marketing send.
+  //
+  // Bug fix 2026-05-15: this template used to silently drop
+  // c.imageUrl (the other 3 templates rendered it; personal-note
+  // didn't). When a customer uploaded an image then chose the
+  // personal-note template, the upload was wasted and the email
+  // shipped without the image — confusing to debug because the
+  // upload + send both succeeded silently.
   return wrap(brand, c.subject, [
     header(brand),
+    c.imageUrl
+      ? `<tr><td style="padding:0 0 18px;"><img src="${esc(c.imageUrl)}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:8px;"></td></tr>`
+      : "",
     paragraphsHtml(paragraphs),
     `<tr><td style="padding:8px 0 18px;"><p style="margin:0;font-size:16px;line-height:1.55;color:#172a42;">— ${esc(brand.senderName)}</p></td></tr>`,
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
