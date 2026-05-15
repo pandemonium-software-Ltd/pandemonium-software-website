@@ -86,6 +86,14 @@ const requestSchema = z.discriminatedUnion("status", [
      *  dispatched. Tells the callback to flip status to "Live" +
      *  stamp Site Live At + send the celebratory email. */
     finalLaunch: finalLaunchString,
+    /** Set by the customer-site-build workflow's preview-upload step
+     *  when the customer's CF account has no workers.dev subdomain —
+     *  wrangler emits no preview URL, so the workflow falls back to
+     *  promoting the just-uploaded version directly to live. The
+     *  callback handles this by skipping the preview-then-approve
+     *  gate: marks the CR resolved, sends "applied live" instead of
+     *  "preview ready", uses the customer's live URL as previewUrl. */
+    fallbackPromotedToLive: finalLaunchString,
   }),
   z.object({
     token: z.string().regex(TOKEN_RE),
@@ -507,6 +515,72 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+
+    // Sub-case (b): the workflow's preview-upload step had to fall
+    // back to direct-promote-to-live because the customer's CF
+    // account has no workers.dev subdomain (so wrangler emitted no
+    // preview URL to gate against). The version is already deployed
+    // to live; previewUrl is the customer's live URL. Skip the
+    // approve-to-promote dance: mark the CR resolved + send "your
+    // change is live" instead of "preview ready".
+    //
+    // This keeps the customer-driven CR pipeline working for the
+    // common case of new customer accounts. Customer's safety-gate
+    // (preview before approve) becomes "applied immediately" — same
+    // promise as the manual /admin Apply button, just without the
+    // operator step.
+    if (parsed.data.fallbackPromotedToLive === true) {
+      const merged = await patchChangeRequest(
+        prospect.pageId,
+        parsed.data.changeRequestId,
+        {
+          status: "resolved",
+          coworkPatchAppliedAt: new Date().toISOString(),
+          reply:
+            "Applied — your change is now live on your site. (Your Cloudflare account doesn't have a preview subdomain configured, so we skipped the preview-then-approve gate and went straight to live. Future change requests will work the same way.)",
+        },
+      );
+      if (!merged) {
+        return NextResponse.json(
+          {
+            error: `Change request ${parsed.data.changeRequestId} not found on prospect.`,
+          },
+          { status: 404 },
+        );
+      }
+
+      let emailWarning: string | null = null;
+      try {
+        await sendCustomerEmail(
+          env,
+          prospect.email,
+          "change-request-applied-live",
+          {
+            customerName: firstName(prospect.name),
+            originalMessage: merged.message,
+            siteUrl: parsed.data.previewUrl,
+            accountUrl: `${baseUrl}/account/${parsed.data.token}`,
+          },
+        );
+      } catch (e) {
+        emailWarning = e instanceof Error ? e.message : String(e);
+        console.warn(
+          `[build-callback] change-request-applied-live email failed: ${emailWarning}`,
+        );
+      }
+      console.log(
+        `[build-callback] PREVIEW fallback → LIVE for ${parsed.data.token} cr=${parsed.data.changeRequestId} (no workers.dev subdomain)`,
+      );
+      return NextResponse.json({
+        success: true,
+        action: "preview-fallback-applied-live",
+        mode: "preview",
+        changeRequestId: parsed.data.changeRequestId,
+        customerNotified: !emailWarning,
+        emailWarning,
+      });
+    }
+
     const merged = await patchChangeRequest(
       prospect.pageId,
       parsed.data.changeRequestId,

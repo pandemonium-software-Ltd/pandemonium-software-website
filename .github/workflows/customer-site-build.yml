@@ -173,17 +173,37 @@ jobs:
             PREVIEW_VAR_ARGS="--var PREVIEW_ACCESS_TOKEN:${{ steps.token.outputs.preview_access_token }}"
           fi
           OUT=$(npx wrangler versions upload --name "${{ steps.fetch.outputs.worker_name }}" $PREVIEW_VAR_ARGS 2>&1 | tee /dev/stderr)
-          # Wrangler prints a line like: "Worker Version ID: <uuid>"
-          # and a separate line containing the preview URL like
-          # "<id>.<account-subdomain>.workers.dev". Extract both.
+          # Wrangler prints "Worker Version ID: <uuid>" plus
+          # (sometimes) a separate "<id>.<account-subdomain>.workers.dev"
+          # preview URL — but ONLY if the customer's CF account has a
+          # workers.dev subdomain enabled. Most fresh customer accounts
+          # don't, so we have to handle "version uploaded but no preview
+          # URL" gracefully. See history: this used to fail the whole
+          # workflow + email Ben an incident every time.
           VERSION_ID=$(printf "%s" "$OUT" | grep -Eo '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-          # Cloudflare's version preview URL pattern (covers both
-          # workers.dev subdomain shapes that ship today).
           PREVIEW_VERSION_URL=$(printf "%s" "$OUT" | grep -Eo 'https://[a-z0-9-]+(\.[a-z0-9-]+)*\.workers\.dev' | head -1)
-          if [ -z "$VERSION_ID" ] || [ -z "$PREVIEW_VERSION_URL" ]; then
-            echo "::error::Couldn't extract version id / preview URL from wrangler output"
+          if [ -z "$VERSION_ID" ]; then
+            echo "::error::Couldn't extract version id from wrangler output"
             echo "$OUT"
             exit 1
+          fi
+          if [ -z "$PREVIEW_VERSION_URL" ]; then
+            # No workers.dev preview URL emitted → customer's CF
+            # account has no subdomain configured. PROMOTE THE
+            # JUST-UPLOADED VERSION TO LIVE so the change actually
+            # takes effect, then use the customer's live URL as the
+            # "preview" URL in the callback. The customer's
+            # change-request-applied email links them to their live
+            # site (which now has the change). The approve-to-promote
+            # gate is bypassed in this fallback path — acceptable
+            # because the change is the customer's own request, and
+            # they're already in the loop via the request-received
+            # email.
+            echo "No workers.dev preview URL emitted by wrangler — falling back to direct-promote-to-live."
+            npx wrangler versions deploy "${VERSION_ID}@100" --name "${{ steps.fetch.outputs.worker_name }}" --yes
+            PREVIEW_VERSION_URL="${{ steps.fetch.outputs.preview_url }}"
+            echo "fallback_promoted_to_live=true" >> "$GITHUB_OUTPUT"
+            echo "Promoted version $VERSION_ID to live; using customer live URL as preview-URL fallback: $PREVIEW_VERSION_URL"
           fi
           echo "version_id=$VERSION_ID" >> "$GITHUB_OUTPUT"
           echo "preview_version_url=$PREVIEW_VERSION_URL" >> "$GITHUB_OUTPUT"
@@ -197,13 +217,21 @@ jobs:
           # customer can be emailed it + the marketing site can
           # later trigger a promote.
           if [ "${{ steps.token.outputs.mode }}" = "preview" ]; then
+            # If the preview-upload step had to fall back to direct-
+            # promote-to-live (no workers.dev subdomain on the
+            # customer's account), pass `fallbackPromotedToLive=true`
+            # so the callback knows to email the customer
+            # "applied live" instead of "preview ready" + auto-resolve
+            # the CR (no approve gate to wait on, the change is
+            # already live).
             PAYLOAD=$(jq -nc \
               --arg token "${{ steps.token.outputs.value }}" \
               --arg url "${{ steps.preview_upload.outputs.preview_version_url }}" \
               --arg vid "${{ steps.preview_upload.outputs.version_id }}" \
               --arg crid "${{ steps.token.outputs.change_request_id }}" \
               --arg pat "${{ steps.token.outputs.preview_access_token }}" \
-              '{token: $token, status: "success", mode: "preview", previewUrl: $url, previewVersionId: $vid, changeRequestId: $crid, previewAccessToken: $pat}')
+              --arg fpl "${{ steps.preview_upload.outputs.fallback_promoted_to_live }}" \
+              '{token: $token, status: "success", mode: "preview", previewUrl: $url, previewVersionId: $vid, changeRequestId: $crid, previewAccessToken: $pat, fallbackPromotedToLive: $fpl}')
           else
             # live mode — include reviewEditId if this is a pre-commit
             # auto-apply build so the callback can email the customer
