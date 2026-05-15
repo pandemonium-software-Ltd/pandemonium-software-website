@@ -37,7 +37,7 @@ export default function Footer({ data }: Props) {
         />
       )}
     <footer className="mt-20 bg-navy-950 text-cream-100">
-      <div className="container-content grid gap-10 py-14 md:grid-cols-3">
+      <div className="container-content grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p className="font-serif text-xl font-semibold text-white">
             {business.name}
@@ -105,6 +105,29 @@ export default function Footer({ data }: Props) {
             <li>
               <Link href="/contact" className="hover:text-white">
                 Contact
+              </Link>
+            </li>
+          </ul>
+        </nav>
+
+        {/* Legal links — small, deliberate. Auto-generated privacy
+         *  policy and terms of service per customer (with sections
+         *  conditional on which modules they bought). GDPR + UK
+         *  consumer-law baseline so every customer site is
+         *  compliant out of the box. */}
+        <nav aria-label="Legal">
+          <p className="text-sm font-semibold uppercase tracking-wider text-navy-300">
+            Legal
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-navy-100">
+            <li>
+              <Link href="/privacy" className="hover:text-white">
+                Privacy policy
+              </Link>
+            </li>
+            <li>
+              <Link href="/terms" className="hover:text-white">
+                Terms of service
               </Link>
             </li>
           </ul>

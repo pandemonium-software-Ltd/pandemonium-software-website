@@ -16,6 +16,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import CookieNotice from "@/components/CookieNotice";
 import { SITE_DATA } from "@/lib/site-data";
 import { brandColorsStyleBlock } from "@/lib/colors";
 import { buildLocalBusinessJsonLd } from "@/lib/jsonld";
@@ -193,6 +194,11 @@ export default function RootLayout({
         <Header data={SITE_DATA} />
         <main id="main">{children}</main>
         <Footer data={SITE_DATA} />
+        {/* Cookie disclosure banner — only essential cookies are
+         *  used (Cloudflare + Cal.com session), so this is a notice
+         *  not a consent toggle. See CookieNotice.tsx head comment
+         *  for the legal reasoning. */}
+        <CookieNotice />
       </body>
     </html>
   );
