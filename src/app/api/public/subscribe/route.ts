@@ -210,8 +210,30 @@ export async function POST(request: Request) {
   // Send the confirmation email — fail-soft so a Resend hiccup
   // doesn't lose the signup (the visitor sees "check your inbox"
   // and we have the unconfirmed row on file; they can re-submit).
+  //
+  // 2026-05-15: confirm + unsubscribe URLs now point at the
+  // CUSTOMER's domain (not modu-forge.co.uk) so the subscriber
+  // stays in the customer's branded environment when they click
+  // through. The customer site has /confirm-subscription/[token]
+  // and /unsubscribe/[token] pages that POST back to /api/public/
+  // confirm-subscription and /api/public/unsubscribe to do the
+  // actual Notion mutation.
+  //
+  // Falls back to the marketing-site URL if the customer's domain
+  // isn't on file yet (shouldn't happen for a launched customer
+  // — Step 2 captures it before the newsletter module ever ships)
+  // — keeps the link working rather than emitting a broken URL.
   const env = getServerEnv();
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
+  const customerDomain = (() => {
+    const ob = (prospect.onboardingData ?? {}) as Record<string, unknown>;
+    const domainSlice = (ob.domain ?? {}) as { domain?: unknown };
+    return typeof domainSlice.domain === "string"
+      ? domainSlice.domain.trim()
+      : "";
+  })();
+  const baseUrl = customerDomain
+    ? `https://${customerDomain}`
+    : (process.env.NEXT_PUBLIC_SITE_URL ?? site.url);
   const confirmUrl = `${baseUrl.replace(/\/$/, "")}/confirm-subscription/${confirmationToken}?c=${customerToken}`;
   const unsubscribeUrl = `${baseUrl.replace(/\/$/, "")}/unsubscribe/${unsubscribeToken}?c=${customerToken}`;
 
