@@ -25,6 +25,7 @@ import {
   updateProspectOnboarding,
 } from "@/lib/notion-prospects";
 import { getServerEnv } from "@/lib/env";
+import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
 import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import {
@@ -131,13 +132,20 @@ export async function POST(request: Request) {
   };
 
   // Monthly cap — count sends this calendar month from history.
+  // Effective cap = default + admin grant for this month (operator
+  // can extend the customer's allowance from /admin/[token]).
   const history = newsletter.history ?? [];
   const sentThisMonth = countSendsThisMonth(history);
-  if (sentThisMonth >= NEWSLETTER_MONTHLY_SEND_LIMIT) {
+  const effectiveCap = effectiveMonthlyCap({
+    prospect,
+    defaultCap: NEWSLETTER_MONTHLY_SEND_LIMIT,
+    kind: "newsletters",
+  });
+  if (sentThisMonth >= effectiveCap) {
     const nextReset = nextMonthStartIso();
     return NextResponse.json(
       {
-        error: `You've sent your ${NEWSLETTER_MONTHLY_SEND_LIMIT} included newsletter this month. Allowance resets on ${formatDateNice(nextReset)}. For extra sends, reply to me directly and I'll set one up.`,
+        error: `You've sent your ${effectiveCap} included newsletter${effectiveCap === 1 ? "" : "s"} this month. Allowance resets on ${formatDateNice(nextReset)}. For extra sends, reply to me directly and I'll set one up.`,
         resetsOn: nextReset,
       },
       { status: 429 },

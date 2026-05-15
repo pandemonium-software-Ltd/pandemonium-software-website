@@ -34,6 +34,7 @@ import {
   type NotificationPayload,
 } from "@/lib/email";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
@@ -224,23 +225,37 @@ export async function POST(request: Request) {
   const usedFreeText = countActiveChangeRequestsByKind(requests, "free-text");
   const usedOffers = countActiveChangeRequestsByKind(requests, "offer-update");
 
+  // Effective caps fold in any admin-granted bonus for this month
+  // (see src/lib/admin-grants.ts). Customer who's used the default
+  // 2 + been granted 1 by Ben sees an effective cap of 3.
+  const effectiveOfferCap = effectiveMonthlyCap({
+    prospect,
+    defaultCap: MONTHLY_OFFER_UPDATE_LIMIT,
+    kind: "offers",
+  });
+  const effectiveCrCap = effectiveMonthlyCap({
+    prospect,
+    defaultCap: MONTHLY_CHANGE_REQUEST_LIMIT,
+    kind: "changeRequests",
+  });
+
   const nextReset = nextMonthStartIso();
   const resetCopy = `Allowance resets on ${formatDateNice(nextReset)}.`;
 
-  if (kind === "offer-update" && usedOffers >= MONTHLY_OFFER_UPDATE_LIMIT) {
+  if (kind === "offer-update" && usedOffers >= effectiveOfferCap) {
     return NextResponse.json(
       {
-        error: `You've used your ${MONTHLY_OFFER_UPDATE_LIMIT} offer updates for this month. ${resetCopy}`,
+        error: `You've used your ${effectiveOfferCap} offer updates for this month. ${resetCopy}`,
         remaining: 0,
         resetsOn: nextReset,
       },
       { status: 429 },
     );
   }
-  if (!kind && usedFreeText >= MONTHLY_CHANGE_REQUEST_LIMIT) {
+  if (!kind && usedFreeText >= effectiveCrCap) {
     return NextResponse.json(
       {
-        error: `You've used your ${MONTHLY_CHANGE_REQUEST_LIMIT} change requests for this month. ${resetCopy} For anything bigger or more urgent, email me directly and I'll quote it separately.`,
+        error: `You've used your ${effectiveCrCap} change requests for this month. ${resetCopy} For anything bigger or more urgent, email me directly and I'll quote it separately.`,
         remaining: 0,
         resetsOn: nextReset,
       },
@@ -481,8 +496,8 @@ export async function POST(request: Request) {
   // so the OfferCard composer shows the right counter, and globally
   // for legacy free-text submissions.
   const remainingAfter = isOfferUpdate
-    ? MONTHLY_OFFER_UPDATE_LIMIT - (usedOffers + 1)
-    : MONTHLY_CHANGE_REQUEST_LIMIT - (usedFreeText + 1);
+    ? effectiveOfferCap - (usedOffers + 1)
+    : effectiveCrCap - (usedFreeText + 1);
   return NextResponse.json({
     success: true,
     request: newRequest,

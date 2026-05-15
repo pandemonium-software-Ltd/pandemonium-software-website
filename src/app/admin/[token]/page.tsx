@@ -20,6 +20,8 @@ import ReviewEditEditor from "@/components/admin/ReviewEditEditor";
 import ModuleChangeEditor from "@/components/admin/ModuleChangeEditor";
 import PreviewUrlEditor from "@/components/admin/PreviewUrlEditor";
 import UnlockStepButton from "@/components/admin/UnlockStepButton";
+import AdminGrantPanel from "@/components/admin/AdminGrantPanel";
+import { currentMonthKey, getAdminGrant } from "@/lib/admin-grants";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -456,6 +458,19 @@ export default async function AdminDetailPage({
           </ul>
         </div>
       )}
+
+      {/* ---------- Monthly allowances (admin grants) ---------- */}
+      <div className="mt-8">
+        <AdminGrantPanel
+          token={token}
+          monthKey={currentMonthKey()}
+          initialBonuses={{
+            changeRequests: getAdminGrant(prospect, "changeRequests"),
+            offers: getAdminGrant(prospect, "offers"),
+            newsletters: getAdminGrant(prospect, "newsletters"),
+          }}
+        />
+      </div>
 
       {/* ---------- Change requests ---------- */}
       <div className="mt-8">
