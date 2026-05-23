@@ -24,6 +24,9 @@ import NewsletterCard, {
   type NewsletterSummary,
 } from "@/components/NewsletterCard";
 import AnalyticsCard from "@/components/AnalyticsCard";
+import DashboardTimeline, {
+  type TimelineSection,
+} from "@/components/DashboardTimeline";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -234,7 +237,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
       </section>
 
       <section className="pb-24 pt-6">
-        <div className="container-content max-w-5xl">
+        <div className="container-content max-w-6xl">
           {/* ---------- Progress tracker ---------- */}
           <div className="mb-6">
             <ProgressTracker status={status} token={token} domain={domain} />
@@ -254,6 +257,50 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             </div>
           )}
 
+          {/* ---------- Timeline rail + main content ----------
+            * Desktop: sticky rail on the left margin scrolls the
+            * page to whichever section the customer clicks. Mobile:
+            * rail collapses to a floating "Jump to" button.
+            * Sections list is built dynamically so it always
+            * matches what actually rendered (e.g. Visitors only
+            * appears when isSiteLive). */}
+          {(() => {
+            const sections: TimelineSection[] = [];
+            if (isSiteLive && hasAnalytics)
+              sections.push({ id: "section-visitors", label: "Visitors" });
+            if (isHubUnlocked && !isCancelled)
+              sections.push({
+                id: "section-hub",
+                label: "Onboarding Hub",
+              });
+            if (isHubUnlocked && !isCancelled)
+              sections.push({
+                id: "section-modules",
+                label: "Your modules",
+              });
+            if (!isCancelled && isSiteLive)
+              sections.push({
+                id: "section-changes",
+                label: "Change requests",
+              });
+            sections.push({ id: "section-contact", label: "Get in touch" });
+            return (
+              <div className="lg:flex lg:items-start lg:gap-10">
+                <DashboardTimeline sections={sections} />
+                <div className="min-w-0 flex-1">
+                  {renderSections()}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </section>
+    </>
+  );
+
+  function renderSections() {
+    return (
+      <>
           {/* ---------- Visitors / analytics (full width) ----------
            *  Cloudflare edge-level totals + daily series +
            *  top pages / countries / referrers / status codes,
@@ -265,7 +312,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
            *  2-column dashboard grid so the visual emphasis matches
            *  the data density. */}
           {isSiteLive && hasAnalytics && (
-            <div className="mb-6">
+            <div id="section-visitors" className="mb-6 scroll-mt-24">
               <AnalyticsCard token={token} domain={domain} />
             </div>
           )}
@@ -345,7 +392,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
 
             {/* ---------- Onboarding Hub navigation ---------- */}
             {isHubUnlocked && !isCancelled && (
-              <DashCard title="Onboarding Hub">
+              <DashCard title="Onboarding Hub" id="section-hub">
                 <p className="text-sm text-navy-700">
                   {(() => {
                     const total = HUB_STEPS.filter((s) =>
@@ -463,7 +510,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
              *  loop. General text edits use the change-request
              *  block lower on the page; they're not modules. */}
             {isHubUnlocked && !isCancelled && (
-              <DashCard title="Your modules">
+              <DashCard title="Your modules" id="section-modules">
                 {/* Bought-modules list — always shown so the customer
                  *  can audit at a glance "what am I paying for?". */}
                 <ul className="space-y-1 text-sm">
@@ -648,7 +695,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             </DashCard>
 
             {/* ---------- Get in touch ---------- */}
-            <DashCard title="Get in touch">
+            <DashCard title="Get in touch" id="section-contact">
               <p className="text-sm text-navy-700">
                 Quickest way to reach me about anything that doesn&apos;t
                 fit a change request.
@@ -701,7 +748,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               has an actual site to request changes to. Pre-launch
               edits use Hub Step 5 instead. */}
           {!isCancelled && isSiteLive && (
-            <div className="mt-8">
+            <div id="section-changes" className="mt-8 scroll-mt-24">
               <ChangeRequestsBlock
                 token={token}
                 requests={requests}
@@ -719,10 +766,9 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               />
             </div>
           )}
-        </div>
-      </section>
-    </>
-  );
+      </>
+    );
+  }
 }
 
 // ---------- Card primitive ----------
@@ -731,6 +777,7 @@ function DashCard({
   title,
   children,
   defaultOpen = true,
+  id,
 }: {
   title: string;
   children: React.ReactNode;
@@ -739,6 +786,10 @@ function DashCard({
    *  to tidy. Pass `false` for sections that are useful but
    *  secondary (e.g. usage stats, contact info). */
   defaultOpen?: boolean;
+  /** Anchor id — set when this card is a target of the left-rail
+   *  timeline nav. Lets the rail's smooth-scroll find the card and
+   *  the IntersectionObserver flag it as the active section. */
+  id?: string;
 }) {
   // Native <details> + <summary> for collapsibility — browser
   // handles state, keyboard ENTER/SPACE, screen reader announce
@@ -749,8 +800,9 @@ function DashCard({
   // affordance.
   return (
     <details
+      id={id}
       open={defaultOpen}
-      className="group rounded-2xl bg-white p-6 shadow-card md:p-7 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
+      className="group scroll-mt-24 rounded-2xl bg-white p-6 shadow-card md:p-7 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
     >
       <summary className="flex cursor-pointer select-none items-center justify-between gap-3">
         <h2 className="font-serif text-xl font-semibold text-navy-900">
