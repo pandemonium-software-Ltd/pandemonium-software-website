@@ -20,6 +20,7 @@
 import { getServerEnv } from "../lib/env";
 import { runOpsTick } from "./tick";
 import { runAnalyticsTick } from "./analytics-tick";
+import { runMonthlyDigestTick } from "./monthly-digest-tick";
 import type { D1Database } from "../lib/d1-analytics";
 
 // Minimal Cloudflare Worker types (we don't pull in @cloudflare/workers-types
@@ -44,6 +45,7 @@ type CfEnvBindings = {
 };
 
 const ANALYTICS_CRON = "0 2 * * *";
+const MONTHLY_DIGEST_CRON = "0 8 1 * *";
 
 const handler = {
   async scheduled(
@@ -51,7 +53,7 @@ const handler = {
     envBindings: CfEnvBindings,
     ctx: CfExecutionContext,
   ): Promise<void> {
-    // Dispatch on which cron fired — same Worker, two schedules.
+    // Dispatch on which cron fired — same Worker, three schedules.
     if (event.cron === ANALYTICS_CRON) {
       const db = envBindings.pandemonium_analytics;
       if (!db) {
@@ -61,6 +63,17 @@ const handler = {
         return;
       }
       ctx.waitUntil(runAnalyticsTick({ db }));
+      return;
+    }
+    if (event.cron === MONTHLY_DIGEST_CRON) {
+      const db = envBindings.pandemonium_analytics;
+      if (!db) {
+        console.error(
+          "[ops] monthly digest cron fired but pandemonium_analytics D1 binding is missing",
+        );
+        return;
+      }
+      ctx.waitUntil(runMonthlyDigestTick({ db }));
       return;
     }
     // Default = minutely onboarding/build tick.

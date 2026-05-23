@@ -506,10 +506,14 @@ export default function NewsletterCard({
       <h2 className="font-serif text-xl font-semibold text-navy-900">
         📬 Newsletter
       </h2>
-      <dl className="mt-3 grid grid-cols-3 gap-3 text-center">
+      {/* 3 stat tiles. Switched value typeface to a smaller mono
+        * so larger subscriber counts ("1,234") don't overflow the
+        * narrow tile + shortened "Sent this month" to "This month"
+        * for the same reason. */}
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
         <Stat label="Subscribers" value={summary.subscriberCount} />
         <Stat
-          label="Sent this month"
+          label="This month"
           value={`${summary.sentThisMonth}/${cap}`}
         />
         <Stat
@@ -1218,12 +1222,16 @@ function Stat({
   label: string;
   value: string | number;
 }) {
+  // Mono + tabular-nums + text-base keeps even "1,234" inside the
+  // narrow stat tile. Tabular numerals also stop different-width
+  // digits from making numbers jitter when the dashboard reloads.
+  // break-words is the last-resort fallback for unusual values.
   return (
-    <div className="rounded-xl border border-navy-100 bg-cream-50 p-3">
+    <div className="rounded-xl border border-navy-100 bg-cream-50 p-2.5">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-navy-500">
         {label}
       </p>
-      <p className="mt-1 font-serif text-xl font-semibold text-navy-900">
+      <p className="mt-1 break-words font-mono text-base font-bold tabular-nums text-navy-900">
         {value}
       </p>
     </div>

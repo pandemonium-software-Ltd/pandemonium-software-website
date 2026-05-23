@@ -29,18 +29,21 @@
   "main": "src/ops-worker/index.ts",
   "compatibility_date": "2026-04-11",
   "compatibility_flags": ["nodejs_compat"],
-  // Two cron schedules:
+  // Three cron schedules:
   //   - "* * * * *"   every minute — drives the onboarding/build
   //     dispatcher (§4.2). Tick is ~50ms when idle.
   //   - "0 2 * * *"   daily at 02:00 UTC — fetches yesterday's
-  //     Cloudflare analytics for every Live customer, writes one
-  //     row per (customer, day) into the pandemonium_analytics D1.
-  //     02:00 picked because Cloudflare's analytics pipeline has
-  //     fully flushed yesterday by then; we also avoid the
-  //     midnight stampede that hits CF's API.
+  //     Cloudflare analytics for every Live customer + @self,
+  //     writes one row per (customer, day) into the
+  //     pandemonium_analytics D1.
+  //   - "0 8 1 * *"   1st of each month at 08:00 UTC — sends
+  //     ModuForge-branded "your monthly results" email to every
+  //     Live customer. 08:00 UTC ≈ 09:00 UK summer time, 08:00
+  //     UK winter — picks Monday-morning catch-up hour in either
+  //     season without daylight-saving branching.
   // ops-worker/index.ts branches on event.cron to dispatch.
   "triggers": {
-    "crons": ["* * * * *", "0 2 * * *"]
+    "crons": ["* * * * *", "0 2 * * *", "0 8 1 * *"]
   },
   "observability": {
     "enabled": true
