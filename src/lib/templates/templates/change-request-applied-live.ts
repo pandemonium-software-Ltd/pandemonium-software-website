@@ -1,16 +1,24 @@
 import type { Template } from "../types";
 
-// Sent when the customer clicks Approve on a preview-ready email
-// and the customer-site-promote workflow successfully promotes
-// the version to live. Confirms the change is now visible on
-// their actual site + invites them to flag anything that looks off.
+// Sent when a customer change request has been applied to the
+// LIVE site. Two paths reach this template:
+//   1. Customer clicks Approve on a preview-ready email and the
+//      promote workflow completes successfully.
+//   2. The site Cloudflare account has no workers.dev subdomain
+//      so the preview-then-approve gate is bypassed and the
+//      change applies directly (see build-callback fallback path).
+//
+// From the customer's perspective both look the same: the change
+// they asked for is now live. Wording deliberately avoids any
+// mention of "preview", "approve", "promote" — those are workflow
+// details, not state. Body leads with timing + restates the
+// change in quotes so they can match it to what they asked for.
 //
 // Distinct from `change-request-resolved` (operator-resolved by
-// Ben) so the customer sees a clear "you approved this; here's
-// the result" framing rather than a "Ben did this for you" framing.
+// Ben with a custom reply) so the customer sees a system-style
+// confirmation rather than a personal note.
 //
-// Low risk tier (§11.2) — pure confirmation of a state the customer
-// just triggered.
+// Low risk tier (§11.2) — pure confirmation of a state change.
 export const changeRequestAppliedLive: Template = {
   id: "change-request-applied-live",
   riskTier: "low",
@@ -22,26 +30,26 @@ export const changeRequestAppliedLive: Template = {
   ],
   // Two CTAs: primary "View your site" so the customer can verify
   // the change landed where it should; secondary "Open dashboard"
-  // for managing requests + subscription state. Live URLs in the
-  // body itself are dropped — the buttons are the canonical action
-  // affordance.
+  // for managing requests + subscription state.
   cta: { urlKey: "siteUrl", label: "View your site" },
   secondaryCta: { urlKey: "accountUrl", label: "Open dashboard" },
   subject: "Your change is live ✓",
   body: `Hi {{customerName}},
 
-That's done. Your site now shows:
+Done — the change you asked for is live on your site now:
 
-  {{originalMessage}}
+  "{{originalMessage}}"
 
-Tap the button below to take a look — refresh once if you've
-got it open already.
+It usually takes under 30 seconds to show up. If you've already
+got the page open, give it a hard refresh (Cmd+Shift+R on Mac,
+Ctrl+F5 on Windows).
 
-If something looks off, just reply to this email — we can put
-the old version back in seconds if needed.
+Tap the button below to check it. If something doesn't look
+right, just reply to this email — we can revert in a few
+seconds if needed.
 
-For anything else, head to your dashboard. You get 2 changes
-a month included with your subscription.
+For anything else, your dashboard tracks every change you've
+made + how many you've got left this month.
 
 — ModuForge`,
 };

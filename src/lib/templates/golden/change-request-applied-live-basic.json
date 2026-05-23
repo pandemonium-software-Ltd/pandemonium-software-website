@@ -1,5 +1,5 @@
 {
-  "description": "Change-request applied-live email after the customer approved a preview and the promote workflow succeeded",
+  "description": "Change-request applied-live email for the post-go-live path (direct-apply OR customer-approved preview promoted to live)",
   "template": "change-request-applied-live",
   "values": {
     "customerName": "Lucas",
@@ -9,6 +9,6 @@
   },
   "expected": {
     "subject": "Your change is live ✓",
-    "body": "Hi Lucas,\n\nThat's done. Your site now shows:\n\n  Please change my tagline to 'Award-winning gardens in Oxfordshire'\n\nTap the button below to take a look — refresh once if you've\ngot it open already.\n\nIf something looks off, just reply to this email — we can put\nthe old version back in seconds if needed.\n\nFor anything else, head to your dashboard. You get 2 changes\na month included with your subscription.\n\n— ModuForge"
+    "body": "Hi Lucas,\n\nDone — the change you asked for is live on your site now:\n\n  \"Please change my tagline to 'Award-winning gardens in Oxfordshire'\"\n\nIt usually takes under 30 seconds to show up. If you've already\ngot the page open, give it a hard refresh (Cmd+Shift+R on Mac,\nCtrl+F5 on Windows).\n\nTap the button below to check it. If something doesn't look\nright, just reply to this email — we can revert in a few\nseconds if needed.\n\nFor anything else, your dashboard tracks every change you've\nmade + how many you've got left this month.\n\n— ModuForge"
   }
 }

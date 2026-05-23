@@ -611,8 +611,13 @@ export async function POST(request: Request) {
         {
           status: "resolved",
           coworkPatchAppliedAt: new Date().toISOString(),
+          // Customer-facing reply — shown both on the dashboard CR
+          // list AND copied into the email. Earlier wording leaked
+          // implementation detail ("preview-then-approve gate", "no
+          // preview subdomain configured"). Keep it short + focused
+          // on what the customer cares about: it landed, where, when.
           reply:
-            "Applied — your change is now live on your site. (Your Cloudflare account doesn't have a preview subdomain configured, so we skipped the preview-then-approve gate and went straight to live. Future change requests will work the same way.)",
+            "Done. The change is live on your site now — usually visible in under 30 seconds (hard-refresh if you've still got the old version open).",
         },
       );
       if (!merged) {
