@@ -33,14 +33,31 @@ type AnalyticsResponse = {
 type WindowOption = 7 | 30;
 
 type Props = {
+  /** Token whose analytics window to render. Customer dashboards
+   *  pass their prospect UUID; the admin self-view uses the
+   *  reserved "@self" token. Used in the default apiPath only. */
   token: string;
-  /** Customer's domain — used to pretty-print top page paths into
-   *  full URLs and to filter own-domain referrers out of the top
-   *  referrers list (a self-referral isn't an interesting source). */
+  /** Customer's domain — used to filter own-domain referrers out
+   *  of the top referrers list (a self-referral isn't an interesting
+   *  source). */
   domain: string;
+  /** Optional title override (defaults to "📊 Visitors"). Admin
+   *  uses "📊 Marketing site visitors" to disambiguate from
+   *  per-customer tiles. */
+  title?: string;
+  /** Override the API endpoint. Default = /api/account/analytics/<token>
+   *  (session-gated customer route). Admin passes /api/admin/analytics
+   *  which is basic-auth gated and ignores the token in the URL. */
+  apiPath?: string;
 };
 
-export default function AnalyticsCard({ token, domain }: Props) {
+export default function AnalyticsCard({
+  token,
+  domain,
+  title = "📊 Visitors",
+  apiPath,
+}: Props) {
+  const resolvedPath = apiPath ?? `/api/account/analytics/${token}`;
   const [windowDays, setWindowDays] = useState<WindowOption>(30);
   const [data, setData] = useState<AnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,7 +67,8 @@ export default function AnalyticsCard({ token, domain }: Props) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/account/analytics/${token}?window=${windowDays}`)
+    const sep = resolvedPath.includes("?") ? "&" : "?";
+    fetch(`${resolvedPath}${sep}window=${windowDays}`)
       .then((r) => r.json())
       .then((json: AnalyticsResponse | { error: string }) => {
         if (cancelled) return;
@@ -70,7 +88,7 @@ export default function AnalyticsCard({ token, domain }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [token, windowDays]);
+  }, [resolvedPath, windowDays]);
 
   // Trim the days array to the selected window (server may have
   // returned more if we asked for 30 then switched to 7 in the UI).
@@ -113,7 +131,7 @@ export default function AnalyticsCard({ token, domain }: Props) {
     <article className="rounded-2xl bg-white p-6 shadow-card md:p-7">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-serif text-xl font-semibold text-navy-900">
-          📊 Visitors
+          {title}
         </h2>
         <div
           role="tablist"

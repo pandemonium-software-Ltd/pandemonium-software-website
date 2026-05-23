@@ -15,6 +15,7 @@ import { listAllProspects, type ProspectRecord } from "@/lib/notion-prospects";
 import { verifyNotionDatabases } from "@/lib/notion";
 import { isStripeConfigured } from "@/lib/stripe";
 import AdminProspectList from "@/components/admin/AdminProspectList";
+import AnalyticsCard from "@/components/AnalyticsCard";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -105,6 +106,20 @@ export default async function AdminPage() {
             label="Stripe"
             ok={stripeReady}
             detail={stripeReady ? "Configured" : "Not yet (Stage 2A Part 2)"}
+          />
+        </div>
+
+        {/* Marketing-site analytics — modu-forge.co.uk traffic.
+            Populated nightly by the ops Worker's analytics tick
+            under the reserved "@self" token; read via /api/admin/analytics.
+            Sits above the prospect list so we see traffic trends
+            without having to dig anywhere. */}
+        <div className="mb-8">
+          <AnalyticsCard
+            token="@self"
+            domain="modu-forge.co.uk"
+            title="📊 Marketing site visitors"
+            apiPath="/api/admin/analytics"
           />
         </div>
 

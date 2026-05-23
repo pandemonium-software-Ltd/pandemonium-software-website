@@ -26,6 +26,17 @@ import {
   type D1Database,
 } from "../lib/d1-analytics";
 
+// Marketing site (modu-forge.co.uk) lives on the same Cloudflare
+// account as Ben's other zones but has no prospect record. We
+// snapshot it alongside customers using a reserved token "@self" —
+// the @ prefix can't collide with a UUID token, so the D1 PK is
+// safe. Read back via /api/admin/analytics on the admin dashboard.
+const SELF = {
+  token: "@self",
+  zoneId: "7d59a1613bd3d93e59552ebadcc3a53f",
+  name: "modu-forge.co.uk",
+} as const;
+
 export async function runAnalyticsTick(args: {
   db: D1Database;
 }): Promise<void> {
@@ -46,28 +57,35 @@ export async function runAnalyticsTick(args: {
   // Only Live customers with a zone we can query. Pre-launch
   // prospects don't have a site to measure; Cancelled ones we
   // explicitly stop tracking.
-  const targets = prospects.filter(
+  const customerTargets = prospects.filter(
     (p) => p.status === "Live" && !!p.cloudflareZoneId,
   );
+  // Add the marketing site as a virtual target. Same fetch + insert
+  // path as customers — keeps the storage layer uniform.
+  const targets = [
+    ...customerTargets.map((p) => ({
+      token: p.token,
+      zoneId: p.cloudflareZoneId!,
+      name: p.name,
+    })),
+    SELF,
+  ];
   console.log(
-    `[analytics:${tickId}] ${targets.length} live customer(s) to snapshot`,
+    `[analytics:${tickId}] ${customerTargets.length} live customer(s) + self to snapshot`,
   );
 
   let ok = 0;
   let failed = 0;
-  for (const prospect of targets) {
+  for (const target of targets) {
     try {
-      const snapshot = await fetchDailySnapshot(
-        prospect.cloudflareZoneId!,
-        date,
-      );
+      const snapshot = await fetchDailySnapshot(target.zoneId, date);
       await insertDailySnapshot(args.db, {
-        token: prospect.token,
+        token: target.token,
         snapshot,
       });
       ok++;
       console.log(
-        `[analytics:${tickId}] ${prospect.name} (${prospect.token}): ${snapshot.pageviews} pageviews, ${snapshot.uniques} uniques`,
+        `[analytics:${tickId}] ${target.name} (${target.token}): ${snapshot.pageviews} pageviews, ${snapshot.uniques} uniques`,
       );
     } catch (e) {
       failed++;
@@ -81,7 +99,7 @@ export async function runAnalyticsTick(args: {
             ? e.message
             : String(e);
       console.error(
-        `[analytics:${tickId}] ${prospect.name} (${prospect.token}): ${msg}`,
+        `[analytics:${tickId}] ${target.name} (${target.token}): ${msg}`,
       );
     }
   }
