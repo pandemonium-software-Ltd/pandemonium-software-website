@@ -4,20 +4,20 @@
 // tile shown on the customer dashboard (/account/[token]) and the
 // admin self-view (/admin).
 //
+// Writing style: assume the reader is a non-technical small-
+// business owner. No jargon (no "cache hit", no "HTTP status
+// codes", no "edge"). Page paths are humanised — "Home" not "/".
+// Top-N lists show percentages of total, not raw counts, because
+// (a) percentages are more meaningful to the reader, and (b) the
+// underlying Cloudflare counts include every request (HTML +
+// images + JS), which can total much higher than pageviews and
+// confuses people who try to add things up.
+//
 // Data source: GET /api/account/analytics/[token] for customers,
 // or /api/admin/analytics for the marketing-site self view.
-// Both routes return the same {windowDays, days[], topPages,
-// topReferrers, topCountries, statusCodes, threatsTotal,
-// bandwidthBytesTotal, cachedRequestsTotal} shape — see
+// Same {windowDays, days[], topPages, topReferrers, topCountries,
+// statusCodes, threatsTotal, ...} shape from
 // src/lib/d1-analytics.ts AnalyticsWindow.
-//
-// Layout: <details> wrapper for native collapsibility (open by
-// default). Inside: window selector (7/30/90d) → totals strip with
-// period-over-period deltas → dual-line sparkline → side-by-side
-// detail panels (top pages, top countries, top referrers, status
-// mix, day-of-week pattern). Renders gracefully when D1 hasn't
-// been populated yet (< 24h-old customers) with a friendly empty
-// state.
 //
 // Privacy: data is Cloudflare edge-level — no cookies, no JS
 // beacon, no banner needed. Visitor counts are estimates.
@@ -104,7 +104,7 @@ export default function AnalyticsCard({
   const pvDelta = percentDelta(currentTotals.pageviews, previousTotals.pageviews);
   const uvDelta = percentDelta(currentTotals.uniques, previousTotals.uniques);
 
-  // Strip self-referrals + meaningless meta-data from the lists.
+  // Strip self-referrals + meaningless meta-paths from the lists.
   const externalReferrers = (data?.topReferrers ?? []).filter(
     (r) => r.name && r.name !== domain && !r.name.endsWith(`.${domain}`),
   );
@@ -115,13 +115,31 @@ export default function AnalyticsCard({
     if (path === "/favicon.ico") return false;
     if (path === "/robots.txt") return false;
     if (path === "/sitemap.xml") return false;
+    if (path === "/icon.svg") return false;
     return true;
   });
 
   // Day-of-week pattern: average pageviews by weekday across the
-  // current window. Mon-Sun bars. Useful for "when do my customers
-  // visit?" — small UK trades often see weekend slumps.
+  // current window. Mon-Sun bars.
   const weekdayBuckets = computeWeekdayPattern(currentDays);
+
+  // Broken-link detection — sum 4xx + 5xx from the status code mix.
+  // We use this for a friendly alert instead of dumping HTTP status
+  // codes on the customer, since most have no idea what a 404 is.
+  const brokenRequestCount = (data?.statusCodes ?? []).reduce((acc, s) => {
+    const code = Number.parseInt(s.name, 10);
+    return code >= 400 && code < 600 ? acc + s.count : acc;
+  }, 0);
+  const totalStatusRequests = (data?.statusCodes ?? []).reduce(
+    (acc, s) => acc + s.count,
+    0,
+  );
+  const brokenPct = totalStatusRequests > 0
+    ? (brokenRequestCount / totalStatusRequests) * 100
+    : 0;
+  // Only surface if more than 5% of requests broke — below that
+  // we're in the noise floor of bot probes that don't matter.
+  const showBrokenAlert = brokenPct >= 5;
 
   const hasAnyData = currentDays.length > 0;
 
@@ -138,7 +156,7 @@ export default function AnalyticsCard({
           {hasAnyData && (
             <span className="text-xs text-navy-500">
               Last {windowDays} days · {currentTotals.pageviews.toLocaleString("en-GB")}{" "}
-              pageviews
+              visits
             </span>
           )}
         </div>
@@ -146,11 +164,11 @@ export default function AnalyticsCard({
       </summary>
 
       <div className="mt-5">
-        {/* Window selector — sticky to the right so it doesn't
-            move when totals expand */}
+        {/* Window selector */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-navy-500">
-            Cloudflare edge data, no cookies. Updates nightly at 02:00 UTC.
+            Anonymous visit data — no cookies, no tracking script.
+            Updates once a day, overnight.
           </p>
           <div
             role="tablist"
@@ -188,57 +206,64 @@ export default function AnalyticsCard({
           <div className="mt-6 rounded-xl border border-dashed border-navy-200 bg-cream-50 p-6 text-sm leading-relaxed text-navy-700">
             <p className="font-semibold text-navy-900">No data yet</p>
             <p className="mt-1">
-              First visitor stats land overnight. The dashboard
-              updates once a day at around 02:00 — check back tomorrow.
+              Your first visitor stats land overnight. The dashboard
+              refreshes once a day around 2am — check back tomorrow.
             </p>
           </div>
         )}
 
         {!loading && !error && hasAnyData && (
           <>
-            {/* Totals strip — pageviews, visitors, threats, cache,
-                bandwidth. Each with a vs-previous-period delta. */}
-            <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+            {/* Headline totals — kept to three: visits, people,
+                attacks-blocked. Cache hit and bandwidth removed —
+                they're meaningless for a non-technical reader. */}
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
               <Stat
-                label="Pageviews"
+                label="Visits"
                 value={currentTotals.pageviews}
                 delta={pvDelta}
+                windowDays={windowDays}
               />
               <Stat
-                label="Visitors"
+                label="People who visited"
                 value={currentTotals.uniques}
                 delta={uvDelta}
+                windowDays={windowDays}
                 approx
+                hint="Estimated — we count by device, not by login."
               />
               <Stat
-                label="Cache hit"
-                value={formatPct(
-                  data!.cachedRequestsTotal,
-                  currentTotals.pageviews + (data!.cachedRequestsTotal - currentTotals.pageviews > 0 ? 0 : 0),
-                )}
-                raw
-              />
-              <Stat
-                label="Bandwidth"
-                value={formatBytes(data!.bandwidthBytesTotal)}
-                raw
-              />
-              <Stat
-                label="Threats blocked"
+                label="Attacks blocked"
                 value={data!.threatsTotal}
                 positiveIsGood={false}
+                hint="Bots probing your site for vulnerabilities. Cloudflare blocks them automatically."
               />
             </div>
+
+            {/* Broken-pages friendly alert — only when there's
+                actually a problem worth flagging. */}
+            {showBrokenAlert && (
+              <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <strong className="font-semibold">
+                  Heads up — {Math.round(brokenPct)}% of visits this period
+                  hit a page that doesn&apos;t exist
+                </strong>{" "}
+                ({brokenRequestCount.toLocaleString("en-GB")} requests).
+                That could be a broken link somewhere on your site or
+                a bookmark someone has for an old URL. Reply if you&apos;d
+                like me to investigate.
+              </div>
+            )}
 
             {/* Sparkline with dual lines (pageviews + visitors) */}
             <div className="mt-7">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
-                  Daily traffic
+                  Daily visits
                 </p>
                 <div className="flex items-center gap-3 text-[11px] text-navy-600">
-                  <LegendDot color="rgb(15 23 42)" /> Pageviews
-                  <LegendDot color="rgb(220 38 38)" /> Visitors
+                  <LegendDot color="rgb(15 23 42)" /> Visits
+                  <LegendDot color="rgb(220 38 38)" /> People
                 </div>
               </div>
               <DualSparkline points={currentDays} className="mt-2" />
@@ -247,13 +272,13 @@ export default function AnalyticsCard({
             {/* Top pages + top countries side-by-side */}
             <div className="mt-7 grid gap-6 md:grid-cols-2">
               <TopList
-                title="Top pages"
+                title="Most viewed pages"
                 entries={meaningfulPages.slice(0, 8)}
                 empty="Not enough data yet."
-                format={(name) => name || "/"}
+                format={(name) => humanizePath(name)}
               />
               <TopList
-                title="Top countries"
+                title="Where your visitors are from"
                 entries={(data!.topCountries ?? []).slice(0, 8)}
                 empty="No country data yet."
                 format={(code) => `${flagEmoji(code)} ${countryName(code)}`}
@@ -263,28 +288,18 @@ export default function AnalyticsCard({
             {/* Top referrers + day-of-week pattern */}
             <div className="mt-7 grid gap-6 md:grid-cols-2">
               <TopList
-                title="Top referrers"
+                title="How people found you"
                 entries={externalReferrers.slice(0, 8)}
-                empty="Mostly direct visits or search — nothing else stands out. (Free plan can't read individual referrers in detail.)"
-                format={(name) => name || "(direct)"}
+                empty="Most visits arrived directly (typed your address, used a bookmark, or came from a Google search)."
+                format={(name) => name || "Direct"}
               />
               <WeekdayPattern buckets={weekdayBuckets} />
             </div>
 
-            {/* Status code mix — full width since it's a horizontal bar */}
-            {(data!.statusCodes ?? []).length > 0 && (
-              <div className="mt-7">
-                <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
-                  HTTP responses
-                </p>
-                <StatusBar entries={data!.statusCodes} />
-              </div>
-            )}
-
             <p className="mt-6 text-[11px] leading-relaxed text-navy-500">
-              Powered by Cloudflare edge analytics. Visitor + cache
-              numbers are estimates. Comparison badges show change
-              vs. the previous {windowDays}-day window.
+              Percentages show share of total. Up/down badges compare
+              this period with the previous {windowDays} days.
+              Visit counts are estimates.
             </p>
           </>
         )}
@@ -312,16 +327,51 @@ function percentDelta(current: number, previous: number): number | null {
   return Math.round(((current - previous) / previous) * 100);
 }
 
-function formatPct(num: number, denom: number): string {
-  if (denom <= 0) return "—";
-  return `${Math.round((num / denom) * 100)}%`;
-}
-
-function formatBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  if (b < 1024 * 1024 * 1024) return `${(b / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(b / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+/** Turn a URL path into a friendly page name a non-tech customer
+ *  will recognise. `/` → "Home". `/contact` → "Contact".
+ *  `/our-services` → "Our services". Unknown paths fall back to a
+ *  title-cased version of the path with dashes turned into spaces.
+ *  Catalog-style nested paths get a "Section: leaf" form so
+ *  blog/team/portfolio listings still read naturally. */
+function humanizePath(raw: string): string {
+  const path = (raw || "/").split("?")[0].split("#")[0];
+  if (path === "/" || path === "") return "Home";
+  // Known one-word paths get specific labels.
+  const COMMON: Record<string, string> = {
+    "/contact": "Contact",
+    "/about": "About",
+    "/about-us": "About us",
+    "/services": "Services",
+    "/our-services": "Our services",
+    "/work": "Our work",
+    "/portfolio": "Portfolio",
+    "/gallery": "Gallery",
+    "/projects": "Projects",
+    "/testimonials": "Testimonials",
+    "/reviews": "Reviews",
+    "/pricing": "Pricing",
+    "/quote": "Get a quote",
+    "/book": "Book",
+    "/booking": "Book",
+    "/blog": "Blog",
+    "/news": "News",
+    "/faq": "FAQs",
+    "/faqs": "FAQs",
+    "/team": "The team",
+    "/privacy": "Privacy policy",
+    "/terms": "Terms",
+    "/cookies": "Cookies policy",
+  };
+  if (COMMON[path]) return COMMON[path];
+  // Generic: split on slashes, drop empties, title-case each
+  // segment (dashes become spaces). Use ": " between segments
+  // so "/blog/my-first-post" becomes "Blog: My first post".
+  const parts = path.split("/").filter(Boolean).map((seg) =>
+    seg
+      .replace(/-/g, " ")
+      .replace(/^./, (c) => c.toUpperCase()),
+  );
+  return parts.join(": ");
 }
 
 /** Two-letter ISO → flag emoji via regional indicator code points.
@@ -336,8 +386,7 @@ function flagEmoji(code: string): string {
 }
 
 /** Tiny country-code → name map for the most likely visitor sources
- *  for UK trade businesses. Unknown codes display as the raw code,
- *  so the user still sees something useful. */
+ *  for UK trade businesses. Unknown codes display as the raw code. */
 const COUNTRY_NAMES: Record<string, string> = {
   GB: "United Kingdom",
   US: "United States",
@@ -383,8 +432,6 @@ function computeWeekdayPattern(days: DayPoint[]): number[] {
   const sums = new Array(7).fill(0);
   const counts = new Array(7).fill(0);
   for (const d of days) {
-    // Date is YYYY-MM-DD UTC. Convert to a weekday with the same
-    // intent: Monday = 0, Sunday = 6.
     const js = new Date(`${d.date}T12:00:00Z`).getUTCDay();
     const idx = (js + 6) % 7;
     sums[idx] += d.pageviews;
@@ -420,32 +467,31 @@ function Stat({
   label,
   value,
   delta,
+  windowDays,
   approx,
-  raw,
   positiveIsGood = true,
+  hint,
 }: {
   label: string;
-  value: number | string;
+  value: number;
   delta?: number | null;
+  windowDays?: number;
   approx?: boolean;
-  raw?: boolean;
-  /** Whether an up-arrow should be green (true) or red (false).
-   *  Threats blocked = "up is bad" inverts the colour. */
+  /** Up = green when true; up = red when false (e.g. attacks). */
   positiveIsGood?: boolean;
+  /** Optional one-line clarifier shown beneath the number. */
+  hint?: string;
 }) {
-  const displayValue =
-    typeof value === "string"
-      ? value
-      : `${approx ? "≈ " : ""}${value.toLocaleString("en-GB")}`;
   return (
     <div className="rounded-xl bg-cream-50 p-4">
       <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">
         {label}
       </p>
       <p className="mt-1 font-mono text-2xl font-bold text-navy-900">
-        {displayValue}
+        {approx ? "≈ " : ""}
+        {value.toLocaleString("en-GB")}
       </p>
-      {!raw && delta !== undefined && delta !== null && (
+      {delta !== undefined && delta !== null && (
         <p
           className={[
             "mt-1 inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold",
@@ -457,12 +503,16 @@ function Stat({
           ].join(" ")}
         >
           {delta > 0 ? "▲" : delta < 0 ? "▼" : "·"} {Math.abs(delta)}%
+          {windowDays ? ` vs previous ${windowDays} days` : ""}
         </p>
       )}
-      {!raw && delta === null && (
+      {delta === null && (
         <p className="mt-1 inline-block rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold text-navy-600">
-          new
+          first period
         </p>
+      )}
+      {hint && (
+        <p className="mt-2 text-[11px] leading-tight text-navy-500">{hint}</p>
       )}
     </div>
   );
@@ -492,10 +542,7 @@ function DualSparkline({
   const padY = 8;
   const maxPv = Math.max(1, ...points.map((p) => p.pageviews));
   const maxUv = Math.max(1, ...points.map((p) => p.uniques));
-  // We use the larger of the two as the y-scale so both lines share
-  // a comparable visual range; visitors usually < pageviews but the
-  // CF unique estimator occasionally returns >pageviews on low-
-  // traffic days so we hedge.
+  // Shared y-scale so both lines render comparably.
   const yMax = Math.max(maxPv, maxUv);
   const stepX =
     points.length > 1 ? (w - padX * 2) / (points.length - 1) : 0;
@@ -518,7 +565,7 @@ function DualSparkline({
       preserveAspectRatio="none"
       className={`h-36 w-full ${className}`}
       role="img"
-      aria-label={`Daily traffic chart, max ${yMax}`}
+      aria-label={`Daily visits chart, max ${yMax}`}
     >
       <path d={pvArea} fill="rgb(15 23 42 / 0.05)" />
       <path
@@ -553,6 +600,12 @@ function TopList({
   empty: string;
   format: (name: string) => string;
 }) {
+  // Total over the LIST (not the full window) so percentages add
+  // to 100 across the items shown. This is what most users
+  // intuitively expect from a top-N share view, and it sidesteps
+  // the "totals more than pageviews" confusion that comes from
+  // Cloudflare counting every request (HTML + assets) in the
+  // country/path breakdowns while pageviews is HTML-only.
   const total = entries.reduce((acc, e) => acc + e.count, 0) || 1;
   return (
     <div>
@@ -568,11 +621,11 @@ function TopList({
             return (
               <li key={e.name} className="text-sm">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="truncate text-xs text-navy-800">
+                  <span className="truncate text-sm text-navy-800">
                     {format(e.name)}
                   </span>
                   <span className="font-mono text-xs tabular-nums text-navy-600">
-                    {e.count.toLocaleString("en-GB")}
+                    {pct}%
                   </span>
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full bg-cream-100">
@@ -596,10 +649,10 @@ function WeekdayPattern({ buckets }: { buckets: number[] }) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
-        When visitors arrive
+        When people visit
       </p>
       <p className="mt-1 text-[11px] text-navy-500">
-        Average pageviews by weekday across the window.
+        Average visits per weekday for this period.
       </p>
       <div className="mt-3 grid grid-cols-7 gap-1.5">
         {buckets.map((v, i) => {
@@ -608,7 +661,7 @@ function WeekdayPattern({ buckets }: { buckets: number[] }) {
             <div
               key={i}
               className="flex flex-col items-center gap-1"
-              title={`${labels[i]}: ${v} avg pageviews`}
+              title={`${labels[i]}: ${v} avg visits`}
             >
               <div className="flex h-16 w-full items-end">
                 <div
@@ -627,50 +680,5 @@ function WeekdayPattern({ buckets }: { buckets: number[] }) {
         })}
       </div>
     </div>
-  );
-}
-
-function StatusBar({ entries }: { entries: TopEntry[] }) {
-  const total = entries.reduce((acc, e) => acc + e.count, 0) || 1;
-  // Categorise: 2xx = green, 3xx = blue, 4xx = amber, 5xx = red.
-  const buckets = { ok: 0, redir: 0, client: 0, server: 0 };
-  for (const e of entries) {
-    const code = Number.parseInt(e.name, 10);
-    if (code >= 200 && code < 300) buckets.ok += e.count;
-    else if (code >= 300 && code < 400) buckets.redir += e.count;
-    else if (code >= 400 && code < 500) buckets.client += e.count;
-    else if (code >= 500 && code < 600) buckets.server += e.count;
-  }
-  const segs = [
-    { key: "2xx OK", v: buckets.ok, color: "bg-green-500" },
-    { key: "3xx Redirect", v: buckets.redir, color: "bg-blue-400" },
-    { key: "4xx Client error (incl. 404)", v: buckets.client, color: "bg-amber-400" },
-    { key: "5xx Server error", v: buckets.server, color: "bg-ember-500" },
-  ].filter((s) => s.v > 0);
-  return (
-    <>
-      <div className="mt-2 flex h-3 overflow-hidden rounded-full">
-        {segs.map((s) => (
-          <div
-            key={s.key}
-            className={`${s.color} transition-all`}
-            style={{ width: `${Math.max(1, (s.v / total) * 100)}%` }}
-            title={`${s.key}: ${s.v.toLocaleString("en-GB")}`}
-          />
-        ))}
-      </div>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-navy-600">
-        {segs.map((s) => (
-          <span key={s.key} className="inline-flex items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className={`inline-block h-2 w-2 rounded-full ${s.color}`}
-            />
-            {s.key}: {s.v.toLocaleString("en-GB")} (
-            {Math.round((s.v / total) * 100)}%)
-          </span>
-        ))}
-      </div>
-    </>
   );
 }
