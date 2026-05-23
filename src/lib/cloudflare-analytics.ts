@@ -51,6 +51,20 @@ export type DailySnapshot = {
   topPages: TopEntry[];
   /** Top referring hosts (max 10). Empty string = direct/no referrer. */
   topReferrers: TopEntry[];
+  /** Top source countries (max 10). Two-letter ISO codes. From
+   *  sum.countryMap on httpRequests1dGroups — free plan friendly. */
+  topCountries: TopEntry[];
+  /** HTTP status code mix. Each entry is { name: "200", count: N }.
+   *  Useful for spotting 404 spikes (broken links). */
+  statusCodes: TopEntry[];
+  /** Requests Cloudflare blocked as threats. "We blocked N attacks
+   *  today" gauge for the dashboard. */
+  threats: number;
+  /** Total bytes Cloudflare served — bandwidth measure. */
+  bandwidthBytes: number;
+  /** Requests served from CF cache (vs. origin). cached / pageviews
+   *  ≈ cache hit rate. */
+  cachedRequests: number;
 };
 
 /**
@@ -150,11 +164,20 @@ export async function fetchDailySnapshot(
     uniques: totals.uniques,
     topPages,
     topReferrers,
+    topCountries: totals.topCountries,
+    statusCodes: totals.statusCodes,
+    threats: totals.threats,
+    bandwidthBytes: totals.bandwidthBytes,
+    cachedRequests: totals.cachedRequests,
   };
 }
 
 // ---------- Internal queries ----------
 
+// Single query pulls every metric we display on the dashboard
+// except top pages + top referrers (which need adaptive groups
+// because countryMap-style buckets only exist on the daily roll-up).
+// All fields here are free-plan available.
 const TOTALS_QUERY = `
   query Totals($zoneTag: String!, $date: String!) {
     viewer {
@@ -163,7 +186,15 @@ const TOTALS_QUERY = `
           limit: 1
           filter: { date: $date }
         ) {
-          sum { requests pageViews }
+          sum {
+            requests
+            pageViews
+            bytes
+            cachedRequests
+            threats
+            countryMap     { clientCountryName  requests }
+            responseStatusMap { edgeResponseStatus  requests }
+          }
           uniq { uniques }
         }
       }
@@ -171,15 +202,49 @@ const TOTALS_QUERY = `
   }
 `;
 
+type TotalsResult = {
+  pageviews: number;
+  uniques: number;
+  topCountries: TopEntry[];
+  statusCodes: TopEntry[];
+  threats: number;
+  bandwidthBytes: number;
+  cachedRequests: number;
+};
+
+const EMPTY_TOTALS: TotalsResult = {
+  pageviews: 0,
+  uniques: 0,
+  topCountries: [],
+  statusCodes: [],
+  threats: 0,
+  bandwidthBytes: 0,
+  cachedRequests: 0,
+};
+
 async function fetchTotals(
   zoneId: string,
   date: string,
-): Promise<{ pageviews: number; uniques: number }> {
+): Promise<TotalsResult> {
   type Resp = {
     viewer: {
       zones: Array<{
         httpRequests1dGroups: Array<{
-          sum: { requests: number; pageViews: number };
+          sum: {
+            requests: number;
+            pageViews: number;
+            bytes: number;
+            cachedRequests: number;
+            threats: number;
+            countryMap: Array<{
+              clientCountryName: string;
+              requests: number;
+            }>;
+            responseStatusMap: Array<{
+              edgeResponseStatus: number;
+              requests: number;
+            }>;
+          };
           uniq: { uniques: number };
         }>;
       }>;
@@ -187,13 +252,31 @@ async function fetchTotals(
   };
   const data = await gql<Resp>(TOTALS_QUERY, { zoneTag: zoneId, date });
   const row = data.viewer.zones[0]?.httpRequests1dGroups[0];
-  if (!row) return { pageviews: 0, uniques: 0 };
-  // pageViews is the HTML-only count Cloudflare computes; falls back
-  // to total requests if the zone is too low-traffic for the
+  if (!row) return EMPTY_TOTALS;
+
+  // Country + status maps come back already grouped — sort + cap
+  // ourselves so the JSON column doesn't bloat. Top 10 each is
+  // plenty for a dashboard render.
+  const topCountries: TopEntry[] = (row.sum.countryMap ?? [])
+    .map((c) => ({ name: c.clientCountryName || "??", count: c.requests }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+  const statusCodes: TopEntry[] = (row.sum.responseStatusMap ?? [])
+    .map((s) => ({ name: String(s.edgeResponseStatus), count: s.requests }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // pageViews is the HTML-only count Cloudflare computes; falls
+  // back to total requests if the zone is too low-traffic for the
   // sampler to compute it (Cloudflare returns 0 in that case).
   return {
     pageviews: row.sum.pageViews || row.sum.requests || 0,
     uniques: row.uniq.uniques || 0,
+    topCountries,
+    statusCodes,
+    threats: row.sum.threats || 0,
+    bandwidthBytes: row.sum.bytes || 0,
+    cachedRequests: row.sum.cachedRequests || 0,
   };
 }
 

@@ -254,6 +254,22 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             </div>
           )}
 
+          {/* ---------- Visitors / analytics (full width) ----------
+           *  Cloudflare edge-level totals + daily series +
+           *  top pages / countries / referrers / status codes,
+           *  populated nightly by the ops Worker's analytics-tick.
+           *  Only rendered for live customers whose site is on a
+           *  Cloudflare zone we can read (gated by hasAnalytics,
+           *  computed server-side from prospect.cloudflareZoneId).
+           *  Sits as a full-width, collapsible block above the
+           *  2-column dashboard grid so the visual emphasis matches
+           *  the data density. */}
+          {isSiteLive && hasAnalytics && (
+            <div className="mb-6">
+              <AnalyticsCard token={token} domain={domain} />
+            </div>
+          )}
+
           <div className="grid gap-6 md:grid-cols-2">
             {/* ---------- Your site ---------- */}
             <DashCard title="Your site">
@@ -321,19 +337,6 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 </Link>
               )}
             </DashCard>
-
-            {/* ---------- Visitors / analytics ----------
-             *  Cloudflare edge-level pageviews + uniques + top
-             *  pages + top referrers, populated nightly by the ops
-             *  Worker's analytics-tick. Only rendered for live
-             *  customers whose site is on a Cloudflare zone we
-             *  can read (gated by hasAnalytics, which the server
-             *  computes from prospect.cloudflareZoneId). Sits as
-             *  its own tile in the dashboard grid so it shows up
-             *  next to "Your site". */}
-            {isSiteLive && hasAnalytics && (
-              <AnalyticsCard token={token} domain={domain} />
-            )}
 
             {/* ---------- Onboarding Hub navigation ---------- */}
             {isHubUnlocked && !isCancelled && (

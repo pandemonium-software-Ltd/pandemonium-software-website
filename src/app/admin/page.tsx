@@ -73,6 +73,18 @@ export default async function AdminPage() {
           </p>
         </header>
 
+        {/* Marketing-site analytics — at the top so it is the first
+            thing you see when opening /admin. Collapsible inside
+            the card itself. */}
+        <div className="mb-8">
+          <AnalyticsCard
+            token="@self"
+            domain="modu-forge.co.uk"
+            title="📊 Marketing site visitors"
+            apiPath="/api/admin/analytics"
+          />
+        </div>
+
         {/* Health strip */}
         <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <HealthCard
@@ -106,20 +118,6 @@ export default async function AdminPage() {
             label="Stripe"
             ok={stripeReady}
             detail={stripeReady ? "Configured" : "Not yet (Stage 2A Part 2)"}
-          />
-        </div>
-
-        {/* Marketing-site analytics — modu-forge.co.uk traffic.
-            Populated nightly by the ops Worker's analytics tick
-            under the reserved "@self" token; read via /api/admin/analytics.
-            Sits above the prospect list so we see traffic trends
-            without having to dig anywhere. */}
-        <div className="mb-8">
-          <AnalyticsCard
-            token="@self"
-            domain="modu-forge.co.uk"
-            title="📊 Marketing site visitors"
-            apiPath="/api/admin/analytics"
           />
         </div>
 

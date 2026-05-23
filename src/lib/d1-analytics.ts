@@ -54,8 +54,11 @@ export async function insertDailySnapshot(
   await db
     .prepare(
       `INSERT OR REPLACE INTO daily_analytics
-         (token, date, pageviews, uniques, top_pages, top_referrers, captured_at)
-       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+         (token, date, pageviews, uniques,
+          top_pages, top_referrers, top_countries, status_codes,
+          threats, bandwidth_bytes, cached_requests,
+          captured_at)
+       VALUES (?, ?, ?, ?,  ?, ?, ?, ?,  ?, ?, ?,  CURRENT_TIMESTAMP)`,
     )
     .bind(
       token,
@@ -64,6 +67,11 @@ export async function insertDailySnapshot(
       snapshot.uniques,
       JSON.stringify(snapshot.topPages),
       JSON.stringify(snapshot.topReferrers),
+      JSON.stringify(snapshot.topCountries),
+      JSON.stringify(snapshot.statusCodes),
+      snapshot.threats,
+      snapshot.bandwidthBytes,
+      snapshot.cachedRequests,
     )
     .run();
 }
@@ -100,6 +108,17 @@ export type AnalyticsWindow = {
   topPages: TopEntry[];
   /** Top referrers aggregated across the whole window, max 10. */
   topReferrers: TopEntry[];
+  /** Top source countries aggregated across the whole window. */
+  topCountries: TopEntry[];
+  /** HTTP status code mix across the window. */
+  statusCodes: TopEntry[];
+  /** Threats blocked summed across the window. */
+  threatsTotal: number;
+  /** Total bytes served across the window. */
+  bandwidthBytesTotal: number;
+  /** Cache-hit requests summed. cachedRequestsTotal / pageviewsTotal
+   *  ≈ cache hit rate for the window. */
+  cachedRequestsTotal: number;
 };
 
 /**
@@ -127,10 +146,17 @@ export async function readWindow(
     uniques: number;
     top_pages: string;
     top_referrers: string;
+    top_countries: string | null;
+    status_codes: string | null;
+    threats: number | null;
+    bandwidth_bytes: number | null;
+    cached_requests: number | null;
   };
   const { results } = await db
     .prepare(
-      `SELECT date, pageviews, uniques, top_pages, top_referrers
+      `SELECT date, pageviews, uniques,
+              top_pages, top_referrers, top_countries, status_codes,
+              threats, bandwidth_bytes, cached_requests
          FROM daily_analytics
         WHERE token = ? AND date >= ?
         ORDER BY date ASC`,
@@ -146,11 +172,37 @@ export async function readWindow(
 
   // Sum each (name → count) across all days in the window, then
   // sort descending + take top 10. Safe parse on the JSON column —
-  // malformed rows just contribute nothing.
+  // malformed rows just contribute nothing. Older rows written
+  // before migration 0002 have NULL for the new columns; we
+  // tolerate that by defaulting to "[]".
   const topPages = mergeTopN(results.map((r) => r.top_pages));
   const topReferrers = mergeTopN(results.map((r) => r.top_referrers));
+  const topCountries = mergeTopN(results.map((r) => r.top_countries ?? "[]"));
+  const statusCodes = mergeTopN(
+    results.map((r) => r.status_codes ?? "[]"),
+    20,
+  );
+  const threatsTotal = results.reduce((acc, r) => acc + (r.threats ?? 0), 0);
+  const bandwidthBytesTotal = results.reduce(
+    (acc, r) => acc + (r.bandwidth_bytes ?? 0),
+    0,
+  );
+  const cachedRequestsTotal = results.reduce(
+    (acc, r) => acc + (r.cached_requests ?? 0),
+    0,
+  );
 
-  return { windowDays, days, topPages, topReferrers };
+  return {
+    windowDays,
+    days,
+    topPages,
+    topReferrers,
+    topCountries,
+    statusCodes,
+    threatsTotal,
+    bandwidthBytesTotal,
+    cachedRequestsTotal,
+  };
 }
 
 function mergeTopN(rawJsonRows: string[], limit = 10): TopEntry[] {

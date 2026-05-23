@@ -72,11 +72,17 @@ async function main() {
       // miniflare. We use --file rather than --command to dodge
       // multi-level shell-escaping with the JSON columns.
       const sql = `INSERT OR REPLACE INTO daily_analytics
-        (token, date, pageviews, uniques, top_pages, top_referrers, captured_at)
+        (token, date, pageviews, uniques,
+         top_pages, top_referrers, top_countries, status_codes,
+         threats, bandwidth_bytes, cached_requests,
+         captured_at)
        VALUES
         ('${token}', '${date}', ${snap.pageviews}, ${snap.uniques},
          '${JSON.stringify(snap.topPages).replace(/'/g, "''")}',
          '${JSON.stringify(snap.topReferrers).replace(/'/g, "''")}',
+         '${JSON.stringify(snap.topCountries).replace(/'/g, "''")}',
+         '${JSON.stringify(snap.statusCodes).replace(/'/g, "''")}',
+         ${snap.threats}, ${snap.bandwidthBytes}, ${snap.cachedRequests},
          CURRENT_TIMESTAMP);`;
       const tmpFile = join(tmpdir(), `backfill-${token}-${date}.sql`);
       writeFileSync(tmpFile, sql);

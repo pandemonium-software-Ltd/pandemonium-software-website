@@ -25,6 +25,23 @@ type FakeRow = {
   uniques: number;
   top_pages: string;
   top_referrers: string;
+  top_countries: string;
+  status_codes: string;
+  threats: number;
+  bandwidth_bytes: number;
+  cached_requests: number;
+};
+
+// Shared helper to spread the new defaults into each fixture so
+// individual tests stay readable.
+const baseEmpty = {
+  topPages: [] as { name: string; count: number }[],
+  topReferrers: [] as { name: string; count: number }[],
+  topCountries: [] as { name: string; count: number }[],
+  statusCodes: [] as { name: string; count: number }[],
+  threats: 0,
+  bandwidthBytes: 0,
+  cachedRequests: 0,
 };
 
 // Tiny in-memory D1 stand-in. Stores rows as objects keyed by
@@ -48,7 +65,16 @@ function makeFakeD1(): D1Database & { _rows: Map<string, FakeRow> } {
             uniques,
             top_pages,
             top_referrers,
-          ] = boundValues as [string, string, number, number, string, string];
+            top_countries,
+            status_codes,
+            threats,
+            bandwidth_bytes,
+            cached_requests,
+          ] = boundValues as [
+            string, string, number, number,
+            string, string, string, string,
+            number, number, number,
+          ];
           rows.set(`${token}|${date}`, {
             token,
             date,
@@ -56,6 +82,11 @@ function makeFakeD1(): D1Database & { _rows: Map<string, FakeRow> } {
             uniques,
             top_pages,
             top_referrers,
+            top_countries,
+            status_codes,
+            threats,
+            bandwidth_bytes,
+            cached_requests,
           });
           return { success: true, meta: { duration: 0, changes: 1, last_row_id: 0 } };
         }
@@ -101,6 +132,7 @@ describe("d1-analytics", () => {
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
+        ...baseEmpty,
         date: "2026-05-20",
         pageviews: 42,
         uniques: 18,
@@ -118,9 +150,8 @@ describe("d1-analytics", () => {
   test("INSERT OR REPLACE: same (token, date) overwrites", async () => {
     const db = makeFakeD1();
     const base = {
+      ...baseEmpty,
       date: "2026-05-20",
-      topPages: [] as { name: string; count: number }[],
-      topReferrers: [] as { name: string; count: number }[],
     };
     await insertDailySnapshot(db, {
       token: TOKEN,
@@ -140,6 +171,7 @@ describe("d1-analytics", () => {
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
+        ...baseEmpty,
         date: "2026-05-18",
         pageviews: 0,
         uniques: 0,
@@ -147,12 +179,12 @@ describe("d1-analytics", () => {
           { name: "/services", count: 5 },
           { name: "/contact", count: 3 },
         ],
-        topReferrers: [],
       },
     });
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
+        ...baseEmpty,
         date: "2026-05-19",
         pageviews: 0,
         uniques: 0,
@@ -160,7 +192,6 @@ describe("d1-analytics", () => {
           { name: "/services", count: 2 },
           { name: "/about", count: 4 },
         ],
-        topReferrers: [],
       },
     });
     const w = await readWindow(db, { token: TOKEN, windowDays: 30 });
@@ -176,21 +207,19 @@ describe("d1-analytics", () => {
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
+        ...baseEmpty,
         date: "2026-05-20",
         pageviews: 10,
         uniques: 5,
-        topPages: [],
-        topReferrers: [],
       },
     });
     await insertDailySnapshot(db, {
       token: "different-customer",
       snapshot: {
+        ...baseEmpty,
         date: "2026-05-20",
         pageviews: 999,
         uniques: 500,
-        topPages: [],
-        topReferrers: [],
       },
     });
     const w = await readWindow(db, { token: TOKEN, windowDays: 30 });
@@ -209,21 +238,19 @@ describe("d1-analytics", () => {
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
+        ...baseEmpty,
         date: old.toISOString().slice(0, 10),
         pageviews: 1,
         uniques: 1,
-        topPages: [],
-        topReferrers: [],
       },
     });
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
+        ...baseEmpty,
         date: recent.toISOString().slice(0, 10),
         pageviews: 2,
         uniques: 2,
-        topPages: [],
-        topReferrers: [],
       },
     });
 
@@ -240,6 +267,11 @@ describe("d1-analytics", () => {
       days: [],
       topPages: [],
       topReferrers: [],
+      topCountries: [],
+      statusCodes: [],
+      threatsTotal: 0,
+      bandwidthBytesTotal: 0,
+      cachedRequestsTotal: 0,
     });
   });
 });
