@@ -265,9 +265,15 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             * matches what actually rendered (e.g. Visitors only
             * appears when isSiteLive). */}
           {(() => {
+            // Sections list in page (DOM) order — the rail's active
+            // dot moves top-to-bottom as the customer scrolls.
+            // Conditional pushes mirror the conditional render in
+            // the body below, so the rail only lists what actually
+            // mounted on the page.
             const sections: TimelineSection[] = [];
             if (isSiteLive && hasAnalytics)
               sections.push({ id: "section-visitors", label: "Visitors" });
+            sections.push({ id: "section-site", label: "Your site" });
             if (isHubUnlocked && !isCancelled)
               sections.push({
                 id: "section-hub",
@@ -278,12 +284,21 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 id: "section-modules",
                 label: "Your modules",
               });
+            if (isHubUnlocked && !isCancelled)
+              sections.push({
+                id: "section-billing",
+                label: "Billing",
+              });
+            sections.push({
+              id: "section-this-month",
+              label: "This month",
+            });
+            sections.push({ id: "section-contact", label: "Get in touch" });
             if (!isCancelled && isSiteLive)
               sections.push({
                 id: "section-changes",
                 label: "Change requests",
               });
-            sections.push({ id: "section-contact", label: "Get in touch" });
             return (
               <div className="lg:flex lg:items-start lg:gap-10">
                 <DashboardTimeline sections={sections} />
@@ -312,8 +327,12 @@ export default function AccountDashboard(props: AccountDashboardProps) {
            *  2-column dashboard grid so the visual emphasis matches
            *  the data density. */}
           {isSiteLive && hasAnalytics && (
-            <div id="section-visitors" className="mb-6 scroll-mt-24">
-              <AnalyticsCard token={token} domain={domain} />
+            <div className="mb-6">
+              <AnalyticsCard
+                token={token}
+                domain={domain}
+                id="section-visitors"
+              />
             </div>
           )}
 
@@ -324,7 +343,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               still letting cards collapse for tidiness. */}
           <div className="flex flex-col gap-6">
             {/* ---------- Your site ---------- */}
-            <DashCard title="Your site">
+            <DashCard title="Your site" id="section-site">
               {siteUrl ? (
                 <>
                   <p className="font-mono text-base text-navy-900">
@@ -630,7 +649,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
 
             {/* ---------- Billing (placeholder for #6) ---------- */}
             {isHubUnlocked && !isCancelled && (
-              <DashCard title="Billing">
+              <DashCard title="Billing" id="section-billing">
                 <span className="inline-block rounded-full bg-cream-100 px-2.5 py-0.5 text-[11px] font-semibold text-navy-700 ring-1 ring-navy-200">
                   Self-serve coming soon
                 </span>
@@ -659,7 +678,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
              *  Per-kind usage. Each module has its own 2/month budget
              *  (or 1/month for legacy free-text change-requests under
              *  the old shared cap). Resets together on the 1st UTC. */}
-            <DashCard title="This month">
+            <DashCard title="This month" id="section-this-month">
               <p className="text-sm text-navy-700">
                 Each module has its own monthly allowance. Resets on
                 the 1st. Out-of-scope items quoted separately
@@ -748,11 +767,12 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               has an actual site to request changes to. Pre-launch
               edits use Hub Step 5 instead. */}
           {!isCancelled && isSiteLive && (
-            <div id="section-changes" className="mt-8 scroll-mt-24">
+            <div className="mt-8">
               <ChangeRequestsBlock
                 token={token}
                 requests={requests}
                 cap={effectiveCrCap}
+                id="section-changes"
                 onSubmitted={(req) => setRequests((prev) => [req, ...prev])}
                 onRetracted={(id) =>
                   setRequests((prev) =>
@@ -776,15 +796,15 @@ export default function AccountDashboard(props: AccountDashboardProps) {
 function DashCard({
   title,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
   id,
 }: {
   title: string;
   children: React.ReactNode;
-  /** Whether the section starts expanded. Defaults to true so the
-   *  customer sees their content on first load; they can collapse
-   *  to tidy. Pass `false` for sections that are useful but
-   *  secondary (e.g. usage stats, contact info). */
+  /** Whether the section starts expanded. Defaults to false — the
+   *  dashboard now opens as a compact accordion driven by the
+   *  left-rail timeline. The customer expands what they want via
+   *  the rail (or the chevron) and sections stay open after that. */
   defaultOpen?: boolean;
   /** Anchor id — set when this card is a target of the left-rail
    *  timeline nav. Lets the rail's smooth-scroll find the card and
@@ -1046,6 +1066,8 @@ function ChangeRequestsBlock({
   cap,
   onSubmitted,
   onRetracted,
+  id,
+  defaultOpen = false,
 }: {
   token: string;
   requests: ChangeRequest[];
@@ -1055,6 +1077,12 @@ function ChangeRequestsBlock({
   cap: number;
   onSubmitted: (req: ChangeRequest) => void;
   onRetracted: (id: string) => void;
+  /** DOM id on the outer <details>. Lets the dashboard timeline
+   *  rail target this block for smooth-scroll + open. */
+  id?: string;
+  /** Whether the block starts expanded. Defaults to false so the
+   *  dashboard starts as a compact accordion. */
+  defaultOpen?: boolean;
 }) {
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
@@ -1182,8 +1210,9 @@ function ChangeRequestsBlock({
     // DashCard. The usage pill stays visible in the summary so the
     // customer sees their remaining count even when collapsed.
     <details
-      open
-      className="group rounded-2xl bg-white p-7 shadow-card md:p-8 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
+      id={id}
+      open={defaultOpen}
+      className="group scroll-mt-24 rounded-2xl bg-white p-7 shadow-card md:p-8 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
     >
       <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-3">
         <div className="flex flex-1 flex-wrap items-baseline gap-3">

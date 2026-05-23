@@ -46,6 +46,13 @@ type Props = {
   domain: string;
   title?: string;
   apiPath?: string;
+  /** DOM id on the outer <details>. Lets the dashboard timeline
+   *  rail target this card for smooth-scroll + open. */
+  id?: string;
+  /** Whether the card starts expanded. Defaults to false so the
+   *  dashboard starts as a compact accordion — the customer
+   *  expands what they want via the rail or the chevron. */
+  defaultOpen?: boolean;
 };
 
 export default function AnalyticsCard({
@@ -53,6 +60,8 @@ export default function AnalyticsCard({
   domain,
   title = "📊 Visitors",
   apiPath,
+  id,
+  defaultOpen = false,
 }: Props) {
   const resolvedPath = apiPath ?? `/api/account/analytics/${token}`;
   const [windowDays, setWindowDays] = useState<WindowOption>(30);
@@ -136,8 +145,9 @@ export default function AnalyticsCard({
 
   return (
     <details
-      open
-      className="group rounded-2xl bg-white p-6 shadow-card md:p-7 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
+      id={id}
+      open={defaultOpen}
+      className="group scroll-mt-24 rounded-2xl bg-white p-6 shadow-card md:p-7 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none"
     >
       <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-3">
         <div className="flex flex-1 flex-wrap items-baseline gap-3">

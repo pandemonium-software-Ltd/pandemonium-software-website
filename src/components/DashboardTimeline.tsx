@@ -80,10 +80,19 @@ export default function DashboardTimeline({ sections }: Props) {
     return () => observer.disconnect();
   }, [sections]);
 
-  // Smooth-scroll handler. Closes the mobile drawer after navigation.
+  // Smooth-scroll + expand handler. If the target is a <details>
+  // element (the dashboard's collapsible cards all are), force it
+  // open before scrolling so the customer lands inside the content,
+  // not on a still-collapsed header. The section stays open after
+  // this — the native <details> only closes again when the customer
+  // clicks the chevron themselves. Closes the mobile drawer after
+  // navigation.
   function scrollTo(id: string) {
     const el = document.getElementById(id);
     if (!el) return;
+    if (el.tagName === "DETAILS") {
+      (el as HTMLDetailsElement).open = true;
+    }
     el.scrollIntoView({ behavior: "smooth", block: "start" });
     setActiveId(id);
     setDrawerOpen(false);
