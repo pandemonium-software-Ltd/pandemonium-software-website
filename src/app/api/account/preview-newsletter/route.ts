@@ -35,6 +35,11 @@ const TOKEN_RE =
 // customer can start typing and see the layout before they've
 // written a full subject line. min(0) on the body / subject lets
 // the preview render with placeholders ("(empty subject)").
+// Mirror the send route's cap so preview rejects requests the
+// send would too (4 inline images). Kept in lock-step via a
+// shared constant would be nicer, but the value rarely changes.
+const MAX_IMAGES_PER_NEWSLETTER = 4;
+
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE),
   template: z.enum([
@@ -45,7 +50,15 @@ const requestSchema = z.object({
   ]),
   subject: z.string().max(NEWSLETTER_SUBJECT_MAX).default(""),
   body: z.string().max(NEWSLETTER_BODY_MAX).default(""),
-  imageUrl: z.string().max(2000).optional(),
+  images: z
+    .array(
+      z.object({
+        url: z.string().max(2000),
+        size: z.enum(["small", "medium", "large"]).optional(),
+      }),
+    )
+    .max(MAX_IMAGES_PER_NEWSLETTER)
+    .optional(),
   ctaLabel: z.string().max(40).optional(),
   ctaUrl: z.string().max(500).optional(),
 });
@@ -67,7 +80,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, template, subject, body, imageUrl, ctaLabel, ctaUrl } =
+  const { token, template, subject, body, images, ctaLabel, ctaUrl } =
     parsed.data;
   const sessionAuth = await requireCustomerSession(request, token);
   if (!sessionAuth.ok) return sessionAuth.response;
@@ -88,12 +101,16 @@ export async function POST(request: Request) {
     ? `https://${domainCaptured.domain}`
     : undefined;
 
+  // Strip empty-URL slots — the composer may include a placeholder
+  // row before the customer has uploaded/pasted a URL, and we don't
+  // want the renderer to emit an <img src=""> for those.
+  const validImages = (images ?? []).filter((i) => i.url && i.url.trim());
   const rendered = renderNewsletter(
     {
       template: template as NewsletterTemplateId,
       subject: subject || "(no subject yet)",
       body: body || "(start typing your newsletter — the preview updates as you type)",
-      imageUrl: imageUrl || undefined,
+      images: validImages.length > 0 ? validImages : undefined,
       ctaLabel: ctaLabel || undefined,
       ctaUrl: ctaUrl || undefined,
     },

@@ -54,11 +54,19 @@ type TemplateId =
   | "promo"
   | "personal-note";
 
+type ImageSize = "small" | "medium" | "large";
+type DraftImage = { url: string; size: ImageSize };
+
+/** Cap matches the API schema (MAX_IMAGES_PER_NEWSLETTER) — kept
+ *  here so the composer can hide the "Add another" button at the
+ *  limit, but the server is still the source of truth. */
+const MAX_IMAGES = 4;
+
 type Draft = {
   template: TemplateId;
   subject: string;
   body: string;
-  imageUrl: string;
+  images: DraftImage[];
   ctaLabel: string;
   ctaUrl: string;
 };
@@ -162,7 +170,7 @@ function emptyDraft(): Draft {
     template: "monthly-update",
     subject: "",
     body: "",
-    imageUrl: "",
+    images: [],
     ctaLabel: "",
     ctaUrl: "",
   };
@@ -219,7 +227,9 @@ export default function NewsletterCard({
           template: draft.template,
           subject: draft.subject,
           body: draft.body,
-          imageUrl: draft.imageUrl || undefined,
+          // Strip incomplete rows (URL not yet filled in) so the
+          // preview doesn't emit empty <img src="">.
+          images: draft.images.filter((i) => i.url.trim().length > 0),
           ctaLabel: draft.ctaLabel || undefined,
           ctaUrl: draft.ctaUrl || undefined,
         }),
@@ -251,7 +261,7 @@ export default function NewsletterCard({
     draft.template,
     draft.subject,
     draft.body,
-    draft.imageUrl,
+    draft.images,
     draft.ctaLabel,
     draft.ctaUrl,
   ]);
@@ -383,12 +393,19 @@ export default function NewsletterCard({
     if (!draft.body.trim()) return "Add some body text.";
     if (draft.ctaLabel.trim() && !draft.ctaUrl.trim())
       return "Set a button link, or clear the button label.";
-    if (draft.imageUrl.trim()) {
-      try {
-        new URL(draft.imageUrl);
-      } catch {
-        return "Image URL doesn't look valid.";
+    for (let i = 0; i < draft.images.length; i++) {
+      const url = draft.images[i].url.trim();
+      if (!url) {
+        return `Image ${i + 1} needs a URL — paste one or upload, or remove the empty slot.`;
       }
+      try {
+        new URL(url);
+      } catch {
+        return `Image ${i + 1}'s URL doesn't look valid.`;
+      }
+    }
+    if (draft.images.length > MAX_IMAGES) {
+      return `You can attach up to ${MAX_IMAGES} images per newsletter.`;
     }
     return null;
   }
@@ -410,7 +427,13 @@ export default function NewsletterCard({
           template: draft.template,
           subject: draft.subject.trim(),
           body: draft.body.trim(),
-          imageUrl: draft.imageUrl.trim() || undefined,
+          images:
+            draft.images.length > 0
+              ? draft.images.map((i) => ({
+                  url: i.url.trim(),
+                  size: i.size,
+                }))
+              : undefined,
           ctaLabel: draft.ctaLabel.trim() || undefined,
           ctaUrl: draft.ctaUrl.trim() || undefined,
         }),
@@ -634,129 +657,185 @@ export default function NewsletterCard({
               </span>
             </label>
 
+            {/* ---------- Images ----------
+              * Multi-image list (max MAX_IMAGES). Each entry has a
+              * thumbnail, a size dropdown (Small/Medium/Large), and
+              * a Remove button. Below the list: file upload + URL
+              * input that both append to the array. Hidden when
+              * already at the cap.
+              *
+              * Sizes mirror lib/newsletter/render.ts:
+              *   Small  ≈ 240px — sits in a paragraph, thumbnail-ish
+              *   Medium ≈ 400px — mid-size, room around it
+              *   Large  = full width — fills the email body (default) */}
             <div>
-              <span className="block text-sm font-semibold text-navy-900">
-                Image (optional)
-              </span>
-              <p className="mt-1 text-[11px] text-navy-500">
-                Upload one image to appear at the top of your email
-                (JPG / PNG / WebP, max 5MB), or paste a URL to a photo
-                already hosted elsewhere.
-              </p>
-              {/* Hidden file input — opened by the "Upload image"
-               *  button. We POST it to /api/account/upload-newsletter-image
-               *  which puts to R2 + returns the public URL. The URL
-               *  lands in draft.imageUrl exactly as if the customer
-               *  had pasted it manually, so downstream code (preview,
-               *  send) doesn't need to differentiate uploads from
-               *  pasted URLs. */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setImageError(null);
-                  setImageUploading(true);
-                  try {
-                    const form = new FormData();
-                    form.append("token", token);
-                    form.append("file", file);
-                    const res = await fetch(
-                      "/api/account/upload-newsletter-image",
-                      { method: "POST", body: form },
-                    );
-                    const json = (await res.json().catch(() => ({}))) as {
-                      success?: boolean;
-                      url?: string;
-                      error?: string;
-                    };
-                    if (!res.ok || !json.success || !json.url) {
-                      setImageError(json.error ?? "Upload failed.");
-                      return;
-                    }
-                    setDraft((d) => ({ ...d, imageUrl: json.url! }));
-                  } catch (err) {
-                    setImageError(
-                      err instanceof Error ? err.message : String(err),
-                    );
-                  } finally {
-                    setImageUploading(false);
-                    // Reset the input so picking the same file twice
-                    // still fires the change handler.
-                    if (fileInputRef.current) {
-                      fileInputRef.current.value = "";
-                    }
-                  }
-                }}
-              />
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={imageUploading}
-                  className="rounded-md border border-navy-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:border-navy-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {imageUploading ? "Uploading…" : "Upload image"}
-                </button>
-                {draft.imageUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, imageUrl: "" })}
-                    className="text-xs text-navy-500 underline hover:text-navy-900"
-                  >
-                    Remove image
-                  </button>
-                )}
-              </div>
-              <label className="mt-2 block">
-                <span className="block text-[11px] font-semibold text-navy-700">
-                  …or paste an image URL
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="block text-sm font-semibold text-navy-900">
+                  Images (optional)
                 </span>
-                <input
-                  type="url"
-                  value={draft.imageUrl}
-                  onChange={(e) =>
-                    setDraft({ ...draft, imageUrl: e.target.value })
-                  }
-                  placeholder="https://..."
-                  className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900"
-                />
-              </label>
-              {imageError && (
-                <p
-                  role="alert"
-                  className="mt-2 rounded-md bg-ember-50 px-2 py-1 text-xs text-ember-700"
-                >
-                  {imageError}
-                </p>
+                <span className="text-[11px] text-navy-500">
+                  {draft.images.length} of {MAX_IMAGES} used
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-navy-500">
+                Add up to {MAX_IMAGES} photos. Pick the size for each —
+                Small + Medium look great alongside text; Large fills
+                the email.
+              </p>
+
+              {/* Existing image rows */}
+              {draft.images.length > 0 && (
+                <ul className="mt-3 space-y-2">
+                  {draft.images.map((img, idx) => (
+                    <li
+                      key={idx}
+                      className="flex flex-wrap items-center gap-3 rounded-lg border border-navy-100 bg-cream-50 p-2"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.url}
+                        alt=""
+                        className="h-14 w-20 flex-none rounded border border-navy-100 object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.opacity = "0.4";
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-[11px] text-navy-700">
+                          {img.url}
+                        </p>
+                        <label className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-navy-600">
+                          <span>Size</span>
+                          <select
+                            value={img.size}
+                            onChange={(e) => {
+                              const size = e.target.value as ImageSize;
+                              setDraft((d) => ({
+                                ...d,
+                                images: d.images.map((it, i) =>
+                                  i === idx ? { ...it, size } : it,
+                                ),
+                              }));
+                            }}
+                            className="rounded border border-navy-200 bg-white px-1.5 py-0.5 text-[11px] text-navy-900"
+                          >
+                            <option value="small">Small (~240px)</option>
+                            <option value="medium">Medium (~400px)</option>
+                            <option value="large">Large (full width)</option>
+                          </select>
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((d) => ({
+                            ...d,
+                            images: d.images.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        className="text-xs text-navy-500 underline hover:text-ember-700"
+                        aria-label={`Remove image ${idx + 1}`}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
-              {draft.imageUrl && !imageError && (
-                <>
-                  {/* Live preview — gives the customer immediate
-                   *  visual feedback the image is the right one
-                   *  before sending. Capped at h-32 so a tall photo
-                   *  doesn't push the composer fields off-screen.
-                   *  next/image isn't a good fit: the URL is
-                   *  arbitrary (R2 OR a pasted third-party host the
-                   *  customer typed in), so the remotePatterns
-                   *  whitelist would have to allow * — which defeats
-                   *  the point. Plain <img> with a fixed height
-                   *  bound keeps this thumbnail tight. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={draft.imageUrl}
-                    alt="Newsletter image preview"
-                    className="mt-2 h-32 w-auto rounded-md border border-navy-100 object-cover"
-                    onError={() =>
-                      setImageError(
-                        "That image URL didn't load. Check the link or upload directly.",
-                      )
-                    }
+
+              {/* Add control — hidden when at the cap. */}
+              {draft.images.length < MAX_IMAGES && (
+                <div className="mt-3 rounded-lg border border-dashed border-navy-200 bg-white p-3">
+                  <p className="text-[11px] font-semibold text-navy-700">
+                    Add an image
+                  </p>
+                  {/* Hidden file input — opened by the "Upload" button.
+                   *  POSTs to /api/account/upload-newsletter-image which
+                   *  puts to R2 + returns the public URL. The new image
+                   *  appends to draft.images with default size = "large". */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setImageError(null);
+                      setImageUploading(true);
+                      try {
+                        const form = new FormData();
+                        form.append("token", token);
+                        form.append("file", file);
+                        const res = await fetch(
+                          "/api/account/upload-newsletter-image",
+                          { method: "POST", body: form },
+                        );
+                        const json = (await res.json().catch(() => ({}))) as {
+                          success?: boolean;
+                          url?: string;
+                          error?: string;
+                        };
+                        if (!res.ok || !json.success || !json.url) {
+                          setImageError(json.error ?? "Upload failed.");
+                          return;
+                        }
+                        setDraft((d) => ({
+                          ...d,
+                          images: [
+                            ...d.images,
+                            { url: json.url!, size: "large" },
+                          ],
+                        }));
+                      } catch (err) {
+                        setImageError(
+                          err instanceof Error ? err.message : String(err),
+                        );
+                      } finally {
+                        setImageUploading(false);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = "";
+                        }
+                      }
+                    }}
                   />
-                </>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={imageUploading}
+                      className="rounded-md border border-navy-200 bg-white px-3 py-1.5 text-xs font-semibold text-navy-900 hover:border-navy-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {imageUploading ? "Uploading…" : "Upload image"}
+                    </button>
+                    <span className="text-[11px] text-navy-500">
+                      JPG / PNG / WebP, max 5MB
+                    </span>
+                  </div>
+                  <PasteUrlAdder
+                    onAdd={(url) => {
+                      setImageError(null);
+                      setDraft((d) => ({
+                        ...d,
+                        images: [...d.images, { url, size: "large" }],
+                      }));
+                    }}
+                  />
+                  {imageError && (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded-md bg-ember-50 px-2 py-1 text-xs text-ember-700"
+                    >
+                      {imageError}
+                    </p>
+                  )}
+                </div>
+              )}
+              {draft.images.length >= MAX_IMAGES && (
+                <p className="mt-3 text-[11px] text-navy-500">
+                  At the {MAX_IMAGES}-image limit. Remove one to add
+                  another.
+                </p>
               )}
             </div>
 
@@ -1039,4 +1118,50 @@ function formatRelativeDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/** Inline paste-URL form. Local state so an in-progress URL
+ *  doesn't pollute the parent draft (and trigger preview fetches)
+ *  until the customer hits Add. */
+function PasteUrlAdder({ onAdd }: { onAdd: (url: string) => void }) {
+  const [url, setUrl] = useState("");
+  const trimmed = url.trim();
+  let valid = false;
+  try {
+    if (trimmed) {
+      new URL(trimmed);
+      valid = true;
+    }
+  } catch {
+    valid = false;
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <input
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        placeholder="…or paste an image URL: https://…"
+        className="min-w-0 flex-1 rounded-lg border-2 border-navy-200 bg-white px-3 py-1.5 text-xs text-navy-900 outline-none focus:border-navy-900"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && valid) {
+            e.preventDefault();
+            onAdd(trimmed);
+            setUrl("");
+          }
+        }}
+      />
+      <button
+        type="button"
+        disabled={!valid}
+        onClick={() => {
+          onAdd(trimmed);
+          setUrl("");
+        }}
+        className="rounded-md bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-700 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Add
+      </button>
+    </div>
+  );
 }

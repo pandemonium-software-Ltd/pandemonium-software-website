@@ -46,6 +46,12 @@ export const runtime = "nodejs";
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Cap on inline images per send. Beyond this it stops being an
+// email and starts being a brochure — open rates suffer and
+// Gmail starts clipping. 4 is the sweet spot from email best
+// practice + matches the composer UI's add-image cap.
+const MAX_IMAGES_PER_NEWSLETTER = 4;
+
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE),
   template: z.enum([
@@ -56,7 +62,15 @@ const requestSchema = z.object({
   ]),
   subject: z.string().trim().min(1).max(NEWSLETTER_SUBJECT_MAX),
   body: z.string().trim().min(1).max(NEWSLETTER_BODY_MAX),
-  imageUrl: z.string().trim().url().max(2000).optional(),
+  images: z
+    .array(
+      z.object({
+        url: z.string().trim().url().max(2000),
+        size: z.enum(["small", "medium", "large"]).optional(),
+      }),
+    )
+    .max(MAX_IMAGES_PER_NEWSLETTER)
+    .optional(),
   ctaLabel: z.string().trim().max(40).optional(),
   ctaUrl: z.string().trim().max(500).optional(),
 });
@@ -80,7 +94,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, template, subject, body, imageUrl, ctaLabel, ctaUrl } =
+  const { token, template, subject, body, images, ctaLabel, ctaUrl } =
     parsed.data;
   const sessionAuth = await requireCustomerSession(request, token);
   if (!sessionAuth.ok) return sessionAuth.response;
@@ -237,7 +251,7 @@ export async function POST(request: Request) {
         template: template as NewsletterTemplateId,
         subject,
         body,
-        imageUrl,
+        images,
         ctaLabel,
         ctaUrl,
       },

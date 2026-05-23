@@ -17,6 +17,24 @@ export type NewsletterTemplateId =
   | "promo"
   | "personal-note";
 
+/** Image size — controls how wide the image renders in the email.
+ *    small  ≈ 240px  (thumbnail-style, fits in a paragraph)
+ *    medium ≈ 400px  (mid-size, leaves room around it)
+ *    large  ≈ 100%   (fills the email body, the original default)
+ *  Cap at the email body's 528px usable width so "large" never
+ *  scrolls horizontally. */
+export type NewsletterImageSize = "small" | "medium" | "large";
+
+export type NewsletterImage = {
+  /** Image URL — R2 public URL from upload, or a pasted third-
+   *  party URL. */
+  url: string;
+  /** How wide to render this image in the email. Defaults to
+   *  "large" when not specified — matches the old single-image
+   *  behaviour. */
+  size?: NewsletterImageSize;
+};
+
 export type NewsletterContent = {
   /** Template variant. */
   template: NewsletterTemplateId;
@@ -29,11 +47,12 @@ export type NewsletterContent = {
    *  body (or below the image for announcement template). */
   ctaLabel?: string;
   ctaUrl?: string;
-  /** Optional inline image URL (R2 public URL). Always rendered
-   *  at the top for announcement; below the header for
-   *  monthly-update; banner-style for promo. Ignored for
-   *  personal-note. */
-  imageUrl?: string;
+  /** Optional inline images. Stacked vertically at the top
+   *  (announcement, personal-note) or below the header
+   *  (monthly-update). For promo, all images render below the
+   *  banner block. Max 4 enforced upstream by the API schema.
+   *  Each image can be small / medium / large independently. */
+  images?: NewsletterImage[];
 };
 
 export type NewsletterBrand = {
@@ -108,9 +127,7 @@ function renderAnnouncement(
 ): string {
   return wrap(brand, c.subject, [
     header(brand),
-    c.imageUrl
-      ? `<tr><td style="padding:0 0 24px;"><img src="${esc(c.imageUrl)}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:8px;"></td></tr>`
-      : "",
+    imagesHtml(c.images, 24),
     `<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:Georgia,serif;font-size:28px;line-height:1.25;color:${esc(brand.primaryColor)};">${esc(c.subject)}</h1></td></tr>`,
     paragraphsHtml(paragraphs),
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
@@ -136,9 +153,7 @@ function renderMonthlyUpdate(
   return wrap(brand, c.subject, [
     header(brand),
     `<tr><td style="padding:0 0 18px;"><h1 style="margin:0;font-family:Georgia,serif;font-size:24px;line-height:1.3;color:${esc(brand.primaryColor)};">${esc(c.subject)}</h1><p style="margin:6px 0 0;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#5d82ab;">Monthly update from ${esc(brand.senderName)}</p></td></tr>`,
-    c.imageUrl
-      ? `<tr><td style="padding:0 0 18px;"><img src="${esc(c.imageUrl)}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:8px;"></td></tr>`
-      : "",
+    imagesHtml(c.images, 18),
     sections,
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
     footerHtml(brand, footer),
@@ -152,10 +167,15 @@ function renderPromo(
   footer: NewsletterFooter,
 ): string {
   // Promo leads with a strong banner block in primary colour,
-  // subject overlaid, then short body + CTA. Punchy.
+  // subject overlaid, then images, then short body + CTA. Punchy.
+  // (Earlier version embedded the first image as a circular avatar
+  // inside the banner; removed in favour of consistent multi-image
+  // handling below the banner. Customers wanting the avatar look
+  // can pick "Small" size which renders ~240px wide.)
   return wrap(brand, c.subject, [
     header(brand),
-    `<tr><td style="padding:0 0 20px;"><div style="background:${esc(brand.primaryColor)};border-radius:12px;padding:32px 24px;text-align:center;">${c.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="" style="display:block;margin:0 auto 16px;max-width:120px;height:auto;border:0;border-radius:60px;">` : ""}<h1 style="margin:0;font-family:Georgia,serif;font-size:30px;line-height:1.2;color:#ffffff;">${esc(c.subject)}</h1></div></td></tr>`,
+    `<tr><td style="padding:0 0 20px;"><div style="background:${esc(brand.primaryColor)};border-radius:12px;padding:32px 24px;text-align:center;"><h1 style="margin:0;font-family:Georgia,serif;font-size:30px;line-height:1.2;color:#ffffff;">${esc(c.subject)}</h1></div></td></tr>`,
+    imagesHtml(c.images, 20),
     paragraphsHtml(paragraphs),
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
     footerHtml(brand, footer),
@@ -171,17 +191,16 @@ function renderPersonalNote(
   // Minimal — just logo + (optional) image + body + sign-off.
   // Feels like a personal email, not a marketing send.
   //
-  // Bug fix 2026-05-15: this template used to silently drop
-  // c.imageUrl (the other 3 templates rendered it; personal-note
-  // didn't). When a customer uploaded an image then chose the
-  // personal-note template, the upload was wasted and the email
-  // shipped without the image — confusing to debug because the
-  // upload + send both succeeded silently.
+  // Bug fix 2026-05-15: this template used to silently drop the
+  // image (the other 3 templates rendered it; personal-note didn't).
+  // When a customer uploaded an image then chose the personal-note
+  // template, the upload was wasted and the email shipped without
+  // the image — confusing to debug because the upload + send both
+  // succeeded silently. Now uses the same imagesHtml() helper as
+  // every other template so it never falls out of sync.
   return wrap(brand, c.subject, [
     header(brand),
-    c.imageUrl
-      ? `<tr><td style="padding:0 0 18px;"><img src="${esc(c.imageUrl)}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:8px;"></td></tr>`
-      : "",
+    imagesHtml(c.images, 18),
     paragraphsHtml(paragraphs),
     `<tr><td style="padding:8px 0 18px;"><p style="margin:0;font-size:16px;line-height:1.55;color:#172a42;">— ${esc(brand.senderName)}</p></td></tr>`,
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
@@ -218,6 +237,40 @@ function header(brand: NewsletterBrand): string {
     : "";
   return `<tr><td style="padding:0 0 24px;text-align:center;border-bottom:1px solid #f0f4f9;">${logo}<p style="margin:${brand.logoUrl ? "0" : "0 0 4px"};font-family:Georgia,serif;font-size:18px;font-weight:600;color:#0f1d30;">${esc(brand.senderName)}</p></td></tr>
 <tr><td style="height:24px;"></td></tr>`;
+}
+
+/** Render a stack of images. Each image gets its own <tr> with
+ *  the bottom padding the template asks for between stacked
+ *  blocks. Sizes:
+ *    small  → 240px max
+ *    medium → 400px max
+ *    large  → 100% (uncapped, up to the 528px usable email width)
+ *  We centre small + medium images so they sit comfortably in the
+ *  body column; large fills the body so centring is moot. */
+function imagesHtml(
+  images: NewsletterImage[] | undefined,
+  paddingBottomPx: number,
+): string {
+  if (!images || images.length === 0) return "";
+  return images
+    .map((img, i) => {
+      if (!img.url) return "";
+      const isLast = i === images.length - 1;
+      // Last image gets the section padding; intermediates get a
+      // smaller 12px gap so a stack doesn't look like 4 separate
+      // sections.
+      const pb = isLast ? paddingBottomPx : 12;
+      const size = img.size ?? "large";
+      const widthStyle =
+        size === "small"
+          ? "max-width:240px;width:100%;"
+          : size === "medium"
+            ? "max-width:400px;width:100%;"
+            : "width:100%;";
+      const align = size === "large" ? "left" : "center";
+      return `<tr><td style="padding:0 0 ${pb}px;text-align:${align};"><img src="${esc(img.url)}" alt="" style="display:inline-block;${widthStyle}height:auto;border:0;border-radius:8px;"></td></tr>`;
+    })
+    .join("\n");
 }
 
 function paragraphsHtml(paragraphs: string[]): string {
