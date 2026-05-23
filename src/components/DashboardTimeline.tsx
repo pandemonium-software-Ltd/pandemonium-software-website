@@ -132,15 +132,16 @@ export default function DashboardTimeline({ sections }: Props) {
             const distance =
               activeIdx >= 0 ? Math.abs(idx - activeIdx) : 99;
             // Fisheye sizing: active = tall, immediate neighbours
-            // = medium, rest = compact. Tailwind doesn't do
-            // arbitrary py from a calc, so we map distance to
-            // discrete classes.
+            // = medium, rest = roomy compact. Bumped a tier each
+            // so every point has more breathing room around it
+            // and the rail feels more like a deliberate timeline
+            // than a tight nav list.
             const sizeClass =
               distance === 0
-                ? "py-5"
+                ? "py-8"
                 : distance === 1
-                  ? "py-3"
-                  : "py-1.5";
+                  ? "py-5"
+                  : "py-3";
             return (
               <li
                 key={s.id}
