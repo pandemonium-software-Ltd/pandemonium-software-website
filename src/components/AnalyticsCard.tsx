@@ -90,6 +90,23 @@ export default function AnalyticsCard({ token, domain }: Props) {
     (r) => r.name && r.name !== domain && !r.name.endsWith(`.${domain}`),
   );
 
+  // Drop noise from the top-pages list:
+  //   - /_next/*   Next.js JS chunks + image proxy
+  //   - /wp-*      WordPress probe attacks (every public site
+  //                gets these; not interesting to the customer)
+  //   - /favicon.ico, /robots.txt, /sitemap.xml — assets, not pages
+  // We keep the raw data in D1 (so we can change this filter later
+  // without re-fetching) and just strip at render time.
+  const meaningfulPages = (data?.topPages ?? []).filter((p) => {
+    const path = p.name || "/";
+    if (path.startsWith("/_next/")) return false;
+    if (path.startsWith("/wp-")) return false;
+    if (path === "/favicon.ico") return false;
+    if (path === "/robots.txt") return false;
+    if (path === "/sitemap.xml") return false;
+    return true;
+  });
+
   const hasAnyData = days.length > 0;
 
   return (
@@ -163,7 +180,7 @@ export default function AnalyticsCard({ token, domain }: Props) {
           <div className="mt-6 grid gap-5 md:grid-cols-2">
             <TopList
               title="Top pages"
-              entries={(data?.topPages ?? []).slice(0, 5)}
+              entries={meaningfulPages.slice(0, 5)}
               empty="Not enough data yet."
               format={(name) => name || "/"}
             />

@@ -111,8 +111,15 @@ async function gql<T>(
  *
  * `date` is the ISO UTC date (YYYY-MM-DD) we want — usually
  * "yesterday" when called from the nightly cron. Three GraphQL
- * queries fanned out in parallel (totals, top pages, top referrers)
- * because Cloudflare returns them from different datasets.
+ * queries fanned out in parallel (totals, top pages, top referrers).
+ *
+ * Free-plan zones can't read the `clientRequestPath` or
+ * `clientRequestReferer` dimensions from `httpRequestsAdaptiveGroups`
+ * — those are gated to Pro+. We catch those specific failures and
+ * return empty top arrays rather than failing the whole snapshot.
+ * The dashboard renders an "empty list" state for those panels.
+ * The pageviews/uniques totals from `httpRequests1dGroups` work on
+ * every plan, so the headline numbers + sparkline always populate.
  *
  * If a zone has zero traffic for the day, returns a snapshot with
  * pageviews=0, uniques=0, and empty top arrays. We still write that
@@ -124,8 +131,18 @@ export async function fetchDailySnapshot(
 ): Promise<DailySnapshot> {
   const [totals, topPages, topReferrers] = await Promise.all([
     fetchTotals(zoneId, date),
-    fetchTopPages(zoneId, date),
-    fetchTopReferrers(zoneId, date),
+    fetchTopPages(zoneId, date).catch((e) => {
+      console.warn(
+        `[cf-analytics] top pages unavailable for ${zoneId} (likely free plan): ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return [] as TopEntry[];
+    }),
+    fetchTopReferrers(zoneId, date).catch((e) => {
+      console.warn(
+        `[cf-analytics] top referrers unavailable for ${zoneId} (likely free plan): ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return [] as TopEntry[];
+    }),
   ]);
   return {
     date,
@@ -180,6 +197,12 @@ async function fetchTotals(
   };
 }
 
+// We deliberately don't filter to HTML-only here — the
+// edgeResponseContentType field isn't reliably present across all
+// plans + datasets, and at the volumes our customers see (small
+// trades, dozens of pageviews/day) the path counts are already
+// dominated by real pages. Asset paths like /favicon.ico get
+// filtered client-side if they bubble into the top 10.
 const TOP_PAGES_QUERY = `
   query TopPages($zoneTag: String!, $start: String!, $end: String!) {
     viewer {
@@ -189,7 +212,6 @@ const TOP_PAGES_QUERY = `
           filter: {
             datetime_geq: $start
             datetime_lt: $end
-            edgeResponseContentTypeName: "html"
           }
           orderBy: [count_DESC]
         ) {
@@ -228,21 +250,24 @@ async function fetchTopPages(
   }));
 }
 
+// Cloudflare's adaptive-groups schema exposes the full referer URL
+// as `clientRequestReferer` (not a `refererHost` shortcut). We
+// extract the host part ourselves so the dashboard shows
+// "google.com" rather than "https://www.google.com/search?q=...".
 const TOP_REFERRERS_QUERY = `
   query TopReferrers($zoneTag: String!, $start: String!, $end: String!) {
     viewer {
       zones(filter: { zoneTag: $zoneTag }) {
         httpRequestsAdaptiveGroups(
-          limit: 10
+          limit: 50
           filter: {
             datetime_geq: $start
             datetime_lt: $end
-            edgeResponseContentTypeName: "html"
           }
           orderBy: [count_DESC]
         ) {
           count
-          dimensions { refererHost }
+          dimensions { clientRequestReferer }
         }
       }
     }
@@ -258,7 +283,7 @@ async function fetchTopReferrers(
       zones: Array<{
         httpRequestsAdaptiveGroups: Array<{
           count: number;
-          dimensions: { refererHost: string };
+          dimensions: { clientRequestReferer: string };
         }>;
       }>;
     };
@@ -270,10 +295,29 @@ async function fetchTopReferrers(
     end,
   });
   const rows = data.viewer.zones[0]?.httpRequestsAdaptiveGroups ?? [];
-  return rows.map((r) => ({
-    name: r.dimensions.refererHost || "",
-    count: r.count,
-  }));
+  // Bucket by host so referers from the same domain don't fill up
+  // the top-10. Pull 50 raw rows, collapse, return the top 10.
+  const byHost = new Map<string, number>();
+  for (const r of rows) {
+    const host = refererHost(r.dimensions.clientRequestReferer);
+    byHost.set(host, (byHost.get(host) ?? 0) + r.count);
+  }
+  return Array.from(byHost.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+}
+
+function refererHost(raw: string): string {
+  if (!raw) return "";
+  try {
+    return new URL(raw).host;
+  } catch {
+    // Some referers arrive as bare hosts (no scheme) or junk —
+    // fall back to the raw value, the dashboard renders whatever
+    // we give it.
+    return raw;
+  }
 }
 
 /** Cloudflare's adaptive groups want ISO timestamps, not bare
