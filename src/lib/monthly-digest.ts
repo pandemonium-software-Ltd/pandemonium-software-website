@@ -10,6 +10,7 @@
 
 import type { D1Database } from "./d1-analytics";
 import type { ProspectRecord } from "./notion-prospects";
+import { isMeaningfulPath } from "./humanize-path";
 
 export type DigestMonth = {
   /** YYYY-MM, the month the digest covers. */
@@ -135,10 +136,18 @@ export async function readDigestPayload(args: {
     { pageviews: 0, uniques: 0 },
   );
 
+  // Top pages — merge from 30+ daily snapshots first (each has
+  // its own top 10 from CF), then strip asset/probe paths
+  // (/_next/*, /favicon.ico, /wp-* probes etc.), then take the
+  // top 5. Without the filter customers see /favicon.ico as
+  // their #1 "page" because the file load count dwarfs real
+  // pageviews on low-traffic sites.
   const topPages = mergeTopN(
     thisMonthRows.map((r) => r.top_pages ?? "[]"),
-    5,
-  );
+    50,
+  )
+    .filter((p) => isMeaningfulPath(p.name))
+    .slice(0, 5);
   const topCountries = mergeTopN(
     thisMonthRows.map((r) => r.top_countries ?? "[]"),
     5,

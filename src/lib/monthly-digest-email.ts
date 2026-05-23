@@ -12,6 +12,7 @@
 // would see if they opened /account/[token].
 
 import type { DigestPayload } from "./monthly-digest";
+import { humanizePath } from "./humanize-path";
 
 export type DigestRenderArgs = {
   /** Customer's first name for the greeting. */
@@ -286,26 +287,6 @@ function buildText(args: {
 }
 
 // ---------- Helpers ----------
-
-function humanizePath(raw: string): string {
-  const path = (raw || "/").split("?")[0].split("#")[0];
-  if (path === "/" || path === "") return "Home";
-  const COMMON: Record<string, string> = {
-    "/contact": "Contact",
-    "/about": "About",
-    "/services": "Services",
-    "/pricing": "Pricing",
-    "/blog": "Blog",
-  };
-  if (COMMON[path]) return COMMON[path];
-  return path
-    .split("/")
-    .filter(Boolean)
-    .map((seg) =>
-      seg.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase()),
-    )
-    .join(": ");
-}
 
 function esc(s: string): string {
   return s

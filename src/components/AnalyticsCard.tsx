@@ -23,6 +23,7 @@
 // beacon, no banner needed. Visitor counts are estimates.
 
 import { useEffect, useState } from "react";
+import { humanizePath, isMeaningfulPath } from "@/lib/humanize-path";
 
 type TopEntry = { name: string; count: number };
 type DayPoint = { date: string; pageviews: number; uniques: number };
@@ -121,20 +122,15 @@ export default function AnalyticsCard({
   const pvDelta = percentDelta(currentTotals.pageviews, previousTotals.pageviews);
   const uvDelta = percentDelta(currentTotals.uniques, previousTotals.uniques);
 
-  // Strip self-referrals + meaningless meta-paths from the lists.
+  // Strip self-referrals + asset/probe paths from the lists. The
+  // isMeaningfulPath filter is shared with the monthly digest
+  // email so both surfaces agree on what counts as a real page.
   const externalReferrers = (data?.topReferrers ?? []).filter(
     (r) => r.name && r.name !== domain && !r.name.endsWith(`.${domain}`),
   );
-  const meaningfulPages = (data?.topPages ?? []).filter((p) => {
-    const path = p.name || "/";
-    if (path.startsWith("/_next/")) return false;
-    if (path.startsWith("/wp-")) return false;
-    if (path === "/favicon.ico") return false;
-    if (path === "/robots.txt") return false;
-    if (path === "/sitemap.xml") return false;
-    if (path === "/icon.svg") return false;
-    return true;
-  });
+  const meaningfulPages = (data?.topPages ?? []).filter((p) =>
+    isMeaningfulPath(p.name),
+  );
 
   // Day-of-week pattern: average pageviews by weekday across the
   // current window. Mon-Sun bars.
@@ -703,53 +699,6 @@ function sumDays(
 function percentDelta(current: number, previous: number): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
   return Math.round(((current - previous) / previous) * 100);
-}
-
-/** Turn a URL path into a friendly page name a non-tech customer
- *  will recognise. `/` → "Home". `/contact` → "Contact".
- *  `/our-services` → "Our services". Unknown paths fall back to a
- *  title-cased version of the path with dashes turned into spaces.
- *  Catalog-style nested paths get a "Section: leaf" form so
- *  blog/team/portfolio listings still read naturally. */
-function humanizePath(raw: string): string {
-  const path = (raw || "/").split("?")[0].split("#")[0];
-  if (path === "/" || path === "") return "Home";
-  // Known one-word paths get specific labels.
-  const COMMON: Record<string, string> = {
-    "/contact": "Contact",
-    "/about": "About",
-    "/about-us": "About us",
-    "/services": "Services",
-    "/our-services": "Our services",
-    "/work": "Our work",
-    "/portfolio": "Portfolio",
-    "/gallery": "Gallery",
-    "/projects": "Projects",
-    "/testimonials": "Testimonials",
-    "/reviews": "Reviews",
-    "/pricing": "Pricing",
-    "/quote": "Get a quote",
-    "/book": "Book",
-    "/booking": "Book",
-    "/blog": "Blog",
-    "/news": "News",
-    "/faq": "FAQs",
-    "/faqs": "FAQs",
-    "/team": "The team",
-    "/privacy": "Privacy policy",
-    "/terms": "Terms",
-    "/cookies": "Cookies policy",
-  };
-  if (COMMON[path]) return COMMON[path];
-  // Generic: split on slashes, drop empties, title-case each
-  // segment (dashes become spaces). Use ": " between segments
-  // so "/blog/my-first-post" becomes "Blog: My first post".
-  const parts = path.split("/").filter(Boolean).map((seg) =>
-    seg
-      .replace(/-/g, " ")
-      .replace(/^./, (c) => c.toUpperCase()),
-  );
-  return parts.join(": ");
 }
 
 /** Two-letter ISO → flag emoji via regional indicator code points.
