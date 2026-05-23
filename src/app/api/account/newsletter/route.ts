@@ -288,12 +288,22 @@ export async function POST(request: Request) {
     });
   }
 
+  // Pre-generate the send id so we can tag every Resend message
+  // with it. Tags come back on webhook events (delivered, opened,
+  // clicked etc.) which lets the webhook receiver route an event
+  // to the right customer + send with zero database lookup.
+  const sendId = crypto.randomUUID();
+
   // Send via Resend batch endpoint. Chunks of 100 to stay under
-  // the API's documented limit.
+  // the API's documented limit. We capture per-recipient Resend
+  // email IDs (one ID per message in each batch response) and zip
+  // them back to the recipient emails so the dashboard can
+  // display "sent to a@b.com" with per-recipient open/click status.
   const recipientCount = messages.length;
   let sentCount = 0;
   const errors: string[] = [];
   const resendBatchIds: string[] = [];
+  const recipients: Array<{ email: string; resendEmailId: string }> = [];
   for (let i = 0; i < messages.length; i += 100) {
     const chunk = messages.slice(i, i + 100);
     const res = await fetch("https://api.resend.com/emails/batch", {
@@ -310,6 +320,16 @@ export async function POST(request: Request) {
           subject: m.subject,
           html: m.html,
           text: m.text,
+          // Tags travel through to every webhook event for this
+          // email. The receiver reads tags.token + tags.send_id
+          // to insert an event row without scanning Notion.
+          // Resend tag rules: name ≤ 256, value ≤ 256, only
+          // alphanumeric + - + _ allowed. Tokens are UUIDs and
+          // send ids are too, so both fit.
+          tags: [
+            { name: "token", value: token },
+            { name: "send_id", value: sendId },
+          ],
         })),
       ),
     });
@@ -321,17 +341,29 @@ export async function POST(request: Request) {
     sentCount += chunk.length;
     try {
       const json = (await res.json()) as { data?: { id?: string }[] };
-      for (const d of json.data ?? []) {
-        if (d.id) resendBatchIds.push(d.id);
-      }
+      // Resend returns `data` in the same order as the request
+      // array, so index N in the response corresponds to chunk[N]
+      // in the request.
+      (json.data ?? []).forEach((d, idx) => {
+        if (d.id) {
+          resendBatchIds.push(d.id);
+          const recipient = chunk[idx];
+          if (recipient) {
+            recipients.push({ email: recipient.to, resendEmailId: d.id });
+          }
+        }
+      });
     } catch {
       /* ignore parse errors — sentCount is correct */
     }
   }
 
   // Stamp history entry. Capped at NEWSLETTER_HISTORY_CAP entries.
+  // The id was generated earlier (sendId) so it could be tagged
+  // on every Resend message — same id appears in webhook events,
+  // letting the dashboard correlate events back to this row.
   const historyEntry = {
-    id: crypto.randomUUID(),
+    id: sendId,
     status: errors.length === 0 ? "sent" : "failed",
     template,
     subject,
@@ -343,6 +375,7 @@ export async function POST(request: Request) {
     sentAt: new Date().toISOString(),
     recipientCount,
     resendBatchId: resendBatchIds[0],
+    recipients,
   };
   const updatedHistory = [historyEntry, ...history].slice(
     0,

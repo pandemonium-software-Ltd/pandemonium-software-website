@@ -332,6 +332,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 token={token}
                 domain={domain}
                 id="section-visitors"
+                hasNewsletter={hasNewsletterModule}
               />
             </div>
           )}

@@ -39,6 +39,13 @@ const serverEnvSchema = z.object({
   // Email
   RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
 
+  // Resend webhook signing secret (whsec_…). Set via Resend
+  // dashboard → Webhooks → endpoint detail → Signing Secret.
+  // Optional — webhook handler returns 503 if missing rather
+  // than crashing, so the rest of the app keeps working while
+  // the secret gets configured.
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
+
   // Admin gate
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 chars"),
 

@@ -53,6 +53,10 @@ type Props = {
    *  dashboard starts as a compact accordion — the customer
    *  expands what they want via the rail or the chevron. */
   defaultOpen?: boolean;
+  /** Show the Website / Newsletter tab toggle. Pass true when
+   *  the customer has the Newsletter module + at least one send;
+   *  false / unset hides the toggle and only renders Website. */
+  hasNewsletter?: boolean;
 };
 
 export default function AnalyticsCard({
@@ -62,7 +66,11 @@ export default function AnalyticsCard({
   apiPath,
   id,
   defaultOpen = false,
+  hasNewsletter = false,
 }: Props) {
+  const [activeTab, setActiveTab] = useState<"website" | "newsletter">(
+    "website",
+  );
   const resolvedPath = apiPath ?? `/api/account/analytics/${token}`;
   const [windowDays, setWindowDays] = useState<WindowOption>(30);
   // Pull DOUBLE the window so we can split current vs previous for
@@ -195,6 +203,99 @@ export default function AnalyticsCard({
           </div>
         </div>
 
+        {/* Tab toggle — Website / Newsletter. Only shown when the
+          * customer actually has the Newsletter module (hasNewsletter
+          * prop), otherwise we render the website analytics
+          * directly. Window selector above applies to both tabs. */}
+        {hasNewsletter && (
+          <div
+            role="tablist"
+            aria-label="Analytics view"
+            className="mt-5 inline-flex overflow-hidden rounded-full border-2 border-navy-200 text-xs font-semibold"
+          >
+            {(["website", "newsletter"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === t}
+                onClick={() => setActiveTab(t)}
+                className={`px-4 py-1.5 transition-colors ${
+                  activeTab === t
+                    ? "bg-navy-900 text-white"
+                    : "bg-white text-navy-700 hover:bg-cream-50"
+                }`}
+              >
+                {t === "website" ? "🌐 Website" : "📧 Newsletter"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {hasNewsletter && activeTab === "newsletter" ? (
+          <NewsletterAnalyticsPanel
+            token={token}
+            windowDays={windowDays}
+          />
+        ) : (
+          <WebsiteAnalyticsPanel
+            loading={loading}
+            error={error}
+            hasAnyData={hasAnyData}
+            currentTotals={currentTotals}
+            pvDelta={pvDelta}
+            uvDelta={uvDelta}
+            windowDays={windowDays}
+            data={data}
+            currentDays={currentDays}
+            meaningfulPages={meaningfulPages}
+            externalReferrers={externalReferrers}
+            weekdayBuckets={weekdayBuckets}
+          />
+        )}
+      </div>
+    </details>
+  );
+}
+
+// ---------- WebsiteAnalyticsPanel ----------
+// Existing website analytics rendering, extracted into its own
+// component so the tab toggle can swap between it and the
+// newsletter panel without conditionally rendering hundreds of
+// lines inline.
+
+type WebsiteAnalyticsPanelProps = {
+  loading: boolean;
+  error: string | null;
+  hasAnyData: boolean;
+  currentTotals: { pageviews: number; uniques: number };
+  pvDelta: number | null;
+  uvDelta: number | null;
+  windowDays: number;
+  data: AnalyticsResponse | null;
+  currentDays: DayPoint[];
+  meaningfulPages: TopEntry[];
+  externalReferrers: TopEntry[];
+  weekdayBuckets: number[];
+};
+
+function WebsiteAnalyticsPanel(props: WebsiteAnalyticsPanelProps) {
+  const {
+    loading,
+    error,
+    hasAnyData,
+    currentTotals,
+    pvDelta,
+    uvDelta,
+    windowDays,
+    data,
+    currentDays,
+    meaningfulPages,
+    externalReferrers,
+    weekdayBuckets,
+  } = props;
+  return (
+    <>
         {loading && <p className="mt-6 text-sm text-navy-500">Loading…</p>}
 
         {!loading && error && (
@@ -289,9 +390,291 @@ export default function AnalyticsCard({
             </p>
           </>
         )}
-      </div>
-    </details>
+    </>
   );
+}
+
+// ---------- NewsletterAnalyticsPanel ----------
+// Fetches /api/account/analytics/[token]/newsletter for the
+// current window and renders headline tiles + send-history table.
+// Subscriber growth is derived client-side from the response so
+// we don't fan out a second API call.
+
+function NewsletterAnalyticsPanel({
+  token,
+  windowDays,
+}: {
+  token: string;
+  windowDays: number;
+}) {
+  const [data, setData] = useState<NewsletterAnalyticsResponse | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(
+      `/api/account/analytics/${token}/newsletter?window=${windowDays}`,
+    )
+      .then((r) => r.json())
+      .then(
+        (json: NewsletterAnalyticsResponse | { error: string }) => {
+          if (cancelled) return;
+          if ("error" in json) {
+            setError(json.error);
+            return;
+          }
+          setData(json);
+        },
+      )
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, windowDays]);
+
+  if (loading) {
+    return <p className="mt-6 text-sm text-navy-500">Loading…</p>;
+  }
+  if (error) {
+    return (
+      <p className="mt-6 text-sm text-ember-700" role="alert">
+        {error}
+      </p>
+    );
+  }
+  if (!data) return null;
+
+  const openRate = ratePct(data.totals.opened, data.totals.delivered);
+  const clickRate = ratePct(data.totals.clicked, data.totals.delivered);
+  const bounceRate = ratePct(
+    data.totals.bounced,
+    data.totals.recipientCount,
+  );
+
+  return (
+    <>
+      {data.sends.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-dashed border-navy-200 bg-cream-50 p-6 text-sm leading-relaxed text-navy-700">
+          <p className="font-semibold text-navy-900">
+            No sends in the last {windowDays} days
+          </p>
+          <p className="mt-1">
+            Once you send a newsletter, open / click / bounce stats
+            will appear here. Stats update as soon as Resend reports
+            them — usually within seconds of a subscriber opening
+            the email.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Headline tiles */}
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <NewsletterStat
+              label="Sends"
+              value={data.totals.sendsCount.toLocaleString("en-GB")}
+              hint={`${data.totals.recipientCount.toLocaleString("en-GB")} total recipients`}
+            />
+            <NewsletterStat
+              label="Open rate"
+              value={openRate === null ? "—" : `${openRate}%`}
+              hint={`${data.totals.opened.toLocaleString("en-GB")} opened`}
+            />
+            <NewsletterStat
+              label="Click rate"
+              value={clickRate === null ? "—" : `${clickRate}%`}
+              hint={`${data.totals.clicked.toLocaleString("en-GB")} clicked a link`}
+            />
+            <NewsletterStat
+              label="Unsubscribes"
+              value={data.totals.unsubscribed.toLocaleString("en-GB")}
+              hint={
+                bounceRate === null
+                  ? `${data.totals.bounced} bounced`
+                  : `${data.totals.bounced} bounced (${bounceRate}%)`
+              }
+              positiveIsGood={false}
+            />
+          </div>
+
+          {/* Subscribers strip */}
+          <div className="mt-5 flex flex-wrap items-baseline gap-x-6 gap-y-2 rounded-xl bg-cream-50 px-4 py-3 text-sm">
+            <div>
+              <span className="font-mono text-xl font-bold text-navy-900">
+                {data.subscriberCountNow.toLocaleString("en-GB")}
+              </span>
+              <span className="ml-2 text-xs text-navy-600">
+                active subscribers right now
+              </span>
+            </div>
+            {data.subscriberGrowthInWindow !== 0 && (
+              <span
+                className={[
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
+                  data.subscriberGrowthInWindow > 0
+                    ? "bg-green-100 text-green-800"
+                    : "bg-ember-100 text-ember-700",
+                ].join(" ")}
+              >
+                {data.subscriberGrowthInWindow > 0 ? "▲" : "▼"}{" "}
+                {Math.abs(data.subscriberGrowthInWindow)} in last{" "}
+                {windowDays} days
+              </span>
+            )}
+          </div>
+
+          {/* Per-send table */}
+          <div className="mt-5">
+            <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
+              Recent sends
+            </p>
+            <div className="mt-2 overflow-x-auto rounded-xl border border-navy-100">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead className="bg-cream-50 text-[11px] uppercase tracking-wider text-navy-500">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">
+                      Sent
+                    </th>
+                    <th className="px-3 py-2 text-left font-semibold">
+                      Subject
+                    </th>
+                    <th className="px-3 py-2 text-right font-semibold">
+                      Recipients
+                    </th>
+                    <th className="px-3 py-2 text-right font-semibold">
+                      Opens
+                    </th>
+                    <th className="px-3 py-2 text-right font-semibold">
+                      Clicks
+                    </th>
+                    <th className="px-3 py-2 text-right font-semibold">
+                      Bounces
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sends.map((s) => {
+                    const o = ratePct(s.opened, s.delivered);
+                    const c = ratePct(s.clicked, s.delivered);
+                    const b = ratePct(s.bounced, s.recipientCount);
+                    return (
+                      <tr
+                        key={s.sendId}
+                        className="border-t border-navy-100"
+                      >
+                        <td className="px-3 py-2 font-mono text-xs text-navy-600">
+                          {new Date(s.sentAt).toLocaleDateString("en-GB", {
+                            day: "numeric",
+                            month: "short",
+                          })}
+                        </td>
+                        <td className="px-3 py-2 text-navy-900">
+                          <span className="line-clamp-1">{s.subject}</span>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums text-navy-700">
+                          {s.recipientCount}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums text-navy-700">
+                          {s.opened} {o === null ? "" : `(${o}%)`}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums text-navy-700">
+                          {s.clicked} {c === null ? "" : `(${c}%)`}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums text-navy-700">
+                          {s.bounced} {b === null ? "" : `(${b}%)`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <p className="mt-5 text-[11px] leading-relaxed text-navy-500">
+            Opens and clicks count unique recipients, not repeats.
+            Stats arrive in real time as subscribers interact with
+            the email — refresh to pick up new events.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+type NewsletterAnalyticsResponse = {
+  windowDays: number;
+  sends: Array<{
+    sendId: string;
+    sentAt: string;
+    subject: string;
+    recipientCount: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    bounced: number;
+    complained: number;
+    unsubscribed: number;
+  }>;
+  totals: {
+    sendsCount: number;
+    recipientCount: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    bounced: number;
+    unsubscribed: number;
+  };
+  subscriberCountNow: number;
+  subscriberGrowthInWindow: number;
+};
+
+function NewsletterStat({
+  label,
+  value,
+  hint,
+  positiveIsGood = true,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  positiveIsGood?: boolean;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-xl p-4",
+        positiveIsGood ? "bg-cream-50" : "bg-cream-100",
+      ].join(" ")}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-2xl font-bold text-navy-900">
+        {value}
+      </p>
+      {hint && (
+        <p className="mt-1 text-[11px] leading-tight text-navy-500">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ratePct(num: number, denom: number): number | null {
+  if (denom <= 0) return null;
+  return Math.round((num / denom) * 100);
 }
 
 // ---------- Helpers ----------
