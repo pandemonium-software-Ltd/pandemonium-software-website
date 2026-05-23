@@ -270,7 +270,12 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             </div>
           )}
 
-          <div className="grid gap-6 md:grid-cols-2">
+          {/* Each DashCard gets its own full-width row. The earlier
+              2-column grid looked uneven when one section was
+              collapsed (short) and its neighbour expanded (tall) —
+              vertical stacking keeps the layout predictable while
+              still letting cards collapse for tidiness. */}
+          <div className="flex flex-col gap-6">
             {/* ---------- Your site ---------- */}
             <DashCard title="Your site">
               {siteUrl ? (
