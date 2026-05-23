@@ -123,23 +123,14 @@ export default function AnalyticsCard({
   // current window. Mon-Sun bars.
   const weekdayBuckets = computeWeekdayPattern(currentDays);
 
-  // Broken-link detection — sum 4xx + 5xx from the status code mix.
-  // We use this for a friendly alert instead of dumping HTTP status
-  // codes on the customer, since most have no idea what a 404 is.
-  const brokenRequestCount = (data?.statusCodes ?? []).reduce((acc, s) => {
-    const code = Number.parseInt(s.name, 10);
-    return code >= 400 && code < 600 ? acc + s.count : acc;
-  }, 0);
-  const totalStatusRequests = (data?.statusCodes ?? []).reduce(
-    (acc, s) => acc + s.count,
-    0,
-  );
-  const brokenPct = totalStatusRequests > 0
-    ? (brokenRequestCount / totalStatusRequests) * 100
-    : 0;
-  // Only surface if more than 5% of requests broke — below that
-  // we're in the noise floor of bot probes that don't matter.
-  const showBrokenAlert = brokenPct >= 5;
+  // (No broken-pages alert any more — it was firing on bot probe
+  // noise. Without per-path status codes from Cloudflare's free
+  // plan we can't distinguish a real broken link from 1,000 bots
+  // hitting /wp-admin. If we want to surface this in future, we'd
+  // need to either upgrade the customer's CF plan to Pro+ for
+  // richer dimensions, or instrument the customer site with the
+  // Cloudflare Web Analytics beacon which tracks "real visitor"
+  // navigation distinctly from raw HTTP requests.)
 
   const hasAnyData = currentDays.length > 0;
 
@@ -239,21 +230,6 @@ export default function AnalyticsCard({
                 hint="Bots probing your site for vulnerabilities. Cloudflare blocks them automatically."
               />
             </div>
-
-            {/* Broken-pages friendly alert — only when there's
-                actually a problem worth flagging. */}
-            {showBrokenAlert && (
-              <div className="mt-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                <strong className="font-semibold">
-                  Heads up — {Math.round(brokenPct)}% of visits this period
-                  hit a page that doesn&apos;t exist
-                </strong>{" "}
-                ({brokenRequestCount.toLocaleString("en-GB")} requests).
-                That could be a broken link somewhere on your site or
-                a bookmark someone has for an old URL. Reply if you&apos;d
-                like me to investigate.
-              </div>
-            )}
 
             {/* Sparkline with dual lines (pageviews + visitors) */}
             <div className="mt-7">
