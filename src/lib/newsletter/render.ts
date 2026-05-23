@@ -17,23 +17,36 @@ export type NewsletterTemplateId =
   | "promo"
   | "personal-note";
 
-/** Image size — controls how wide the image renders in the email.
- *    small  ≈ 240px  (thumbnail-style, fits in a paragraph)
- *    medium ≈ 400px  (mid-size, leaves room around it)
- *    large  ≈ 100%   (fills the email body, the original default)
- *  Cap at the email body's 528px usable width so "large" never
- *  scrolls horizontally. */
-export type NewsletterImageSize = "small" | "medium" | "large";
+/** Aspect-ratio crop applied to an image. "original" lets the
+ *  natural image dimensions through; the named ratios fit the
+ *  image inside a wrapper with that ratio and use object-fit:
+ *  cover to crop centre-aligned. Works in all modern email
+ *  clients via the padding-top hack + object-fit (Outlook
+ *  desktop falls back gracefully to the natural ratio). */
+export type NewsletterImageCrop =
+  | "original"
+  | "square"
+  | "16:9"
+  | "4:3";
 
 export type NewsletterImage = {
   /** Image URL — R2 public URL from upload, or a pasted third-
    *  party URL. */
   url: string;
-  /** How wide to render this image in the email. Defaults to
-   *  "large" when not specified — matches the old single-image
-   *  behaviour. */
-  size?: NewsletterImageSize;
+  /** Width as a percentage of the email body (528px usable).
+   *  25-100 in 5% steps from the composer. Only applied in the
+   *  "stacked" layout; the side-by-side and grid layouts size
+   *  images to their cells. Default 100 (full body width). */
+  widthPct?: number;
+  /** Aspect-ratio crop. Default "original". */
+  crop?: NewsletterImageCrop;
 };
+
+/** How a stack of images arranges in the email.
+ *    stacked       — one image per row (default, current behaviour)
+ *    side-by-side  — 2 images per row, each ~50% of body width
+ *    grid          — 2 cols × N rows, ideal for 3-4 images */
+export type NewsletterImageLayout = "stacked" | "side-by-side" | "grid";
 
 export type NewsletterContent = {
   /** Template variant. */
@@ -51,8 +64,11 @@ export type NewsletterContent = {
    *  (announcement, personal-note) or below the header
    *  (monthly-update). For promo, all images render below the
    *  banner block. Max 4 enforced upstream by the API schema.
-   *  Each image can be small / medium / large independently. */
+   *  Each image has its own width % + crop. */
   images?: NewsletterImage[];
+  /** How multiple images arrange (only meaningful when
+   *  images.length >= 2). Defaults to "stacked". */
+  imageLayout?: NewsletterImageLayout;
 };
 
 export type NewsletterBrand = {
@@ -127,7 +143,7 @@ function renderAnnouncement(
 ): string {
   return wrap(brand, c.subject, [
     header(brand),
-    imagesHtml(c.images, 24),
+    imagesHtml(c.images, 24, c.imageLayout),
     `<tr><td style="padding:0 0 12px;"><h1 style="margin:0;font-family:Georgia,serif;font-size:28px;line-height:1.25;color:${esc(brand.primaryColor)};">${esc(c.subject)}</h1></td></tr>`,
     paragraphsHtml(paragraphs),
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
@@ -153,7 +169,7 @@ function renderMonthlyUpdate(
   return wrap(brand, c.subject, [
     header(brand),
     `<tr><td style="padding:0 0 18px;"><h1 style="margin:0;font-family:Georgia,serif;font-size:24px;line-height:1.3;color:${esc(brand.primaryColor)};">${esc(c.subject)}</h1><p style="margin:6px 0 0;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#5d82ab;">Monthly update from ${esc(brand.senderName)}</p></td></tr>`,
-    imagesHtml(c.images, 18),
+    imagesHtml(c.images, 18, c.imageLayout),
     sections,
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
     footerHtml(brand, footer),
@@ -175,7 +191,7 @@ function renderPromo(
   return wrap(brand, c.subject, [
     header(brand),
     `<tr><td style="padding:0 0 20px;"><div style="background:${esc(brand.primaryColor)};border-radius:12px;padding:32px 24px;text-align:center;"><h1 style="margin:0;font-family:Georgia,serif;font-size:30px;line-height:1.2;color:#ffffff;">${esc(c.subject)}</h1></div></td></tr>`,
-    imagesHtml(c.images, 20),
+    imagesHtml(c.images, 20, c.imageLayout),
     paragraphsHtml(paragraphs),
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
     footerHtml(brand, footer),
@@ -200,7 +216,7 @@ function renderPersonalNote(
   // every other template so it never falls out of sync.
   return wrap(brand, c.subject, [
     header(brand),
-    imagesHtml(c.images, 18),
+    imagesHtml(c.images, 18, c.imageLayout),
     paragraphsHtml(paragraphs),
     `<tr><td style="padding:8px 0 18px;"><p style="margin:0;font-size:16px;line-height:1.55;color:#172a42;">— ${esc(brand.senderName)}</p></td></tr>`,
     ctaHtml(c.ctaLabel, c.ctaUrl, brand),
@@ -239,38 +255,98 @@ function header(brand: NewsletterBrand): string {
 <tr><td style="height:24px;"></td></tr>`;
 }
 
-/** Render a stack of images. Each image gets its own <tr> with
- *  the bottom padding the template asks for between stacked
- *  blocks. Sizes:
- *    small  → 240px max
- *    medium → 400px max
- *    large  → 100% (uncapped, up to the 528px usable email width)
- *  We centre small + medium images so they sit comfortably in the
- *  body column; large fills the body so centring is moot. */
+/** Padding-top % that gives a wrapper the named aspect ratio
+ *  (height / width × 100). "original" returns null — we render
+ *  without an aspect-ratio wrapper, letting the image's natural
+ *  ratio through. */
+function cropPaddingPct(crop: NewsletterImageCrop): number | null {
+  switch (crop) {
+    case "square":
+      return 100;
+    case "16:9":
+      return 56.25;
+    case "4:3":
+      return 75;
+    default:
+      return null;
+  }
+}
+
+/** Build the inner <img> HTML — either a raw image (crop=original)
+ *  or wrapped in an aspect-ratio container with object-fit:cover so
+ *  the image fills the wrapper without distortion. */
+function imgHtml(img: NewsletterImage, widthStyle: string): string {
+  const crop = img.crop ?? "original";
+  const padding = cropPaddingPct(crop);
+  if (padding === null) {
+    return `<img src="${esc(img.url)}" alt="" style="display:block;${widthStyle}height:auto;border:0;border-radius:8px;">`;
+  }
+  // Aspect-ratio wrapper: padding-top % gives the box its shape,
+  // absolute-positioned <img> + object-fit:cover crops centred.
+  return `<div style="${widthStyle}"><div style="position:relative;width:100%;padding-top:${padding}%;overflow:hidden;border-radius:8px;"><img src="${esc(img.url)}" alt="" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border:0;"></div></div>`;
+}
+
+/** Render images according to the chosen layout. */
 function imagesHtml(
   images: NewsletterImage[] | undefined,
   paddingBottomPx: number,
+  layout: NewsletterImageLayout = "stacked",
 ): string {
   if (!images || images.length === 0) return "";
-  return images
+  const valid = images.filter((img) => img.url);
+  if (valid.length === 0) return "";
+
+  // Side-by-side and grid both use 2-column rows. Difference is
+  // semantic only: side-by-side = "pair them up", grid = "make a
+  // tidy 2xN grid". The rendered HTML is identical (rows of 2),
+  // so we collapse them into one branch.
+  const useTwoColumns =
+    valid.length >= 2 &&
+    (layout === "side-by-side" || layout === "grid");
+
+  if (useTwoColumns) {
+    // Pair images into rows of 2. If odd count, the last row has
+    // a single image filling the left cell; right cell stays
+    // empty. Each cell ~50% body width minus 6px gutter.
+    const rows: NewsletterImage[][] = [];
+    for (let i = 0; i < valid.length; i += 2) {
+      rows.push(valid.slice(i, i + 2));
+    }
+    return rows
+      .map((row, ri) => {
+        const isLast = ri === rows.length - 1;
+        const pb = isLast ? paddingBottomPx : 12;
+        const cellWidthStyle = "width:100%;";
+        const left = imgHtml(row[0], cellWidthStyle);
+        const right = row[1]
+          ? imgHtml(row[1], cellWidthStyle)
+          : "&nbsp;";
+        // Inline 2-col table for email-client compatibility
+        // (flex/grid are unreliable in Outlook). 6px gutter via
+        // td padding.
+        return `<tr><td style="padding:0 0 ${pb}px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td valign="top" style="padding-right:6px;width:50%;">${left}</td><td valign="top" style="padding-left:6px;width:50%;">${right}</td></tr></table></td></tr>`;
+      })
+      .join("\n");
+  }
+
+  // Stacked — one image per row, each respects its own widthPct.
+  return valid
     .map((img, i) => {
-      if (!img.url) return "";
-      const isLast = i === images.length - 1;
-      // Last image gets the section padding; intermediates get a
-      // smaller 12px gap so a stack doesn't look like 4 separate
-      // sections.
+      const isLast = i === valid.length - 1;
       const pb = isLast ? paddingBottomPx : 12;
-      const size = img.size ?? "large";
-      const widthStyle =
-        size === "small"
-          ? "max-width:240px;width:100%;"
-          : size === "medium"
-            ? "max-width:400px;width:100%;"
-            : "width:100%;";
-      const align = size === "large" ? "left" : "center";
-      return `<tr><td style="padding:0 0 ${pb}px;text-align:${align};"><img src="${esc(img.url)}" alt="" style="display:inline-block;${widthStyle}height:auto;border:0;border-radius:8px;"></td></tr>`;
+      const widthPct = clampPct(img.widthPct ?? 100);
+      const widthStyle = `width:${widthPct}%;max-width:100%;`;
+      // Centre any image narrower than the full body so it sits
+      // nicely; full-width images centre/left look identical.
+      const align = widthPct >= 100 ? "left" : "center";
+      return `<tr><td style="padding:0 0 ${pb}px;text-align:${align};"><div style="display:inline-block;width:${widthPct}%;max-width:100%;text-align:left;">${imgHtml(img, "width:100%;")}</div></td></tr>`;
     })
     .join("\n");
+}
+
+function clampPct(n: number): number {
+  if (!Number.isFinite(n)) return 100;
+  return Math.max(25, Math.min(100, Math.round(n / 5) * 5));
 }
 
 function paragraphsHtml(paragraphs: string[]): string {

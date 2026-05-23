@@ -54,8 +54,35 @@ type TemplateId =
   | "promo"
   | "personal-note";
 
-type ImageSize = "small" | "medium" | "large";
-type DraftImage = { url: string; size: ImageSize };
+type ImageCrop = "original" | "square" | "16:9" | "4:3";
+type ImageLayout = "stacked" | "side-by-side" | "grid";
+type DraftImage = { url: string; widthPct: number; crop: ImageCrop };
+
+const CROP_OPTIONS: { value: ImageCrop; label: string }[] = [
+  { value: "original", label: "Original ratio" },
+  { value: "square", label: "Square (1:1)" },
+  { value: "16:9", label: "Widescreen (16:9)" },
+  { value: "4:3", label: "Landscape (4:3)" },
+];
+
+const LAYOUT_OPTIONS: { value: ImageLayout; label: string; hint: string }[] =
+  [
+    {
+      value: "stacked",
+      label: "Stacked",
+      hint: "One per row, sized to your slider.",
+    },
+    {
+      value: "side-by-side",
+      label: "Side by side",
+      hint: "Pairs of two, each fills its half.",
+    },
+    {
+      value: "grid",
+      label: "Grid",
+      hint: "2 columns × N rows, neat block layout.",
+    },
+  ];
 
 /** Cap matches the API schema (MAX_IMAGES_PER_NEWSLETTER) — kept
  *  here so the composer can hide the "Add another" button at the
@@ -67,6 +94,9 @@ type Draft = {
   subject: string;
   body: string;
   images: DraftImage[];
+  /** How multiple images arrange. Only meaningful when
+   *  images.length >= 2. */
+  imageLayout: ImageLayout;
   ctaLabel: string;
   ctaUrl: string;
 };
@@ -171,6 +201,7 @@ function emptyDraft(): Draft {
     subject: "",
     body: "",
     images: [],
+    imageLayout: "stacked",
     ctaLabel: "",
     ctaUrl: "",
   };
@@ -230,6 +261,7 @@ export default function NewsletterCard({
           // Strip incomplete rows (URL not yet filled in) so the
           // preview doesn't emit empty <img src="">.
           images: draft.images.filter((i) => i.url.trim().length > 0),
+          imageLayout: draft.imageLayout,
           ctaLabel: draft.ctaLabel || undefined,
           ctaUrl: draft.ctaUrl || undefined,
         }),
@@ -262,6 +294,7 @@ export default function NewsletterCard({
     draft.subject,
     draft.body,
     draft.images,
+    draft.imageLayout,
     draft.ctaLabel,
     draft.ctaUrl,
   ]);
@@ -431,9 +464,12 @@ export default function NewsletterCard({
             draft.images.length > 0
               ? draft.images.map((i) => ({
                   url: i.url.trim(),
-                  size: i.size,
+                  widthPct: i.widthPct,
+                  crop: i.crop,
                 }))
               : undefined,
+          imageLayout:
+            draft.images.length > 1 ? draft.imageLayout : undefined,
           ctaLabel: draft.ctaLabel.trim() || undefined,
           ctaUrl: draft.ctaUrl.trim() || undefined,
         }),
@@ -683,6 +719,52 @@ export default function NewsletterCard({
                 the email.
               </p>
 
+              {/* Layout picker — only shown when there are 2+
+                * images, since layout is meaningless for a single
+                * image. Pill toggle with three options: Stacked,
+                * Side-by-side, Grid. */}
+              {draft.images.length >= 2 && (
+                <div className="mt-3 rounded-lg border border-navy-100 bg-cream-50 p-3">
+                  <p className="text-[11px] font-semibold text-navy-700">
+                    Layout for your images
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {LAYOUT_OPTIONS.map((opt) => {
+                      const active = draft.imageLayout === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setDraft((d) => ({
+                              ...d,
+                              imageLayout: opt.value,
+                            }))
+                          }
+                          className={[
+                            "rounded-full border-2 px-3 py-1 text-[11px] font-semibold transition-colors",
+                            active
+                              ? "border-navy-900 bg-navy-900 text-white"
+                              : "border-navy-200 bg-white text-navy-700 hover:border-navy-400",
+                          ].join(" ")}
+                          aria-pressed={active}
+                          title={opt.hint}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[10px] text-navy-500">
+                    {
+                      LAYOUT_OPTIONS.find(
+                        (o) => o.value === draft.imageLayout,
+                      )?.hint
+                    }
+                  </p>
+                </div>
+              )}
+
               {/* Existing image rows */}
               {draft.images.length > 0 && (
                 <ul className="mt-3 space-y-2">
@@ -704,26 +786,71 @@ export default function NewsletterCard({
                         <p className="truncate font-mono text-[11px] text-navy-700">
                           {img.url}
                         </p>
-                        <label className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-navy-600">
-                          <span>Size</span>
-                          <select
-                            value={img.size}
-                            onChange={(e) => {
-                              const size = e.target.value as ImageSize;
-                              setDraft((d) => ({
-                                ...d,
-                                images: d.images.map((it, i) =>
-                                  i === idx ? { ...it, size } : it,
-                                ),
-                              }));
-                            }}
-                            className="rounded border border-navy-200 bg-white px-1.5 py-0.5 text-[11px] text-navy-900"
-                          >
-                            <option value="small">Small (~240px)</option>
-                            <option value="medium">Medium (~400px)</option>
-                            <option value="large">Large (full width)</option>
-                          </select>
-                        </label>
+                        {/* Width slider — only meaningful in the
+                          * Stacked layout. In side-by-side / grid
+                          * the image fills its cell so the slider
+                          * is disabled with a hint. */}
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-navy-600">
+                          <label className="inline-flex items-center gap-1.5">
+                            <span>Width</span>
+                            <input
+                              type="range"
+                              min={25}
+                              max={100}
+                              step={5}
+                              value={img.widthPct}
+                              disabled={
+                                draft.images.length > 1 &&
+                                draft.imageLayout !== "stacked"
+                              }
+                              onChange={(e) => {
+                                const widthPct = Number.parseInt(
+                                  e.target.value,
+                                  10,
+                                );
+                                setDraft((d) => ({
+                                  ...d,
+                                  images: d.images.map((it, i) =>
+                                    i === idx ? { ...it, widthPct } : it,
+                                  ),
+                                }));
+                              }}
+                              className="h-1 w-32 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                              aria-label={`Image ${idx + 1} width`}
+                            />
+                            <span className="font-mono tabular-nums text-navy-700">
+                              {img.widthPct}%
+                            </span>
+                          </label>
+                          <label className="inline-flex items-center gap-1.5">
+                            <span>Crop</span>
+                            <select
+                              value={img.crop}
+                              onChange={(e) => {
+                                const crop = e.target.value as ImageCrop;
+                                setDraft((d) => ({
+                                  ...d,
+                                  images: d.images.map((it, i) =>
+                                    i === idx ? { ...it, crop } : it,
+                                  ),
+                                }));
+                              }}
+                              className="rounded border border-navy-200 bg-white px-1.5 py-0.5 text-[11px] text-navy-900"
+                            >
+                              {CROP_OPTIONS.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {draft.images.length > 1 &&
+                            draft.imageLayout !== "stacked" && (
+                              <span className="text-[10px] italic text-navy-500">
+                                width set by layout
+                              </span>
+                            )}
+                        </div>
                       </div>
                       <button
                         type="button"
@@ -784,7 +911,7 @@ export default function NewsletterCard({
                           ...d,
                           images: [
                             ...d.images,
-                            { url: json.url!, size: "large" },
+                            { url: json.url!, widthPct: 100, crop: "original" as const },
                           ],
                         }));
                       } catch (err) {
@@ -817,7 +944,7 @@ export default function NewsletterCard({
                       setImageError(null);
                       setDraft((d) => ({
                         ...d,
-                        images: [...d.images, { url, size: "large" }],
+                        images: [...d.images, { url, widthPct: 100, crop: "original" as const }],
                       }));
                     }}
                   />

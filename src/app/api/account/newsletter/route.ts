@@ -66,10 +66,17 @@ const requestSchema = z.object({
     .array(
       z.object({
         url: z.string().trim().url().max(2000),
-        size: z.enum(["small", "medium", "large"]).optional(),
+        // 25-100 in 5% steps from the composer slider. Server
+        // clamps + snaps too in the renderer (clampPct) for
+        // belt-and-braces.
+        widthPct: z.number().min(25).max(100).optional(),
+        crop: z.enum(["original", "square", "16:9", "4:3"]).optional(),
       }),
     )
     .max(MAX_IMAGES_PER_NEWSLETTER)
+    .optional(),
+  imageLayout: z
+    .enum(["stacked", "side-by-side", "grid"])
     .optional(),
   ctaLabel: z.string().trim().max(40).optional(),
   ctaUrl: z.string().trim().max(500).optional(),
@@ -94,8 +101,16 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, template, subject, body, images, ctaLabel, ctaUrl } =
-    parsed.data;
+  const {
+    token,
+    template,
+    subject,
+    body,
+    images,
+    imageLayout,
+    ctaLabel,
+    ctaUrl,
+  } = parsed.data;
   const sessionAuth = await requireCustomerSession(request, token);
   if (!sessionAuth.ok) return sessionAuth.response;
 
@@ -252,6 +267,7 @@ export async function POST(request: Request) {
         subject,
         body,
         images,
+        imageLayout,
         ctaLabel,
         ctaUrl,
       },

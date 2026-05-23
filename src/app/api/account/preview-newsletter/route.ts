@@ -54,10 +54,14 @@ const requestSchema = z.object({
     .array(
       z.object({
         url: z.string().max(2000),
-        size: z.enum(["small", "medium", "large"]).optional(),
+        widthPct: z.number().min(25).max(100).optional(),
+        crop: z.enum(["original", "square", "16:9", "4:3"]).optional(),
       }),
     )
     .max(MAX_IMAGES_PER_NEWSLETTER)
+    .optional(),
+  imageLayout: z
+    .enum(["stacked", "side-by-side", "grid"])
     .optional(),
   ctaLabel: z.string().max(40).optional(),
   ctaUrl: z.string().max(500).optional(),
@@ -80,8 +84,16 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, template, subject, body, images, ctaLabel, ctaUrl } =
-    parsed.data;
+  const {
+    token,
+    template,
+    subject,
+    body,
+    images,
+    imageLayout,
+    ctaLabel,
+    ctaUrl,
+  } = parsed.data;
   const sessionAuth = await requireCustomerSession(request, token);
   if (!sessionAuth.ok) return sessionAuth.response;
 
@@ -111,6 +123,7 @@ export async function POST(request: Request) {
       subject: subject || "(no subject yet)",
       body: body || "(start typing your newsletter — the preview updates as you type)",
       images: validImages.length > 0 ? validImages : undefined,
+      imageLayout,
       ctaLabel: ctaLabel || undefined,
       ctaUrl: ctaUrl || undefined,
     },
