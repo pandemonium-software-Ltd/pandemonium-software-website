@@ -100,26 +100,55 @@ export default function DashboardTimeline({ sections }: Props) {
 
   return (
     <>
-      {/* ---------- Desktop rail ---------- */}
+      {/* ---------- Desktop rail ----------
+        * Sticky vertical timeline. The rail STRETCHES — each item
+        * grows or shrinks based on proximity to the active section,
+        * giving a soft fisheye effect:
+        *   active item       → tall (py-5), label one-size-up
+        *   immediate neighbour → medium (py-3)
+        *   anything further  → compact (py-1.5)
+        * The connecting line + dots inherit the spacing so the
+        * whole rail breathes around the current section. Minimum
+        * height of 70vh keeps the rail visually present even
+        * with few sections. */}
       <nav
         aria-label="Dashboard sections"
-        className="hidden lg:sticky lg:top-24 lg:block lg:w-44 lg:flex-none lg:self-start"
+        className="hidden lg:sticky lg:top-24 lg:block lg:w-48 lg:flex-none lg:self-start"
       >
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-navy-500">
+        <p className="mb-4 text-[10px] font-semibold uppercase tracking-wider text-navy-500">
           On this page
         </p>
-        <ol className="relative space-y-0">
+        <ol className="relative flex min-h-[70vh] flex-col">
           {/* Vertical connecting line — sits behind the dots and
-              spans the full list height. Pulled in 6px so it
-              centres under the 12px dots. */}
+            * spans the full list height. Pulled in 6px so it
+            * centres under the 12px dots. */}
           <span
             aria-hidden="true"
             className="absolute left-[5px] top-2 bottom-2 w-px bg-navy-200"
           />
-          {sections.map((s) => {
+          {sections.map((s, idx) => {
             const active = s.id === activeId;
+            const activeIdx = sections.findIndex((x) => x.id === activeId);
+            const distance =
+              activeIdx >= 0 ? Math.abs(idx - activeIdx) : 99;
+            // Fisheye sizing: active = tall, immediate neighbours
+            // = medium, rest = compact. Tailwind doesn't do
+            // arbitrary py from a calc, so we map distance to
+            // discrete classes.
+            const sizeClass =
+              distance === 0
+                ? "py-5"
+                : distance === 1
+                  ? "py-3"
+                  : "py-1.5";
             return (
-              <li key={s.id} className="relative">
+              <li
+                key={s.id}
+                className={[
+                  "relative flex-none transition-[padding] duration-300 ease-out",
+                  sizeClass,
+                ].join(" ")}
+              >
                 <a
                   href={`#${s.id}`}
                   onClick={(e) => {
@@ -127,20 +156,24 @@ export default function DashboardTimeline({ sections }: Props) {
                     scrollTo(s.id);
                   }}
                   className={[
-                    "group flex items-center gap-3 py-2 text-sm transition-colors",
+                    "group flex items-center gap-3 transition-colors",
                     active
-                      ? "font-semibold text-navy-900"
-                      : "text-navy-600 hover:text-navy-900",
+                      ? "text-base font-semibold text-navy-900"
+                      : distance === 1
+                        ? "text-sm text-navy-700 hover:text-navy-900"
+                        : "text-[13px] text-navy-500 hover:text-navy-800",
                   ].join(" ")}
                   aria-current={active ? "true" : undefined}
                 >
                   <span
                     aria-hidden="true"
                     className={[
-                      "relative z-10 inline-block h-2.5 w-2.5 rounded-full border-2 transition-all",
+                      "relative z-10 inline-block flex-none rounded-full border-2 transition-all duration-300",
                       active
-                        ? "scale-125 border-ember-500 bg-ember-500 shadow-[0_0_0_3px_rgba(252,165,90,0.25)]"
-                        : "border-navy-300 bg-cream-50 group-hover:border-navy-500",
+                        ? "h-3.5 w-3.5 border-ember-500 bg-ember-500 shadow-[0_0_0_4px_rgba(252,165,90,0.22)]"
+                        : distance === 1
+                          ? "h-2.5 w-2.5 border-navy-400 bg-cream-50 group-hover:border-navy-600"
+                          : "h-2 w-2 border-navy-300 bg-cream-50 group-hover:border-navy-500",
                     ].join(" ")}
                   />
                   <span className="truncate">{s.label}</span>
