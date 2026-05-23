@@ -272,7 +272,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
             // mounted on the page.
             const sections: TimelineSection[] = [];
             if (isSiteLive && hasAnalytics)
-              sections.push({ id: "section-visitors", label: "Visitors" });
+              sections.push({ id: "section-visitors", label: "Analytics" });
             sections.push({ id: "section-site", label: "Your site" });
             if (isHubUnlocked && !isCancelled)
               sections.push({

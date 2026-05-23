@@ -815,7 +815,7 @@ export default function NewsletterCard({
                                   ),
                                 }));
                               }}
-                              className="h-1 w-32 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                              className="h-1 w-24 cursor-pointer sm:w-32 disabled:cursor-not-allowed disabled:opacity-50"
                               aria-label={`Image ${idx + 1} width`}
                             />
                             <span className="font-mono tabular-nums text-navy-700">
@@ -1020,7 +1020,7 @@ export default function NewsletterCard({
             </div>
             <div className="mt-2 overflow-hidden rounded-lg border-2 border-navy-200 bg-cream-100">
               {previewError ? (
-                <div className="flex h-[520px] items-center justify-center px-4 text-center text-xs text-ember-700">
+                <div className="flex h-[360px] lg:h-[520px] items-center justify-center px-4 text-center text-xs text-ember-700">
                   {previewError}
                 </div>
               ) : previewHtml ? (
@@ -1028,10 +1028,10 @@ export default function NewsletterCard({
                   title="Newsletter preview"
                   srcDoc={previewHtml}
                   sandbox=""
-                  className="h-[520px] w-full bg-white"
+                  className="h-[360px] lg:h-[520px] w-full bg-white"
                 />
               ) : (
-                <div className="flex h-[520px] items-center justify-center px-4 text-center text-xs text-navy-500">
+                <div className="flex h-[360px] lg:h-[520px] items-center justify-center px-4 text-center text-xs text-navy-500">
                   Loading preview…
                 </div>
               )}

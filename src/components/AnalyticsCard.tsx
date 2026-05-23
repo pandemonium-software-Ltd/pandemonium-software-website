@@ -1,6 +1,6 @@
 "use client";
 
-// Dashboard "Visitors" card — full-width, collapsible analytics
+// Dashboard "Analytics" card — full-width, collapsible analytics
 // tile shown on the customer dashboard (/account/[token]) and the
 // admin self-view (/admin).
 //
@@ -62,7 +62,7 @@ type Props = {
 export default function AnalyticsCard({
   token,
   domain,
-  title = "📊 Visitors",
+  title = "📊 Analytics",
   apiPath,
   id,
   defaultOpen = false,
@@ -535,9 +535,18 @@ function NewsletterAnalyticsPanel({
 
           {/* Per-send table */}
           <div className="mt-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
-              Recent sends
-            </p>
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
+                Recent sends
+              </p>
+              {/* Scroll hint only on narrow viewports — the table
+                  has min-w-[600px] and will overflow with sideways
+                  scroll on mobile. Without this hint customers
+                  won't realise the right-hand columns exist. */}
+              <span className="text-[10px] italic text-navy-500 sm:hidden">
+                Swipe →
+              </span>
+            </div>
             <div className="mt-2 overflow-x-auto rounded-xl border border-navy-100">
               <table className="w-full min-w-[600px] text-sm">
                 <thead className="bg-cream-50 text-[11px] uppercase tracking-wider text-navy-500">

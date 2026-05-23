@@ -80,7 +80,7 @@ export default async function AdminPage() {
           <AnalyticsCard
             token="@self"
             domain="modu-forge.co.uk"
-            title="📊 Marketing site visitors"
+            title="📊 Marketing site analytics"
             apiPath="/api/admin/analytics"
           />
         </div>

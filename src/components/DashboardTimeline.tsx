@@ -189,7 +189,11 @@ export default function DashboardTimeline({ sections }: Props) {
       <button
         type="button"
         onClick={() => setDrawerOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full bg-navy-900 px-4 py-3 text-sm font-semibold text-white shadow-lift hover:bg-navy-700 lg:hidden"
+        // bottom uses a safe-area-aware calc so iOS Safari's
+        // collapsing toolbar doesn't sit on top of the FAB.
+        // Falls back to plain `1.5rem` on browsers that ignore env().
+        style={{ bottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}
+        className="fixed right-5 z-40 inline-flex items-center gap-2 rounded-full bg-navy-900 px-4 py-3 text-sm font-semibold text-white shadow-lift hover:bg-navy-700 lg:hidden"
         aria-label="Jump to section"
         aria-haspopup="dialog"
         aria-expanded={drawerOpen}
