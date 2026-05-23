@@ -23,6 +23,7 @@ import OfferCard from "@/components/OfferCard";
 import NewsletterCard, {
   type NewsletterSummary,
 } from "@/components/NewsletterCard";
+import AnalyticsCard from "@/components/AnalyticsCard";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -72,6 +73,11 @@ export type AccountDashboardProps = {
     offers?: number;
     newsletters?: number;
   };
+  /** True when the customer's site is on a Cloudflare zone we
+   *  can pull analytics for. Drives whether the AnalyticsCard
+   *  tile renders — the API would just return empty data
+   *  otherwise, no point showing the chrome. */
+  hasAnalytics?: boolean;
 };
 
 // Stage groupings — used to gate which blocks render.
@@ -149,6 +155,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     currentOffer,
     newsletterSummary,
     effectiveCaps,
+    hasAnalytics,
   } = props;
   const hasOffersModule = modules.includes("Offers");
   const hasNewsletterModule = modules.includes("Newsletter");
@@ -314,6 +321,19 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 </Link>
               )}
             </DashCard>
+
+            {/* ---------- Visitors / analytics ----------
+             *  Cloudflare edge-level pageviews + uniques + top
+             *  pages + top referrers, populated nightly by the ops
+             *  Worker's analytics-tick. Only rendered for live
+             *  customers whose site is on a Cloudflare zone we
+             *  can read (gated by hasAnalytics, which the server
+             *  computes from prospect.cloudflareZoneId). Sits as
+             *  its own tile in the dashboard grid so it shows up
+             *  next to "Your site". */}
+            {isSiteLive && hasAnalytics && (
+              <AnalyticsCard token={token} domain={domain} />
+            )}
 
             {/* ---------- Onboarding Hub navigation ---------- */}
             {isHubUnlocked && !isCancelled && (

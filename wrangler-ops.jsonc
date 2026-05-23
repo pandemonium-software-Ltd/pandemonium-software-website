@@ -29,12 +29,18 @@
   "main": "src/ops-worker/index.ts",
   "compatibility_date": "2026-04-11",
   "compatibility_flags": ["nodejs_compat"],
-  // Every minute. Cf §4.2 ("Cron Triggers, every 60 seconds"). The
-  // tick is no-op fast (~50ms) when no prospects need work, so this
-  // is cheap. If 60s polling becomes insufficient (Stage 2C C5+),
-  // we graduate to Cloudflare Workflows per §4.2.
+  // Two cron schedules:
+  //   - "* * * * *"   every minute — drives the onboarding/build
+  //     dispatcher (§4.2). Tick is ~50ms when idle.
+  //   - "0 2 * * *"   daily at 02:00 UTC — fetches yesterday's
+  //     Cloudflare analytics for every Live customer, writes one
+  //     row per (customer, day) into the pandemonium_analytics D1.
+  //     02:00 picked because Cloudflare's analytics pipeline has
+  //     fully flushed yesterday by then; we also avoid the
+  //     midnight stampede that hits CF's API.
+  // ops-worker/index.ts branches on event.cron to dispatch.
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": ["* * * * *", "0 2 * * *"]
   },
   "observability": {
     "enabled": true
@@ -47,5 +53,16 @@
     // GITHUB_TOKEN is set via wrangler secret put.
     "GITHUB_OWNER": "pandemonium-software-Ltd",
     "GITHUB_REPO": "pandemonium-software-website"
-  }
+  },
+  // D1 bindings. The analytics DB is shared with the main Next.js
+  // Worker (which reads from it for the customer dashboard tile).
+  // Same database_id on both sides — Cloudflare scopes the binding
+  // per-Worker but the underlying DB is one piece of storage.
+  "d1_databases": [
+    {
+      "binding": "pandemonium_analytics",
+      "database_name": "pandemonium-analytics",
+      "database_id": "c996208f-8f7f-4040-92b4-7a65e5e364ae"
+    }
+  ]
 }

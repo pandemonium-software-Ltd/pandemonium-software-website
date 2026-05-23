@@ -8,41 +8,51 @@
 // points to the static asset directory. Both are outputs of the
 // OpenNext build — don't create them manually.
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pandemonium-software-website",
-  "main": ".open-next/worker.js",
-  "compatibility_date": "2026-04-11",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  // R2 bucket for customer-uploaded brand assets (Hub Step 4).
-  // Bucket lives at the account level; Worker accesses it via the
-  // ASSETS_BUCKET binding (env.ASSETS_BUCKET in Worker code, surfaced
-  // via @opennextjs/cloudflare's getCloudflareContext().env). Public
-  // dev URL configured separately (see R2_PUBLIC_URL_BASE env var).
-  "r2_buckets": [
-    {
-      "binding": "ASSETS_BUCKET",
-      "bucket_name": "moduforge-customer-assets"
-    }
-  ],
-  // GitHub repo for the customer-site-build + customer-site-promote
-  // workflows. The marketing-site Worker dispatches these from:
-  //   - /api/admin/change-request (operator approves a change → rebuild)
-  //   - /api/admin/review-edit (operator approves a Hub Step 5 edit
-  //     → build to deploy)
-  //   - /account/[token]/approve-change/[crId] (customer approves a
-  //     preview → promote)
-  // GITHUB_TOKEN is set via `wrangler secret put GITHUB_TOKEN`.
-  // Same trio also lives in wrangler-ops.jsonc so the ops worker
-  // can dispatch independently.
-  "vars": {
-    "GITHUB_OWNER": "pandemonium-software-Ltd",
-    "GITHUB_REPO": "pandemonium-software-website"
-  },
-  "observability": {
-    "enabled": true
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "pandemonium-software-website",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-04-11",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	// R2 bucket for customer-uploaded brand assets (Hub Step 4).
+	// Bucket lives at the account level; Worker accesses it via the
+	// ASSETS_BUCKET binding (env.ASSETS_BUCKET in Worker code, surfaced
+	// via @opennextjs/cloudflare's getCloudflareContext().env). Public
+	// dev URL configured separately (see R2_PUBLIC_URL_BASE env var).
+	"r2_buckets": [
+		{
+			"binding": "ASSETS_BUCKET",
+			"bucket_name": "moduforge-customer-assets"
+		}
+	],
+	// GitHub repo for the customer-site-build + customer-site-promote
+	// workflows. The marketing-site Worker dispatches these from:
+	//   - /api/admin/change-request (operator approves a change → rebuild)
+	//   - /api/admin/review-edit (operator approves a Hub Step 5 edit
+	//     → build to deploy)
+	//   - /account/[token]/approve-change/[crId] (customer approves a
+	//     preview → promote)
+	// GITHUB_TOKEN is set via `wrangler secret put GITHUB_TOKEN`.
+	// Same trio also lives in wrangler-ops.jsonc so the ops worker
+	// can dispatch independently.
+	"vars": {
+		"GITHUB_OWNER": "pandemonium-software-Ltd",
+		"GITHUB_REPO": "pandemonium-software-website"
+	},
+	"observability": {
+		"enabled": true
+	},
+	"d1_databases": [
+		{
+			"binding": "pandemonium_analytics",
+			"database_name": "pandemonium-analytics",
+			"database_id": "c996208f-8f7f-4040-92b4-7a65e5e364ae",
+			"remote": true
+		}
+	]
 }

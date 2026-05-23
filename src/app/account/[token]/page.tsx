@@ -244,6 +244,7 @@ export default async function AccountPage({
       currentOffer={currentOffer}
       newsletterSummary={newsletterSummary}
       effectiveCaps={effectiveCaps}
+      hasAnalytics={!!prospect.cloudflareZoneId}
     />
   );
 }
