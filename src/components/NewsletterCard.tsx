@@ -14,7 +14,7 @@
 // endpoint. Counts as 1 of the customer's NEWSLETTER_MONTHLY_SEND_LIMIT
 // monthly sends (currently 1).
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   NEWSLETTER_SUBJECT_MAX,
   NEWSLETTER_BODY_MAX,
@@ -86,6 +86,77 @@ const TEMPLATES: { id: TemplateId; label: string; hint: string }[] = [
   },
 ];
 
+/** Tiny SVG mock of each template's visual rhythm — gives the
+ *  customer something to point at rather than just a name. Not a
+ *  real render, just structural blocks (image / headline /
+ *  paragraph / CTA) coloured + stacked to match the template.
+ *  The live preview iframe shows the actual output once they
+ *  start typing. */
+function TemplateThumbnail({ id }: { id: TemplateId }) {
+  const baseProps = {
+    viewBox: "0 0 100 60",
+    className: "h-14 w-full",
+    "aria-hidden": true,
+    preserveAspectRatio: "none" as const,
+  };
+  const navy = "#172a42";
+  const navyLight = "#d8e1ed";
+  const accent = "#1e3a8a";
+  switch (id) {
+    case "announcement":
+      return (
+        <svg {...baseProps}>
+          <rect x="0" y="0" width="100" height="60" fill="#fdfcf9" />
+          <rect x="8" y="6" width="84" height="14" rx="2" fill={navyLight} />
+          <rect x="8" y="24" width="60" height="4" rx="1" fill={accent} />
+          <rect x="8" y="32" width="84" height="2" rx="1" fill={navy} opacity="0.4" />
+          <rect x="8" y="36" width="80" height="2" rx="1" fill={navy} opacity="0.4" />
+          <rect x="36" y="46" width="28" height="8" rx="2" fill={accent} />
+        </svg>
+      );
+    case "monthly-update":
+      return (
+        <svg {...baseProps}>
+          <rect x="0" y="0" width="100" height="60" fill="#fdfcf9" />
+          <rect x="8" y="6" width="50" height="4" rx="1" fill={accent} />
+          <rect x="8" y="14" width="2" height="10" fill={accent} />
+          <rect x="14" y="15" width="78" height="2" fill={navy} opacity="0.4" />
+          <rect x="14" y="19" width="74" height="2" fill={navy} opacity="0.4" />
+          <rect x="8" y="28" width="2" height="10" fill={accent} />
+          <rect x="14" y="29" width="78" height="2" fill={navy} opacity="0.4" />
+          <rect x="14" y="33" width="74" height="2" fill={navy} opacity="0.4" />
+          <rect x="8" y="42" width="2" height="10" fill={accent} />
+          <rect x="14" y="43" width="78" height="2" fill={navy} opacity="0.4" />
+          <rect x="14" y="47" width="74" height="2" fill={navy} opacity="0.4" />
+        </svg>
+      );
+    case "promo":
+      return (
+        <svg {...baseProps}>
+          <rect x="0" y="0" width="100" height="60" fill="#fdfcf9" />
+          <rect x="8" y="6" width="84" height="22" rx="3" fill={accent} />
+          <rect x="22" y="14" width="56" height="3" rx="1" fill="#ffffff" />
+          <rect x="28" y="20" width="44" height="2" rx="1" fill="#ffffff" opacity="0.8" />
+          <rect x="8" y="34" width="84" height="2" rx="1" fill={navy} opacity="0.4" />
+          <rect x="8" y="38" width="78" height="2" rx="1" fill={navy} opacity="0.4" />
+          <rect x="36" y="48" width="28" height="8" rx="2" fill={accent} />
+        </svg>
+      );
+    case "personal-note":
+      return (
+        <svg {...baseProps}>
+          <rect x="0" y="0" width="100" height="60" fill="#fdfcf9" />
+          <rect x="36" y="8" width="28" height="3" rx="1" fill={navy} opacity="0.6" />
+          <rect x="8" y="22" width="84" height="2" fill={navy} opacity="0.4" />
+          <rect x="8" y="26" width="82" height="2" fill={navy} opacity="0.4" />
+          <rect x="8" y="30" width="80" height="2" fill={navy} opacity="0.4" />
+          <rect x="8" y="34" width="76" height="2" fill={navy} opacity="0.4" />
+          <rect x="8" y="44" width="32" height="2" fill={navy} opacity="0.7" />
+        </svg>
+      );
+  }
+}
+
 function emptyDraft(): Draft {
   return {
     template: "monthly-update",
@@ -117,7 +188,74 @@ export default function NewsletterCard({
   const [imageError, setImageError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  // Live preview pane state — rendered HTML from the preview API.
+  // `previewing` flips on while we're fetching so the iframe shows
+  // a subtle "updating…" badge instead of going blank.
+  const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  // composerOpen tracks whether the composer dialog is open. We
+  // use it to gate the preview fetch so we don't burn an API call
+  // when the card is just sitting collapsed on the dashboard.
+  const [composerOpen, setComposerOpen] = useState(false);
   // Subscriber management state (loaded on first dialog open).
+  // Debounced live preview — re-fetches /api/account/preview-newsletter
+  // ~350ms after the customer stops typing or switches template. Only
+  // fires while the composer dialog is open (composerOpen), so we
+  // don't burn an API call when the card sits collapsed on the
+  // dashboard. The rendered HTML lands in an iframe in the preview
+  // pane via srcDoc — isolated styles, no script execution risk.
+  useEffect(() => {
+    if (!composerOpen) return;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      setPreviewing(true);
+      setPreviewError(null);
+      fetch("/api/account/preview-newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          template: draft.template,
+          subject: draft.subject,
+          body: draft.body,
+          imageUrl: draft.imageUrl || undefined,
+          ctaLabel: draft.ctaLabel || undefined,
+          ctaUrl: draft.ctaUrl || undefined,
+        }),
+      })
+        .then((r) => r.json())
+        .then((j: { success?: boolean; html?: string; error?: string }) => {
+          if (cancelled) return;
+          if (!j.success || !j.html) {
+            setPreviewError(j.error ?? "Preview unavailable.");
+            return;
+          }
+          setPreviewHtml(j.html);
+        })
+        .catch((e) => {
+          if (cancelled) return;
+          setPreviewError(e instanceof Error ? e.message : String(e));
+        })
+        .finally(() => {
+          if (!cancelled) setPreviewing(false);
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [
+    composerOpen,
+    token,
+    draft.template,
+    draft.subject,
+    draft.body,
+    draft.imageUrl,
+    draft.ctaLabel,
+    draft.ctaUrl,
+  ]);
+
   const [subscribers, setSubscribers] = useState<
     Array<{
       email: string;
@@ -229,7 +367,15 @@ export default function NewsletterCard({
     setError(null);
     setSuccess(null);
     setDraft(emptyDraft());
+    setPreviewHtml("");
+    setPreviewError(null);
+    setComposerOpen(true);
     dialogRef.current?.showModal();
+  }
+
+  function closeComposer() {
+    setComposerOpen(false);
+    dialogRef.current?.close();
   }
 
   function validate(): string | null {
@@ -279,7 +425,7 @@ export default function NewsletterCard({
         setError(json.error ?? "Send failed. Try again.");
         return;
       }
-      dialogRef.current?.close();
+      closeComposer();
       setSuccess(
         `Sent to ${json.recipientCount ?? 0} subscriber${(json.recipientCount ?? 0) === 1 ? "" : "s"}.${
           json.partialErrors?.length
@@ -388,9 +534,10 @@ export default function NewsletterCard({
 
       <dialog
         ref={dialogRef}
-        className="m-auto max-w-2xl rounded-2xl border-0 p-0 shadow-lift backdrop:bg-navy-900/50"
+        onClose={() => setComposerOpen(false)}
+        className="m-auto w-full max-w-6xl rounded-2xl border-0 p-0 shadow-lift backdrop:bg-navy-900/50"
       >
-        <div className="p-6 md:p-7">
+        <div className="max-h-[90vh] overflow-y-auto p-6 md:p-7">
           <h2 className="font-serif text-xl font-semibold text-navy-900">
             Compose newsletter
           </h2>
@@ -400,20 +547,32 @@ export default function NewsletterCard({
             as your monthly included send.
           </p>
 
-          <div className="mt-4 space-y-4">
-            {/* Template picker */}
+          {/* Two-column body — form on the left, live preview on the
+              right. Stacks on mobile (single column). The preview is
+              an iframe so the newsletter's inline styles are isolated
+              from the dashboard's stylesheet. */}
+          <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="space-y-4">
+            {/* Template picker — 2x2 grid of cards with a small
+                visual thumbnail above the name + hint. Customer
+                can see at a glance what the layout looks like
+                without having to type anything. */}
             <div>
               <span className="block text-sm font-semibold text-navy-900">
                 Template
               </span>
-              <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <p className="mt-1 text-xs text-navy-600">
+                Pick the layout that fits what you&apos;re sending.
+                The preview on the right updates as you choose.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {TEMPLATES.map((t) => (
                   <label
                     key={t.id}
                     className={[
-                      "block cursor-pointer rounded-lg border-2 p-3 text-sm",
+                      "block cursor-pointer rounded-lg border-2 p-3 text-sm transition-colors",
                       draft.template === t.id
-                        ? "border-navy-900 bg-navy-50"
+                        ? "border-navy-900 bg-navy-50 shadow-sm"
                         : "border-navy-200 bg-white hover:border-navy-400",
                     ].join(" ")}
                   >
@@ -427,7 +586,10 @@ export default function NewsletterCard({
                       }
                       className="sr-only"
                     />
-                    <p className="font-semibold text-navy-900">{t.label}</p>
+                    <div className="overflow-hidden rounded border border-navy-100 bg-cream-50">
+                      <TemplateThumbnail id={t.id} />
+                    </div>
+                    <p className="mt-2 font-semibold text-navy-900">{t.label}</p>
                     <p className="mt-1 text-xs text-navy-600">{t.hint}</p>
                   </label>
                 ))}
@@ -632,6 +794,50 @@ export default function NewsletterCard({
             </div>
           </div>
 
+          {/* ---------- Preview column ----------
+            * Live iframe of the actual rendered email. srcDoc
+            * isolates styles + scripts from the parent page.
+            * Sticky on desktop so it stays in view as the
+            * customer scrolls the form. */}
+          <div className="lg:sticky lg:top-2 lg:self-start">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="block text-sm font-semibold text-navy-900">
+                Live preview
+              </span>
+              <span className="text-[11px] text-navy-500">
+                {previewing
+                  ? "Updating…"
+                  : previewError
+                    ? "Preview error"
+                    : "What your subscribers will see"}
+              </span>
+            </div>
+            <div className="mt-2 overflow-hidden rounded-lg border-2 border-navy-200 bg-cream-100">
+              {previewError ? (
+                <div className="flex h-[520px] items-center justify-center px-4 text-center text-xs text-ember-700">
+                  {previewError}
+                </div>
+              ) : previewHtml ? (
+                <iframe
+                  title="Newsletter preview"
+                  srcDoc={previewHtml}
+                  sandbox=""
+                  className="h-[520px] w-full bg-white"
+                />
+              ) : (
+                <div className="flex h-[520px] items-center justify-center px-4 text-center text-xs text-navy-500">
+                  Loading preview…
+                </div>
+              )}
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-navy-500">
+              The preview uses your real brand colours + logo from your
+              site. Footer unsubscribe link is a placeholder here — the
+              real one is unique to each subscriber when sent.
+            </p>
+          </div>
+          </div>
+
           {error && (
             <p
               className="mt-3 rounded-lg border border-ember-200 bg-ember-50 p-2 text-sm text-ember-800"
@@ -644,7 +850,7 @@ export default function NewsletterCard({
           <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
             <button
               type="button"
-              onClick={() => dialogRef.current?.close()}
+              onClick={closeComposer}
               disabled={pending}
               className="rounded-lg border-2 border-navy-200 px-4 py-2 text-sm font-semibold text-navy-900 hover:border-navy-400"
             >

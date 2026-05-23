@@ -38,6 +38,7 @@ import {
   NEWSLETTER_MONTHLY_SEND_LIMIT,
   NEWSLETTER_HISTORY_CAP,
 } from "@/lib/newsletter/limits";
+import { pickLogoUrl, pickBrandColor } from "@/lib/newsletter/brand";
 import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
@@ -413,33 +414,7 @@ function formatDateNice(iso: string): string {
   }
 }
 
-function pickLogoUrl(ob: Record<string, unknown>): string | undefined {
-  const assets = (ob.assets ?? {}) as {
-    logo?: { key?: string };
-  };
-  const key = assets.logo?.key;
-  if (!key) return undefined;
-  const base = process.env.R2_PUBLIC_URL_BASE;
-  if (!base) return undefined;
-  return `${base.replace(/\/$/, "")}/${key}`;
-}
-
-function pickBrandColor(
-  ob: Record<string, unknown>,
-  which: "primary" | "secondary",
-): string {
-  const branding = (ob.branding ?? {}) as {
-    brandColorPrimary?: string;
-    brandColorSecondary?: string;
-  };
-  const fromBranding =
-    which === "primary"
-      ? branding.brandColorPrimary
-      : branding.brandColorSecondary;
-  if (fromBranding && /^#[0-9a-fA-F]{6}$/.test(fromBranding))
-    return fromBranding;
-  // Fallback to a neutral default — same shape as adapter.ts
-  // fallback so the rendered email looks sensible without
-  // brand colours set yet.
-  return which === "primary" ? "#1e3a8a" : "#f97316";
-}
+// Brand helpers (pickLogoUrl, pickBrandColor) live in
+// @/lib/newsletter/brand and are imported below — same source for
+// the send + the preview routes so what customers see in preview
+// matches what subscribers receive.
