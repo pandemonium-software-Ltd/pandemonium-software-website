@@ -1,0 +1,12 @@
+{
+  "description": "No action needed — customer already had domain pointed at Cloudflare (zone is instantly active on first poll)",
+  "template": "domain-no-action-needed",
+  "values": {
+    "customerName": "Priya",
+    "domain": "priyabakes.com"
+  },
+  "expected": {
+    "subject": "priyabakes.com — nothing for you to do",
+    "body": "Hi Priya,\n\nQuick heads up — your domain priyabakes.com is already on\nCloudflare, so there are no nameserver changes for you to\nmake. Nice and easy.\n\nWe'll wire it up to your new site on our side and email you\nagain as soon as it goes live.\n\n— ModuForge"
+  }
+}

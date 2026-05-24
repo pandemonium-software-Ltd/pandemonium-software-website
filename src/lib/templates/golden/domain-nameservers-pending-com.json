@@ -1,15 +1,16 @@
 {
-  "description": "Nameservers pending — .com with confirmUrl for cta button",
+  "description": "Nameservers pending — .com with confirmUrl for cta button + hubUrl for in-Hub walkthroughs",
   "template": "domain-nameservers-pending",
   "values": {
     "customerName": "Sam",
     "domain": "sams-plumbing.com",
     "ns1": "kayla.ns.cloudflare.com",
     "ns2": "rick.ns.cloudflare.com",
-    "confirmUrl": "https://modu-forge.co.uk/api/onboarding/dns-confirm/xyz789"
+    "confirmUrl": "https://modu-forge.co.uk/api/onboarding/dns-confirm/xyz789",
+    "hubUrl": "https://modu-forge.co.uk/onboarding/xyz789"
   },
   "expected": {
     "subject": "One quick thing — connect sams-plumbing.com to your site",
-    "body": "Hi Sam,\n\nTo set up your new site at sams-plumbing.com, we need you to do one\nsmall change with whoever you bought the domain from (GoDaddy,\n123-reg, Names.co.uk, etc.).\n\nLog into your account with them, find a section called\n\"Nameservers\" (or sometimes \"DNS settings\"), and replace\nwhatever's listed with these two lines:\n\n  kayla.ns.cloudflare.com\n  rick.ns.cloudflare.com\n\nSave the change. That's it from your end.\n\nOnce you've done it, tap the button below to let us know.\n(If you forget, no stress — it'll sort itself out automatically\nwithin a day or so anyway.)\n\nIf you can't find the right setting, reply with a screenshot\nof the page you're looking at and we'll point you to the right\nspot.\n\n— ModuForge"
+    "body": "Hi Sam,\n\nYour domain sams-plumbing.com is ready to connect to your new site.\nThe last step needs you to make one small change at whoever\nyou bought it from (GoDaddy, 123-reg, Names.co.uk, etc.).\n\nReplace their nameservers with these two:\n\n  kayla.ns.cloudflare.com\n  rick.ns.cloudflare.com\n\nStep-by-step (works at any registrar):\n\n  1. Log into the account where you bought sams-plumbing.com.\n  2. Open the page for sams-plumbing.com and look for a section\n     called \"Nameservers\" (sometimes \"DNS settings\" or\n     \"Domain settings\").\n  3. Switch the option to \"Use custom nameservers\" — the\n     wording varies (could be \"I'll use my own\" or similar).\n  4. Delete whatever's listed and paste in these two lines:\n        kayla.ns.cloudflare.com\n        rick.ns.cloudflare.com\n  5. Save the change. That's it from your end.\n\nNeed a step-by-step for your exact registrar? Detailed\nwalkthroughs for 123-reg, GoDaddy, Namecheap, IONOS,\nFasthosts and Names.co.uk are in your onboarding hub:\n\n  https://modu-forge.co.uk/onboarding/xyz789\n\nOnce you've saved the change, tap the button below to let\nus know. (If you forget, no stress — it'll sort itself out\nautomatically within a day or so.)\n\nIf you can't find the right setting at all, reply with a\nscreenshot of the page you're on and we'll point you to it.\n\n— ModuForge"
   }
 }

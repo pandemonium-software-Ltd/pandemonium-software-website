@@ -17,6 +17,7 @@ import type { Template } from "./types";
 import { dnsVerified } from "./templates/dns-verified";
 import { changeRequestReceived } from "./templates/change-request-received";
 import { domainNameserversPending } from "./templates/domain-nameservers-pending";
+import { domainNoActionNeeded } from "./templates/domain-no-action-needed";
 import { domainZoneActive } from "./templates/domain-zone-active";
 import { phase1ThanksHereIsQualifyLink } from "./templates/phase1-thanks-here-is-qualify-link";
 import { phase2AcceptHereIsIntakeLink } from "./templates/phase2-accept-here-is-intake-link";
@@ -53,6 +54,7 @@ const TEMPLATES = new Map<string, Template>([
   [dnsVerified.id, dnsVerified],
   [changeRequestReceived.id, changeRequestReceived],
   [domainNameserversPending.id, domainNameserversPending],
+  [domainNoActionNeeded.id, domainNoActionNeeded],
   [domainZoneActive.id, domainZoneActive],
   [phase1ThanksHereIsQualifyLink.id, phase1ThanksHereIsQualifyLink],
   [phase2AcceptHereIsIntakeLink.id, phase2AcceptHereIsIntakeLink],

@@ -271,6 +271,7 @@ describe("step2Domain.run — first-tick happy path (external registrar)", () =>
         confirmUrl: expect.stringContaining(
           "/api/onboarding/dns-confirm/tok_test",
         ),
+        hubUrl: expect.stringContaining("/onboarding/tok_test"),
       }),
     );
     expect(markNameserversEmailed).toHaveBeenCalledWith("page_test");
@@ -318,8 +319,8 @@ describe("step2Domain.run — nameservers email latch", () => {
     expect(result.status).toBe("ok");
   });
 
-  test("does NOT send nameservers email for cloudflare-registered domains", async () => {
-    vi.mocked(listZones).mockResolvedValue([zonePending]);
+  test("sends domain-no-action-needed (not nameservers-pending, not activation) for cloudflare registrar", async () => {
+    vi.mocked(listZones).mockResolvedValue([zoneActive]);
 
     const result = await step2Domain.run(
       {
@@ -331,7 +332,74 @@ describe("step2Domain.run — nameservers email latch", () => {
       env,
     );
 
-    expect(sendCustomerEmail).not.toHaveBeenCalled();
+    // Exactly one customer email — no-action — and section C's
+    // activation email is suppressed so the customer doesn't get
+    // two domain emails in a row.
+    expect(sendCustomerEmail).toHaveBeenCalledTimes(1);
+    expect(sendCustomerEmail).toHaveBeenCalledWith(
+      env,
+      baseProspect.email,
+      "domain-no-action-needed",
+      expect.objectContaining({
+        customerName: "Test Customer",
+        domain: "test.co.uk",
+      }),
+    );
+    expect(markNameserversEmailed).toHaveBeenCalledWith("page_test");
+    expect(markDomainVerified).toHaveBeenCalledWith("page_test");
+    expect(result.status).toBe("ok");
+    if (result.status === "ok") {
+      expect(result.notes).toContain("sent no-action-needed email");
+      expect(result.notes).not.toContain("sent activation email");
+    }
+  });
+
+  test("sends domain-no-action-needed for already-have when zone is instantly active (NS already point at CF)", async () => {
+    vi.mocked(listZones).mockResolvedValue([zoneActive]);
+
+    const result = await step2Domain.run(
+      {
+        ...baseProspect,
+        onboardingData: {
+          domain: { domain: "test.co.uk", registrar: "already-have" },
+        },
+      },
+      env,
+    );
+
+    expect(sendCustomerEmail).toHaveBeenCalledWith(
+      env,
+      baseProspect.email,
+      "domain-no-action-needed",
+      expect.objectContaining({ domain: "test.co.uk" }),
+    );
+    expect(markNameserversEmailed).toHaveBeenCalledWith("page_test");
+    expect(result.status).toBe("ok");
+  });
+
+  test("sends domain-nameservers-pending for already-have when zone is still pending (NS need swapping)", async () => {
+    vi.mocked(listZones).mockResolvedValue([zonePending]);
+
+    const result = await step2Domain.run(
+      {
+        ...baseProspect,
+        onboardingData: {
+          domain: { domain: "test.co.uk", registrar: "already-have" },
+        },
+      },
+      env,
+    );
+
+    expect(sendCustomerEmail).toHaveBeenCalledWith(
+      env,
+      baseProspect.email,
+      "domain-nameservers-pending",
+      expect.objectContaining({
+        ns1: "aron.ns.cloudflare.com",
+        ns2: "nina.ns.cloudflare.com",
+        hubUrl: expect.stringContaining("/onboarding/tok_test"),
+      }),
+    );
     expect(result.status).toBe("ok");
   });
 });

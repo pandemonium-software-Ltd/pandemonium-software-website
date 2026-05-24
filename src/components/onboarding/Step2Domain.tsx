@@ -160,6 +160,65 @@ export default function Step2Domain({
             Where is it (or where will it be) registered?
           </legend>
           <RegistrarOption
+            value="cloudflare"
+            current={registrar}
+            disabled={disabled}
+            onChange={setRegistrar}
+            recommended
+            title="I don&rsquo;t have a domain yet — register one with Cloudflare"
+            blurb={
+              <>
+                <strong>Cleanest setup, zero faff.</strong> Your
+                domain lives on Cloudflare from day one, so there are
+                no nameservers to point and your site goes live
+                within the hour. £8–£12/year for most{" "}
+                <code>.co.uk</code> and <code>.com</code> names —{" "}
+                <strong>same price</strong> you&apos;d pay at GoDaddy
+                or 123-reg.
+                <div className="mt-3 rounded-lg bg-cream-100 p-3 ring-1 ring-navy-200">
+                  <p className="text-[0.85rem] font-semibold uppercase tracking-wide text-navy-800">
+                    How to buy your domain through Cloudflare
+                  </p>
+                  <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[0.95rem]">
+                    <li>
+                      <a
+                        href={CLOUDFLARE_REGISTRAR_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="link font-semibold"
+                      >
+                        Open Cloudflare Domain Registration ↗
+                      </a>{" "}
+                      in a new tab (you&apos;ll need to sign in to
+                      the Cloudflare account you set up in Step 1).
+                    </li>
+                    <li>
+                      Type your business name into the search and
+                      pick a TLD you like — <code>.co.uk</code> works
+                      well for UK trades, <code>.com</code> for
+                      anything more general.
+                    </li>
+                    <li>
+                      Add the chosen name to your cart, pop in your
+                      card details, complete the purchase (takes
+                      about 2 minutes).
+                    </li>
+                    <li>
+                      Come back to this page, type the domain into
+                      the field above, then tick &ldquo;Mark this
+                      step done&rdquo; below.
+                    </li>
+                  </ol>
+                </div>
+                <p className="mt-3">
+                  Once you&apos;re done, I deploy your site straight
+                  to the new domain — no DNS or nameserver work needed
+                  on your end.
+                </p>
+              </>
+            }
+          />
+          <RegistrarOption
             value="already-have"
             current={registrar}
             disabled={disabled}
@@ -175,53 +234,6 @@ export default function Step2Domain({
                 paste into your registrar&apos;s control panel.
                 Cloudflare then handles your DNS while your existing
                 registrar keeps handling your annual renewal.
-              </>
-            }
-          />
-          <RegistrarOption
-            value="cloudflare"
-            current={registrar}
-            disabled={disabled}
-            onChange={setRegistrar}
-            title="I don&rsquo;t have a domain yet — register one with Cloudflare"
-            blurb={
-              <>
-                <strong>Cleanest setup.</strong> No nameservers to
-                point because the domain lives on Cloudflare from day
-                one. £8–£12/year for most <code>.co.uk</code> and{" "}
-                <code>.com</code> names — same price you&apos;d pay
-                anywhere else.
-                <ol className="mt-3 list-decimal space-y-1 pl-5 text-[0.95rem]">
-                  <li>
-                    <a
-                      href={CLOUDFLARE_REGISTRAR_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="link font-semibold"
-                    >
-                      Open Cloudflare Domain Registration ↗
-                    </a>{" "}
-                    in a new tab
-                  </li>
-                  <li>
-                    Search for your business name + a TLD you like
-                    (try <code>.co.uk</code> for UK trades, or{" "}
-                    <code>.com</code> for general business)
-                  </li>
-                  <li>
-                    Pick a name, add your card, complete the purchase
-                    (~2 minutes)
-                  </li>
-                  <li>
-                    Come back here, type the domain into the field
-                    above, then mark this step done
-                  </li>
-                </ol>
-                <p className="mt-3">
-                  Once you&apos;re done, I deploy your site straight
-                  to the new domain — no DNS or nameserver work needed
-                  on your end.
-                </p>
               </>
             }
           />
@@ -522,6 +534,7 @@ function RegistrarOption({
   onChange,
   title,
   blurb,
+  recommended = false,
 }: {
   value: Registrar;
   current: Registrar | "";
@@ -529,15 +542,20 @@ function RegistrarOption({
   onChange: (v: Registrar) => void;
   title: string;
   blurb: React.ReactNode;
+  recommended?: boolean;
 }) {
   const checked = current === value;
   return (
     <label
       className={[
-        "mt-2 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-colors",
-        checked
-          ? "border-navy-900 bg-white"
-          : "border-navy-200 bg-white hover:border-navy-300",
+        "relative mt-2 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition-colors",
+        recommended
+          ? checked
+            ? "border-ember-500 bg-white"
+            : "border-ember-300 bg-white hover:border-ember-400"
+          : checked
+            ? "border-navy-900 bg-white"
+            : "border-navy-200 bg-white hover:border-navy-300",
         disabled ? "cursor-default opacity-90" : "",
       ].join(" ")}
     >
@@ -551,10 +569,17 @@ function RegistrarOption({
         className="mt-1 h-5 w-5 flex-none accent-navy-900"
       />
       <span className="min-w-0">
-        <span
-          className="block font-serif text-base font-semibold text-navy-900"
-          dangerouslySetInnerHTML={{ __html: title }}
-        />
+        <span className="flex flex-wrap items-center gap-2">
+          <span
+            className="font-serif text-base font-semibold text-navy-900"
+            dangerouslySetInnerHTML={{ __html: title }}
+          />
+          {recommended && (
+            <span className="rounded-full bg-ember-600 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-white">
+              Recommended
+            </span>
+          )}
+        </span>
         <span className="mt-1 block text-[0.9rem] leading-relaxed text-navy-700">
           {blurb}
         </span>

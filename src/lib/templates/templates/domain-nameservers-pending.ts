@@ -17,31 +17,45 @@ import type { Template } from "../types";
 export const domainNameserversPending: Template = {
   id: "domain-nameservers-pending",
   riskTier: "low",
-  required: ["customerName", "domain", "ns1", "ns2", "confirmUrl"],
+  required: ["customerName", "domain", "ns1", "ns2", "confirmUrl", "hubUrl"],
   cta: { urlKey: "confirmUrl", label: "I've updated my nameservers" },
   subject: "One quick thing — connect {{domain}} to your site",
   body: `Hi {{customerName}},
 
-To set up your new site at {{domain}}, we need you to do one
-small change with whoever you bought the domain from (GoDaddy,
-123-reg, Names.co.uk, etc.).
+Your domain {{domain}} is ready to connect to your new site.
+The last step needs you to make one small change at whoever
+you bought it from (GoDaddy, 123-reg, Names.co.uk, etc.).
 
-Log into your account with them, find a section called
-"Nameservers" (or sometimes "DNS settings"), and replace
-whatever's listed with these two lines:
+Replace their nameservers with these two:
 
   {{ns1}}
   {{ns2}}
 
-Save the change. That's it from your end.
+Step-by-step (works at any registrar):
 
-Once you've done it, tap the button below to let us know.
-(If you forget, no stress — it'll sort itself out automatically
-within a day or so anyway.)
+  1. Log into the account where you bought {{domain}}.
+  2. Open the page for {{domain}} and look for a section
+     called "Nameservers" (sometimes "DNS settings" or
+     "Domain settings").
+  3. Switch the option to "Use custom nameservers" — the
+     wording varies (could be "I'll use my own" or similar).
+  4. Delete whatever's listed and paste in these two lines:
+        {{ns1}}
+        {{ns2}}
+  5. Save the change. That's it from your end.
 
-If you can't find the right setting, reply with a screenshot
-of the page you're looking at and we'll point you to the right
-spot.
+Need a step-by-step for your exact registrar? Detailed
+walkthroughs for 123-reg, GoDaddy, Namecheap, IONOS,
+Fasthosts and Names.co.uk are in your onboarding hub:
+
+  {{hubUrl}}
+
+Once you've saved the change, tap the button below to let
+us know. (If you forget, no stress — it'll sort itself out
+automatically within a day or so.)
+
+If you can't find the right setting at all, reply with a
+screenshot of the page you're on and we'll point you to it.
 
 — ModuForge`,
 };

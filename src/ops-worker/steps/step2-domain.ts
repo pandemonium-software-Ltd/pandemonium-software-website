@@ -153,33 +153,82 @@ export const step2Domain: Step = {
       await updateZoneStatus(prospect.pageId, zone.status);
     }
 
-    // ---------- B. Send nameservers email (external registrars only, latch) ----------
+    // ---------- B. Send the ONE domain-setup email (latch) ----------
+    // Two flavours, exactly one per customer:
+    //   - domain-no-action-needed   → customer does nothing. Sent when
+    //     the zone is born active (Cloudflare-registered domains) OR
+    //     when an "already-have" customer's existing nameservers
+    //     already point at Cloudflare (zone instantly active too).
+    //   - domain-nameservers-pending → customer must paste the two NS
+    //     values at their registrar. Sent when registrar is external,
+    //     or when "already-have" but the zone is still pending (their
+    //     nameservers point somewhere other than CF).
+    // Same `nameserversEmailSentAt` latch covers both — only one
+    // domain-setup email ever lands in their inbox.
     let sentNameserversEmail = false;
-    const isExternal =
-      config.registrar === "external" || config.registrar === "already-have";
-    if (isExternal && !prospect.nameserversEmailSentAt) {
-      const [ns1, ns2] = zone.name_servers ?? [];
-      if (!ns1 || !ns2) {
-        throw new Error(
-          `Cloudflare returned zone ${zone.id} without 2 nameservers (got ${zone.name_servers?.length ?? 0}); can't email customer`,
-        );
-      }
+    let sentNoActionEmail = false;
+    let stampedDomainVerifiedInB = false;
+    if (!prospect.nameserversEmailSentAt) {
       const baseUrl =
         process.env.NEXT_PUBLIC_SITE_URL ?? "https://modu-forge.co.uk";
-      await sendCustomerEmail(env, prospect.email, "domain-nameservers-pending", {
-        customerName: prospect.name,
-        domain: config.domain,
-        ns1,
-        ns2,
-        confirmUrl: `${baseUrl}/api/onboarding/dns-confirm/${prospect.token}`,
-      });
-      await markNameserversEmailed(prospect.pageId);
-      sentNameserversEmail = true;
+      const noNameserverSwapNeeded =
+        config.registrar === "cloudflare" ||
+        (config.registrar === "already-have" && zone.status === "active");
+
+      if (noNameserverSwapNeeded) {
+        await sendCustomerEmail(env, prospect.email, "domain-no-action-needed", {
+          customerName: prospect.name,
+          domain: config.domain,
+        });
+        await markNameserversEmailed(prospect.pageId);
+        sentNoActionEmail = true;
+        // The no-action email already says "we'll email you again
+        // when it goes live". Stamp domainVerifiedAt so section C
+        // doesn't fire a redundant "domain ready for launch" email
+        // moments after this one — one domain-setup email per
+        // customer, always.
+        if (zone.status === "active" && !prospect.domainVerifiedAt) {
+          await markDomainVerified(prospect.pageId);
+          stampedDomainVerifiedInB = true;
+        }
+      } else if (
+        config.registrar === "external" ||
+        config.registrar === "already-have"
+      ) {
+        const [ns1, ns2] = zone.name_servers ?? [];
+        if (!ns1 || !ns2) {
+          throw new Error(
+            `Cloudflare returned zone ${zone.id} without 2 nameservers (got ${zone.name_servers?.length ?? 0}); can't email customer`,
+          );
+        }
+        await sendCustomerEmail(
+          env,
+          prospect.email,
+          "domain-nameservers-pending",
+          {
+            customerName: prospect.name,
+            domain: config.domain,
+            ns1,
+            ns2,
+            confirmUrl: `${baseUrl}/api/onboarding/dns-confirm/${prospect.token}`,
+            hubUrl: `${baseUrl}/onboarding/${prospect.token}`,
+          },
+        );
+        await markNameserversEmailed(prospect.pageId);
+        sentNameserversEmail = true;
+      }
     }
 
     // ---------- C. Send activation email (status active + latch) ----------
+    // Skipped when B already covered the customer with the
+    // no-action-needed email (which incorporates the "we'll email
+    // when live" promise the activation email would otherwise make).
     let sentActivationEmail = false;
-    if (zone.status === "active" && !prospect.domainVerifiedAt) {
+    if (
+      zone.status === "active" &&
+      !prospect.domainVerifiedAt &&
+      !stampedDomainVerifiedInB
+    ) {
       await sendCustomerEmail(env, prospect.email, "domain-zone-active", {
         customerName: prospect.name,
         domain: config.domain,
@@ -332,6 +381,7 @@ export const step2Domain: Step = {
     if (zoneCreatedThisTick) events.push(`created zone ${zone.id}`);
     else if (!prospect.cloudflareZoneId) events.push(`discovered zone ${zone.id}`);
     if (sentNameserversEmail) events.push("sent nameservers email");
+    if (sentNoActionEmail) events.push("sent no-action-needed email");
     if (sentActivationEmail) events.push("sent activation email");
     if (workerUploadedThisTick && workerName)
       events.push(`uploaded Worker ${workerName}`);

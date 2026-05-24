@@ -1,15 +1,16 @@
 {
-  "description": "Nameservers pending — typical .co.uk customer at an external registrar; confirmUrl drives the cta button",
+  "description": "Nameservers pending — typical .co.uk customer at an external registrar; confirmUrl drives the cta button; hubUrl links back to per-registrar walkthroughs",
   "template": "domain-nameservers-pending",
   "values": {
     "customerName": "Alex",
     "domain": "alexsbakery.co.uk",
     "ns1": "aron.ns.cloudflare.com",
     "ns2": "nina.ns.cloudflare.com",
-    "confirmUrl": "https://modu-forge.co.uk/api/onboarding/dns-confirm/abc123-def456"
+    "confirmUrl": "https://modu-forge.co.uk/api/onboarding/dns-confirm/abc123-def456",
+    "hubUrl": "https://modu-forge.co.uk/onboarding/abc123-def456"
   },
   "expected": {
     "subject": "One quick thing — connect alexsbakery.co.uk to your site",
-    "body": "Hi Alex,\n\nTo set up your new site at alexsbakery.co.uk, we need you to do one\nsmall change with whoever you bought the domain from (GoDaddy,\n123-reg, Names.co.uk, etc.).\n\nLog into your account with them, find a section called\n\"Nameservers\" (or sometimes \"DNS settings\"), and replace\nwhatever's listed with these two lines:\n\n  aron.ns.cloudflare.com\n  nina.ns.cloudflare.com\n\nSave the change. That's it from your end.\n\nOnce you've done it, tap the button below to let us know.\n(If you forget, no stress — it'll sort itself out automatically\nwithin a day or so anyway.)\n\nIf you can't find the right setting, reply with a screenshot\nof the page you're looking at and we'll point you to the right\nspot.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nYour domain alexsbakery.co.uk is ready to connect to your new site.\nThe last step needs you to make one small change at whoever\nyou bought it from (GoDaddy, 123-reg, Names.co.uk, etc.).\n\nReplace their nameservers with these two:\n\n  aron.ns.cloudflare.com\n  nina.ns.cloudflare.com\n\nStep-by-step (works at any registrar):\n\n  1. Log into the account where you bought alexsbakery.co.uk.\n  2. Open the page for alexsbakery.co.uk and look for a section\n     called \"Nameservers\" (sometimes \"DNS settings\" or\n     \"Domain settings\").\n  3. Switch the option to \"Use custom nameservers\" — the\n     wording varies (could be \"I'll use my own\" or similar).\n  4. Delete whatever's listed and paste in these two lines:\n        aron.ns.cloudflare.com\n        nina.ns.cloudflare.com\n  5. Save the change. That's it from your end.\n\nNeed a step-by-step for your exact registrar? Detailed\nwalkthroughs for 123-reg, GoDaddy, Namecheap, IONOS,\nFasthosts and Names.co.uk are in your onboarding hub:\n\n  https://modu-forge.co.uk/onboarding/abc123-def456\n\nOnce you've saved the change, tap the button below to let\nus know. (If you forget, no stress — it'll sort itself out\nautomatically within a day or so.)\n\nIf you can't find the right setting at all, reply with a\nscreenshot of the page you're on and we'll point you to it.\n\n— ModuForge"
   }
 }
