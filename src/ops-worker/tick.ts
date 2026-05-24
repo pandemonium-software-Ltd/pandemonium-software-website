@@ -15,10 +15,12 @@
 import { listProspectsNeedingOps } from "../lib/notion-prospects";
 import type { ServerEnv } from "../lib/env";
 import { dispatchProspect, type DispatchDeps } from "./dispatch";
+import type { StepCtx } from "./types";
 
 export async function runOpsTick(
   env: ServerEnv,
   deps: DispatchDeps = {},
+  ctx: StepCtx = {},
 ): Promise<void> {
   const tickId = new Date().toISOString();
   console.log(`[tick:${tickId}] starting`);
@@ -39,7 +41,7 @@ export async function runOpsTick(
 
   for (const prospect of prospects) {
     try {
-      await dispatchProspect(prospect, env, deps);
+      await dispatchProspect(prospect, env, deps, ctx);
     } catch (e) {
       // Defensive: dispatchProspect already catches per-step errors,
       // so this only fires if the dispatcher itself throws (e.g.

@@ -435,7 +435,18 @@ export function adaptProspect(prospect: ProspectRecord): {
   }
   if (selected.has("Google Business Profile Setup/Audit")) {
     const listingUrl = optionalString(tools.gbpUrl);
-    if (listingUrl) modules.gbp = { listingUrl };
+    if (listingUrl) {
+      modules.gbp = {
+        listingUrl,
+        // Plumb the customer token + API origin so the
+        // GbpReviewsWidget on the customer site can fetch the
+        // latest snapshot from /api/public/gbp-reviews at runtime.
+        // Same pattern as enquiry / newsletter.
+        customerToken: prospect.token,
+        apiOrigin:
+          process.env.NEXT_PUBLIC_SITE_URL ?? "https://modu-forge.co.uk",
+      };
+    }
   }
   // Newsletter — emit the subscribe widget config when the
   // customer's bought the module. The widget renders in the

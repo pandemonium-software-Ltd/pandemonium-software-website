@@ -8,6 +8,7 @@
 
 import type { ProspectRecord } from "../lib/notion-prospects";
 import type { ServerEnv } from "../lib/env";
+import type { D1Database } from "../lib/d1-analytics";
 
 export type StepId =
   | "step1"
@@ -30,6 +31,18 @@ export type StepResult =
   /** Step threw or returned a programmatic failure. Audited AND fires an exception. */
   | { status: "fail"; error: Error };
 
+/** Tick-scoped context passed to step.run alongside env. Carries
+ *  bindings that live on the scheduled-handler env (not process.env)
+ *  — currently just the analytics D1 binding which step3-tools uses
+ *  to seed gbp_reviews and which future steps may share. */
+export type StepCtx = {
+  /** The pandemonium_analytics D1 binding from the scheduled
+   *  handler. Optional — present only when the tick handler had
+   *  it (i.e. the binding is configured in wrangler-ops.jsonc).
+   *  Steps that need D1 must handle the missing case with a skip. */
+  d1?: D1Database;
+};
+
 export type Step = {
   /** Stable id used in audit / exception entries. */
   id: StepId;
@@ -46,7 +59,11 @@ export type Step = {
    * The dispatcher catches thrown errors and converts them to
    * { status: "fail" } automatically.
    */
-  run: (prospect: ProspectRecord, env: ServerEnv) => Promise<StepResult>;
+  run: (
+    prospect: ProspectRecord,
+    env: ServerEnv,
+    ctx?: StepCtx,
+  ) => Promise<StepResult>;
 };
 
 /**

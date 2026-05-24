@@ -100,6 +100,25 @@ const serverEnvSchema = z.object({
   GITHUB_OWNER: z.string().optional(),
   GITHUB_REPO: z.string().optional(),
 
+  // Google Places API key (Places API v1 — the New version).
+  // Used by:
+  //   - step3-tools.ts to resolve a customer's Google Business
+  //     Profile place_id from their pasted Google Maps URL.
+  //   - gbp-reviews-tick.ts daily cron to refresh each Live
+  //     customer's rating + top reviews into D1.
+  //
+  // Cost: Places Details + searchText calls in v1 are ~$5/1k
+  // requests with the field masks we use. At 1k customers × 1
+  // detail call/day = ~$150/mo at full scale, comfortably under
+  // the $200 Maps Platform free credit. Customer pays £2/mo for
+  // the GBP add-on which covers this comfortably.
+  //
+  // Optional: if unset, step3-tools logs a skip reason and the
+  // reviews cron returns early. Customer-facing UI still works
+  // (they can paste their URL); nothing happens until the key
+  // is set.
+  GOOGLE_PLACES_API_KEY: z.string().optional(),
+
   // Stage 2C C5.5 — Haiku copy assist.
   //
   // Anthropic API key. Workspace-scoped with a £30 monthly cap

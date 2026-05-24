@@ -19,6 +19,7 @@ import { changeRequestReceived } from "./templates/change-request-received";
 import { domainNameserversPending } from "./templates/domain-nameservers-pending";
 import { domainNoActionNeeded } from "./templates/domain-no-action-needed";
 import { domainZoneActive } from "./templates/domain-zone-active";
+import { gbpModuleReady } from "./templates/gbp-module-ready";
 import { phase1ThanksHereIsQualifyLink } from "./templates/phase1-thanks-here-is-qualify-link";
 import { phase2AcceptHereIsIntakeLink } from "./templates/phase2-accept-here-is-intake-link";
 import { phase3ThanksFeesAndPaymentComing } from "./templates/phase3-thanks-fees-and-payment-coming";
@@ -56,6 +57,7 @@ const TEMPLATES = new Map<string, Template>([
   [domainNameserversPending.id, domainNameserversPending],
   [domainNoActionNeeded.id, domainNoActionNeeded],
   [domainZoneActive.id, domainZoneActive],
+  [gbpModuleReady.id, gbpModuleReady],
   [phase1ThanksHereIsQualifyLink.id, phase1ThanksHereIsQualifyLink],
   [phase2AcceptHereIsIntakeLink.id, phase2AcceptHereIsIntakeLink],
   [phase3ThanksFeesAndPaymentComing.id, phase3ThanksFeesAndPaymentComing],

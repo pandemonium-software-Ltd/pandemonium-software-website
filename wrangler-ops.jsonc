@@ -19,6 +19,8 @@
 //   (plus, once Stage 2C C2/C3 land:)
 //   wrangler secret put BEN_CLOUDFLARE_API_TOKEN --config wrangler-ops.jsonc
 //   wrangler secret put RESEND_KEY_ENCRYPTION_KEY --config wrangler-ops.jsonc
+//   (for the GBP module — Places API v1, "New" version):
+//   wrangler secret put GOOGLE_PLACES_API_KEY --config wrangler-ops.jsonc
 //
 // Plain text vars (set via the dashboard or vars: block below):
 //   NOTION_PROSPECTS_DB_ID, NOTION_AUDIT_LOG_DB_ID,
@@ -29,13 +31,18 @@
   "main": "src/ops-worker/index.ts",
   "compatibility_date": "2026-04-11",
   "compatibility_flags": ["nodejs_compat"],
-  // Three cron schedules:
+  // Four cron schedules:
   //   - "* * * * *"   every minute — drives the onboarding/build
   //     dispatcher (§4.2). Tick is ~50ms when idle.
   //   - "0 2 * * *"   daily at 02:00 UTC — fetches yesterday's
   //     Cloudflare analytics for every Live customer + @self,
   //     writes one row per (customer, day) into the
   //     pandemonium_analytics D1.
+  //   - "30 2 * * *"  daily at 02:30 UTC — refreshes Google
+  //     Business Profile reviews for every customer with a
+  //     resolved gbpPlaceId, INSERT OR REPLACE into the
+  //     gbp_reviews D1 table. 30-min offset from the analytics
+  //     cron so the two outbound API loads do not stack.
   //   - "0 8 1 * *"   1st of each month at 08:00 UTC — sends
   //     ModuForge-branded "your monthly results" email to every
   //     Live customer. 08:00 UTC ≈ 09:00 UK summer time, 08:00
@@ -43,7 +50,7 @@
   //     season without daylight-saving branching.
   // ops-worker/index.ts branches on event.cron to dispatch.
   "triggers": {
-    "crons": ["* * * * *", "0 2 * * *", "0 8 1 * *"]
+    "crons": ["* * * * *", "0 2 * * *", "30 2 * * *", "0 8 1 * *"]
   },
   "observability": {
     "enabled": true

@@ -108,7 +108,15 @@ export type ModuleConfig = {
     customerToken: string;
     apiOrigin: string;
   };
-  gbp?: { listingUrl: string };
+  /** GBP module — when present, the customer-site renders the
+   *  GbpReviewsWidget (top reviews + aggregate rating fetched at
+   *  runtime from /api/public/gbp-reviews on the marketing site).
+   *  `listingUrl` is the "See all on Google" link target. */
+  gbp?: {
+    listingUrl: string;
+    customerToken: string;
+    apiOrigin: string;
+  };
   /** Promotional offer strip rendered at the top of the homepage
    *  when populated AND the visitor's local date falls between
    *  `startsAt` and `endsAt` (inclusive). Set by the customer in

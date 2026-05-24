@@ -12,7 +12,13 @@
 
 import type { ProspectRecord } from "../lib/notion-prospects";
 import type { ServerEnv } from "../lib/env";
-import type { Step, StepResult, AuditEntry, ExceptionEntry } from "./types";
+import type {
+  Step,
+  StepCtx,
+  StepResult,
+  AuditEntry,
+  ExceptionEntry,
+} from "./types";
 import { writeAudit } from "./audit";
 import { writeException } from "./exceptions";
 
@@ -69,6 +75,7 @@ export async function dispatchProspect(
   prospect: ProspectRecord,
   env: ServerEnv,
   deps: DispatchDeps = {},
+  ctx: StepCtx = {},
 ): Promise<void> {
   const steps = deps.steps ?? STEPS;
   const audit = deps.writeAudit ?? writeAudit;
@@ -80,7 +87,7 @@ export async function dispatchProspect(
     const startedAt = Date.now();
     let result: StepResult;
     try {
-      result = await step.run(prospect, env);
+      result = await step.run(prospect, env, ctx);
     } catch (e) {
       const error = e instanceof Error ? e : new Error(String(e));
       result = { status: "fail", error };

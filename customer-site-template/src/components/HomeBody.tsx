@@ -46,23 +46,46 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { SiteData } from "@/lib/types";
+import GbpReviewsWidget from "./GbpReviewsWidget";
 
 type Props = {
   data: SiteData;
 };
 
 export default function HomeBody({ data }: Props) {
-  switch (data.structure) {
-    case "showcase":
-      return <ShowcaseBody data={data} />;
-    case "booking":
-      return <BookingBody data={data} />;
-    case "editorial":
-      return <EditorialBody data={data} />;
-    case "services":
-    default:
-      return <ServicesBody data={data} />;
-  }
+  const variant = (() => {
+    switch (data.structure) {
+      case "showcase":
+        return <ShowcaseBody data={data} />;
+      case "booking":
+        return <BookingBody data={data} />;
+      case "editorial":
+        return <EditorialBody data={data} />;
+      case "services":
+      default:
+        return <ServicesBody data={data} />;
+    }
+  })();
+  const gbp = data.modules.gbp;
+  return (
+    <>
+      {variant}
+      {/* GBP reviews block — runtime fetch from the marketing
+       *  site. Self-gates: renders nothing if the cron has not
+       *  populated a snapshot yet OR the customer has zero Google
+       *  reviews. Sits below the body variant in every structure
+       *  so it always reads as additional social proof on top of
+       *  the curated testimonials. */}
+      {gbp && (
+        <GbpReviewsWidget
+          customerToken={gbp.customerToken}
+          apiOrigin={gbp.apiOrigin}
+          listingUrl={gbp.listingUrl}
+          businessName={data.business.name}
+        />
+      )}
+    </>
+  );
 }
 
 // ============================================================

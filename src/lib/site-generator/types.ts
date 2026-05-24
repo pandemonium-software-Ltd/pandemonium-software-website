@@ -175,8 +175,18 @@ export type ModuleConfig = {
     customerToken: string;
     apiOrigin: string;
   };
-  /** Public GBP listing URL if GBP audit bought. */
-  gbp?: { listingUrl: string };
+  /** GBP module — when present, the customer-site renders the
+   *  GbpReviewsWidget (top reviews + aggregate rating fetched at
+   *  runtime from /api/public/gbp-reviews on the marketing site).
+   *  `listingUrl` is what the customer pasted at intake — drives
+   *  the "See all on Google" link target. `customerToken` +
+   *  `apiOrigin` plumb the widget to the marketing-site read
+   *  endpoint (same pattern as enquiry / newsletter). */
+  gbp?: {
+    listingUrl: string;
+    customerToken: string;
+    apiOrigin: string;
+  };
   /** Active promotional offer — only present when the Offers
    *  module was bought AND the customer has set an offer whose
    *  date range straddles "now" (the build-time `now`, but the

@@ -1,0 +1,12 @@
+{
+  "description": "GBP module ready — sent once when step3-tools resolves the customer's place_id and fires the first reviews fetch",
+  "template": "gbp-module-ready",
+  "values": {
+    "customerName": "Alex",
+    "domain": "alexsbakery.co.uk"
+  },
+  "expected": {
+    "subject": "Your Google reviews are connected to alexsbakery.co.uk",
+    "body": "Hi Alex,\n\nQuick update — I have found your Google Business Profile and\nconnected it to your site. Your latest Google reviews will\nnow appear on alexsbakery.co.uk automatically, and they refresh\nevery day so the rating and quotes stay current as new\nreviews come in.\n\nA few small things on your end (only if applicable):\n\n  - Keep replying to reviews from your Google Business\n    Profile dashboard — replies show up there as normal and\n    they help your search ranking.\n  - If you ever change the business name or move address,\n    update it in Google first; the changes flow through to\n    your site within a day.\n\nThat's it from your end. You can see the live block on your\nhomepage now.\n\n— ModuForge"
+  }
+}
