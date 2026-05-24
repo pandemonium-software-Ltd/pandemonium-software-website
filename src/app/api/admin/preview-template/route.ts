@@ -58,14 +58,35 @@ export async function GET(request: Request) {
   const id = url.searchParams.get("id");
 
   if (!id) {
+    // Absolute href avoids ambiguity around how the browser
+    // canonicalises a relative `?id=...` against /api/admin/...
+    // (Next.js sometimes serves /api routes with a virtual trailing
+    // slash which then resolves the query against the wrong base
+    // and 404s on click.)
+    const base = `${url.origin}${url.pathname}`;
     const ids = listTemplates()
       .map(
         (t) =>
-          `<li><a href="?id=${encodeURIComponent(t.id)}" style="color:#0f1d30;font-family:monospace;">${t.id}</a> <span style="color:#5d82ab;">(${t.riskTier})</span></li>`,
+          `<li><a href="${base}?id=${encodeURIComponent(t.id)}" style="color:#0f1d30;font-family:monospace;text-decoration:none;border-bottom:1px solid #b4c6dd;">${t.id}</a> <span style="color:#5d82ab;font-size:12px;">(${t.riskTier})</span></li>`,
       )
       .join("");
     return new NextResponse(
-      `<!DOCTYPE html><html><body style="font-family:system-ui;padding:24px;background:#fdfcf9;color:#172a42;"><h1>Template previews</h1><p>Pick a template to render with default placeholders:</p><ul style="line-height:2;">${ids}</ul></body></html>`,
+      `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ModuForge — Template previews</title>
+</head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;padding:32px 24px;background:#fdfcf9;color:#172a42;max-width:720px;margin:0 auto;">
+<div style="font-family:Georgia,serif;font-size:26px;font-weight:600;color:#0f1d30;letter-spacing:-0.02em;">ModuForge</div>
+<div style="margin-top:6px;font-size:11px;color:#5d82ab;text-transform:uppercase;letter-spacing:0.12em;">by Pandamonium Software</div>
+<div style="margin:14px 0 28px;width:32px;height:2px;background-color:#f97316;border-radius:1px;"></div>
+<h1 style="font-family:Georgia,serif;font-size:22px;margin:0 0 8px;color:#0f1d30;">Email template previews</h1>
+<p style="margin:0 0 20px;color:#5d82ab;">Pick a template to render with default placeholder values:</p>
+<ul style="line-height:2.2;padding-left:20px;">${ids}</ul>
+</body>
+</html>`,
       { status: 200, headers: { "content-type": "text/html; charset=utf-8" } },
     );
   }
