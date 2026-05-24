@@ -75,6 +75,8 @@ const snapshot = (rating: number) => ({
       relativeTimeDescription: "2 weeks ago",
     },
   ],
+  displayName: "Test Listing",
+  formattedAddress: "1 Test St",
 });
 
 const prepareMock = vi.fn();

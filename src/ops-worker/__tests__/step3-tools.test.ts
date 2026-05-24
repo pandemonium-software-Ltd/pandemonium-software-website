@@ -12,7 +12,8 @@ import type { ServerEnv } from "../../lib/env";
 import type { D1Database } from "../../lib/d1-analytics";
 
 vi.mock("../../lib/google-places", () => ({
-  extractPlaceIdFromMapsUrl: vi.fn(),
+  parseMapsUrl: vi.fn(),
+  resolveMapsShortUrl: vi.fn((u: string) => Promise.resolve(u)),
   findPlaceByQuery: vi.fn(),
   fetchPlaceDetails: vi.fn(),
   PlacesApiError: class extends Error {
@@ -40,7 +41,7 @@ vi.mock("../notify", () => ({
 }));
 
 import {
-  extractPlaceIdFromMapsUrl,
+  parseMapsUrl,
   findPlaceByQuery,
   fetchPlaceDetails,
 } from "../../lib/google-places";
@@ -102,11 +103,13 @@ const sampleSnapshot = {
       relativeTimeDescription: "2 weeks ago",
     },
   ],
+  displayName: "Alex's Bakery",
+  formattedAddress: "12 High St, Oxford OX1 4AB",
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(extractPlaceIdFromMapsUrl).mockReturnValue(null);
+  vi.mocked(parseMapsUrl).mockReturnValue({});
   vi.mocked(findPlaceByQuery).mockResolvedValue("ChIJfallback");
   vi.mocked(fetchPlaceDetails).mockResolvedValue(sampleSnapshot);
 });
@@ -194,7 +197,7 @@ describe("step3Tools.run — skip paths", () => {
 
 describe("step3Tools.run — first-tick happy path", () => {
   test("URL with explicit place_id skips text-search + seeds + emails", async () => {
-    vi.mocked(extractPlaceIdFromMapsUrl).mockReturnValue("ChIJfromUrl");
+    vi.mocked(parseMapsUrl).mockReturnValue({ placeId: "ChIJfromUrl" });
 
     const result = await step3Tools.run(baseProspect, env, { d1: db });
 
@@ -223,11 +226,31 @@ describe("step3Tools.run — first-tick happy path", () => {
   test("URL without place_id falls back to text-search with business name + location", async () => {
     const result = await step3Tools.run(baseProspect, env, { d1: db });
 
+    // No URL hints -> fallback business name + Hub location, no
+    // location bias.
     expect(findPlaceByQuery).toHaveBeenCalledWith(
       "Alex's Bakery, Oxford",
       "test-places-key",
+      undefined,
     );
     expect(fetchPlaceDetails).toHaveBeenCalledWith("ChIJfallback", "test-places-key");
+    expect(result.status).toBe("ok");
+  });
+
+  test("URL with name + lat/lng biases the text-search call", async () => {
+    vi.mocked(parseMapsUrl).mockReturnValue({
+      name: "Bens Cafe",
+      lat: 51.7521,
+      lng: -1.2577,
+    });
+
+    const result = await step3Tools.run(baseProspect, env, { d1: db });
+
+    expect(findPlaceByQuery).toHaveBeenCalledWith(
+      "Bens Cafe",
+      "test-places-key",
+      { lat: 51.7521, lng: -1.2577 },
+    );
     expect(result.status).toBe("ok");
   });
 });
@@ -246,7 +269,7 @@ describe("step3Tools.run — latches", () => {
       { d1: db },
     );
 
-    expect(extractPlaceIdFromMapsUrl).not.toHaveBeenCalled();
+    expect(parseMapsUrl).not.toHaveBeenCalled();
     expect(findPlaceByQuery).not.toHaveBeenCalled();
     // Still seeds + emails (those latches haven't fired).
     expect(fetchPlaceDetails).toHaveBeenCalledWith("ChIJexisting", "test-places-key");
@@ -301,7 +324,7 @@ describe("step3Tools.run — failure paths", () => {
   });
 
   test("reviews fetch failure throws (email latch not set)", async () => {
-    vi.mocked(extractPlaceIdFromMapsUrl).mockReturnValue("ChIJfromUrl");
+    vi.mocked(parseMapsUrl).mockReturnValue({ placeId: "ChIJfromUrl" });
     vi.mocked(fetchPlaceDetails).mockRejectedValue(new Error("503"));
 
     await expect(

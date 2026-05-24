@@ -29,11 +29,16 @@ export type StoredReview = {
 };
 
 /** The full snapshot one fetchPlaceDetails call resolves. Matches
- *  the gbp_reviews D1 columns 1:1 so the storage path is dumb. */
+ *  the gbp_reviews D1 columns 1:1 so the storage path is dumb.
+ *  `displayName` + `formattedAddress` are captured so /admin can
+ *  verify we picked the correct listing, and the gbp-module-ready
+ *  email can quote them back to the customer for a sanity check. */
 export type PlaceDetailsSnapshot = {
   rating: number | null;
   totalReviews: number | null;
   topReviews: StoredReview[];
+  displayName: string | null;
+  formattedAddress: string | null;
 };
 
 export class PlacesApiError extends Error {
@@ -46,58 +51,156 @@ export class PlacesApiError extends Error {
   }
 }
 
+/** Structured hints we can lift directly out of a Google Maps
+ *  share URL without an API call. The text-search fallback uses
+ *  `name` + `lat`/`lng` together to bias the result to the right
+ *  region — turns "Bens Cafe" (3 in Oxford) into a single correct
+ *  resolution every time. */
+export type MapsUrlHints = {
+  /** Explicit place_id when the URL carries one — gold-standard
+   *  resolution, skip the text-search call entirely. */
+  placeId?: string;
+  /** Business name lifted from /place/<name>/... path segment.
+   *  URL-decoded + `+` → space. */
+  name?: string;
+  /** Decimal lat/lng lifted from /@lat,lng,zoom path segment. */
+  lat?: number;
+  lng?: number;
+};
+
 /**
- * Try to pull a place_id out of a Google Maps URL the customer
- * pastes. Returns null when the URL does not contain one (caller
- * falls back to findPlaceByQuery).
+ * Resolve a Google Maps short link (maps.app.goo.gl/XXXX) to the
+ * full canonical URL by following the redirect chain. Returns the
+ * original input if it is not a short link OR the resolution fails
+ * (network blip, link expired) — caller falls back to parsing what
+ * they pasted.
  *
- * Handles the formats Google produces in practice:
- *   1. /place/<name>/data=!3m1!4b1!4m6!...!1s0x48761c...:0xABC
- *      The `!1s<hex>:<hex>` segment encodes a place_id derivative;
- *      we can extract the colon-separated id but Google's text
- *      search resolves names more reliably, so we treat this as a
- *      "soft" signal — return null and let the fallback fire.
- *   2. Short link /maps/place/?q=place_id:ChIJN1t_tDeuEmsRUsoyG83frY4
- *      The explicit place_id= prefix is the gold standard.
- *   3. Full /place URL with !1s prefix but no readable place_id.
- *
- * Only returns a value for case 2 (explicit place_id). Everything
- * else falls back to text search.
+ * One HEAD fetch with redirect: "manual" per hop so we can chain
+ * up to 3 redirects without burning Workers CPU on a large body.
  */
-export function extractPlaceIdFromMapsUrl(raw: string): string | null {
-  if (!raw) return null;
+export async function resolveMapsShortUrl(raw: string): Promise<string> {
+  if (!raw) return raw;
+  if (!isMapsShortUrl(raw)) return raw;
+  let current = raw;
+  for (let hop = 0; hop < 3; hop++) {
+    let res: Response;
+    try {
+      res = await fetch(current, { method: "GET", redirect: "manual" });
+    } catch {
+      return raw;
+    }
+    const loc = res.headers.get("location");
+    if (!loc) return current;
+    // Resolve relative redirects against the previous URL.
+    current = new URL(loc, current).toString();
+    if (!isMapsShortUrl(current)) return current;
+  }
+  return current;
+}
+
+/** Helper used by resolveMapsShortUrl — hostname check via URL
+ *  parser, NOT regex. The regex approach failed for `https://...`
+ *  prefixed URLs because the host is preceded by `//` rather than
+ *  start-of-string or a dot. */
+function isMapsShortUrl(u: string): boolean {
+  try {
+    return new URL(u).hostname === "maps.app.goo.gl";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Lift everything we can out of a Google Maps URL without calling
+ * the Places API. Handles the formats Google produces in practice:
+ *
+ *   - /maps/place/?q=place_id:ChIJ...                — explicit id
+ *   - /maps/place/<Business+Name>/@lat,lng,zoom/data=! — share link
+ *   - /maps/?q=<query>                                 — search link
+ *
+ * Returns whatever it could parse. Caller combines `name` + `lat`/
+ * `lng` into a Places API locationBias for the text search.
+ */
+export function parseMapsUrl(raw: string): MapsUrlHints {
+  if (!raw) return {};
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    return null;
+    return {};
   }
-  // Direct param: ?q=place_id:ChIJ...
+  const hints: MapsUrlHints = {};
+
+  // 1. Explicit place_id in query or path.
   for (const [, value] of url.searchParams) {
     const m = value.match(/place_id:([A-Za-z0-9_-]{10,})/);
-    if (m) return m[1];
+    if (m) hints.placeId = m[1];
   }
-  // Direct param: ?cid=12345 — older format, not a place_id, skip.
-  // Pathname: /maps/place/place_id:ChIJ...
-  const pathMatch = url.pathname.match(/place_id:([A-Za-z0-9_-]{10,})/);
-  if (pathMatch) return pathMatch[1];
-  return null;
+  if (!hints.placeId) {
+    const pathMatch = url.pathname.match(/place_id:([A-Za-z0-9_-]{10,})/);
+    if (pathMatch) hints.placeId = pathMatch[1];
+  }
+
+  // 2. Business name from /place/<name>/... segment.
+  const placeMatch = url.pathname.match(/\/place\/([^/]+)\//);
+  if (placeMatch) {
+    hints.name = decodeURIComponent(placeMatch[1].replace(/\+/g, " "));
+  }
+
+  // 3. lat/lng from /@lat,lng,zoom segment.
+  const atMatch = url.pathname.match(/\/@(-?\d+\.\d+),(-?\d+\.\d+),/);
+  if (atMatch) {
+    hints.lat = Number.parseFloat(atMatch[1]);
+    hints.lng = Number.parseFloat(atMatch[2]);
+  }
+
+  // 4. Plain ?q=Business+Name search link with no /place segment.
+  if (!hints.name) {
+    const q = url.searchParams.get("q");
+    if (q && !q.startsWith("place_id:")) hints.name = q;
+  }
+
+  return hints;
 }
 
 /**
- * Resolve a free-text query like "Bens Cafe, Oxford" to a place_id
+ * Back-compat shim — old extractPlaceIdFromMapsUrl semantics, now
+ * implemented in terms of parseMapsUrl. Kept so older tests keep
+ * passing; new callers should use parseMapsUrl directly.
+ */
+export function extractPlaceIdFromMapsUrl(raw: string): string | null {
+  return parseMapsUrl(raw).placeId ?? null;
+}
+
+/**
+ * Resolve a free-text query like "Bens Cafe Oxford" to a place_id
  * using the Places API Text Search endpoint. One call, returns the
  * first result's id.
  *
- * Throws PlacesApiError on non-200 or zero results — caller decides
- * how to surface that to the customer (we email them with a
- * "couldn't find your listing, please paste a Google Maps link
- * with place_id" follow-up).
+ * When `locationBias` is provided (always preferred — extracted
+ * from the lat/lng in the customer's pasted Maps URL), the search
+ * is biased to a 500m-radius circle around it, which turns
+ * "Bens Cafe" from a coin-flip across 3 hits into a deterministic
+ * single correct result for the actual business the customer
+ * meant. Without bias we fall back to plain text — works but
+ * less reliable for common names.
+ *
+ * Throws PlacesApiError on non-200 or zero results.
  */
 export async function findPlaceByQuery(
   query: string,
   apiKey: string,
+  locationBias?: { lat: number; lng: number; radiusMeters?: number },
 ): Promise<string> {
+  const body: Record<string, unknown> = { textQuery: query };
+  if (locationBias) {
+    body.locationBias = {
+      circle: {
+        center: { latitude: locationBias.lat, longitude: locationBias.lng },
+        radius: locationBias.radiusMeters ?? 500,
+      },
+    };
+  }
   const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
     method: "POST",
     headers: {
@@ -107,13 +210,13 @@ export async function findPlaceByQuery(
       // We only need the id from this call.
       "X-Goog-FieldMask": "places.id",
     },
-    body: JSON.stringify({ textQuery: query }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.text().catch(() => "(no body)");
+    const text = await res.text().catch(() => "(no body)");
     throw new PlacesApiError(
       res.status,
-      `Places searchText ${res.status}: ${body.slice(0, 200)}`,
+      `Places searchText ${res.status}: ${text.slice(0, 200)}`,
     );
   }
   const json = (await res.json()) as { places?: Array<{ id?: string }> };
@@ -142,9 +245,11 @@ export async function fetchPlaceDetails(
     method: "GET",
     headers: {
       "X-Goog-Api-Key": apiKey,
-      // Only ask for what we render — keeps the bill down (Places API
-      // v1 bills per field group).
-      "X-Goog-FieldMask": "rating,userRatingCount,reviews",
+      // displayName + formattedAddress are captured so we can prove
+      // we resolved the right listing (admin panel + customer email).
+      // rating + userRatingCount + reviews are the actual payload.
+      "X-Goog-FieldMask":
+        "displayName,formattedAddress,rating,userRatingCount,reviews",
     },
   });
   if (!res.ok) {
@@ -155,6 +260,8 @@ export async function fetchPlaceDetails(
     );
   }
   type Raw = {
+    displayName?: { text?: string };
+    formattedAddress?: string;
     rating?: number;
     userRatingCount?: number;
     reviews?: Array<{
@@ -185,5 +292,11 @@ export async function fetchPlaceDetails(
     totalReviews:
       typeof json.userRatingCount === "number" ? json.userRatingCount : null,
     topReviews,
+    displayName:
+      typeof json.displayName?.text === "string" ? json.displayName.text : null,
+    formattedAddress:
+      typeof json.formattedAddress === "string"
+        ? json.formattedAddress
+        : null,
   };
 }

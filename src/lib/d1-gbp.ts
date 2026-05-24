@@ -20,6 +20,13 @@ export type GbpReviewsRow = {
   topReviews: StoredReview[];
   fetchedAt: string;
   lastError: string | null;
+  /** Resolved listing's display name (e.g. "Lucas Luxe Car Wash").
+   *  Captured on every fetch so /admin can verify we picked the
+   *  right listing and the customer email can quote it back. */
+  displayName: string | null;
+  /** Resolved listing's formatted street address. Same rationale
+   *  as displayName — anchor what we resolved to a real place. */
+  formattedAddress: string | null;
 };
 
 /** Insert-or-replace a snapshot for one customer. Last write wins
@@ -40,8 +47,9 @@ export async function upsertSnapshot(
   await db
     .prepare(
       `INSERT OR REPLACE INTO gbp_reviews
-         (token, place_id, rating, total_reviews, top_reviews, fetched_at, last_error)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (token, place_id, rating, total_reviews, top_reviews,
+          fetched_at, last_error, display_name, formatted_address)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       token,
@@ -51,6 +59,8 @@ export async function upsertSnapshot(
       JSON.stringify(snapshot.topReviews),
       new Date().toISOString(),
       lastError,
+      snapshot.displayName,
+      snapshot.formattedAddress,
     )
     .run();
 }
@@ -71,11 +81,14 @@ export async function readSnapshot(
     top_reviews: string;
     fetched_at: string;
     last_error: string | null;
+    display_name: string | null;
+    formatted_address: string | null;
   };
   const row = await db
     .prepare(
       `SELECT token, place_id, rating, total_reviews,
-              top_reviews, fetched_at, last_error
+              top_reviews, fetched_at, last_error,
+              display_name, formatted_address
          FROM gbp_reviews
         WHERE token = ?`,
     )
@@ -98,5 +111,55 @@ export async function readSnapshot(
     topReviews,
     fetchedAt: row.fetched_at,
     lastError: row.last_error,
+    displayName: row.display_name,
+    formattedAddress: row.formatted_address,
   };
+}
+
+/** Admin-only listing of every GBP-module customer + their latest
+ *  snapshot. Powers the /admin GBP overview card. Returns rows
+ *  ordered by fetched_at desc so freshest float to the top. */
+export async function listAllSnapshots(
+  db: D1Database,
+): Promise<GbpReviewsRow[]> {
+  type Row = {
+    token: string;
+    place_id: string;
+    rating: number | null;
+    total_reviews: number | null;
+    top_reviews: string;
+    fetched_at: string;
+    last_error: string | null;
+    display_name: string | null;
+    formatted_address: string | null;
+  };
+  const { results } = await db
+    .prepare(
+      `SELECT token, place_id, rating, total_reviews,
+              top_reviews, fetched_at, last_error,
+              display_name, formatted_address
+         FROM gbp_reviews
+        ORDER BY fetched_at DESC`,
+    )
+    .all<Row>();
+  return results.map((row) => {
+    let topReviews: StoredReview[] = [];
+    try {
+      const parsed = JSON.parse(row.top_reviews);
+      if (Array.isArray(parsed)) topReviews = parsed as StoredReview[];
+    } catch {
+      /* treat as empty — same rationale as readSnapshot */
+    }
+    return {
+      token: row.token,
+      placeId: row.place_id,
+      rating: row.rating,
+      totalReviews: row.total_reviews,
+      topReviews,
+      fetchedAt: row.fetched_at,
+      lastError: row.last_error,
+      displayName: row.display_name,
+      formattedAddress: row.formatted_address,
+    };
+  });
 }

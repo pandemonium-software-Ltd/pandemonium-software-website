@@ -10,27 +10,44 @@ import type { Template } from "../types";
 export const gbpModuleReady: Template = {
   id: "gbp-module-ready",
   riskTier: "low",
-  required: ["customerName", "domain"],
+  required: [
+    "customerName",
+    "domain",
+    "listingName",
+    "listingAddress",
+    "rating",
+    "reviewCount",
+  ],
   subject: "Your Google reviews are connected to {{domain}}",
   body: `Hi {{customerName}},
 
-Quick update — I have found your Google Business Profile and
-connected it to your site. Your latest Google reviews will
-now appear on {{domain}} automatically, and they refresh
-every day so the rating and quotes stay current as new
-reviews come in.
+I have found your Google Business Profile and connected it
+to your site. Your latest reviews will now appear on
+{{domain}} automatically, and they refresh every day so the
+rating and quotes stay current as new reviews come in.
 
-A few small things on your end (only if applicable):
+Quick sanity check — here is the listing I matched you to:
+
+  {{listingName}}
+  {{listingAddress}}
+  Rating {{rating}} from {{reviewCount}} Google review(s)
+
+If that is NOT your business, hit reply with a fresh Google
+Maps link to your listing and I will repoint it within the
+day. (Most common reason for a wrong match: very common
+business name shared with another shop in the same area.)
+
+A couple of small things on your end (only if applicable):
 
   - Keep replying to reviews from your Google Business
     Profile dashboard — replies show up there as normal and
-    they help your search ranking.
+    help your search ranking.
   - If you ever change the business name or move address,
     update it in Google first; the changes flow through to
     your site within a day.
 
-That's it from your end. You can see the live block on your
-homepage now.
+That is it from your end. The reviews block is now live on
+your homepage.
 
 — ModuForge`,
 };

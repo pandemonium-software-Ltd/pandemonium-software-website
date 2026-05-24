@@ -1,12 +1,16 @@
 {
-  "description": "GBP module ready — sent once when step3-tools resolves the customer's place_id and fires the first reviews fetch",
+  "description": "GBP module ready — sent once when step3-tools resolves the customer's place_id and fires the first reviews fetch; quotes the resolved listing back so the customer can flag a wrong match",
   "template": "gbp-module-ready",
   "values": {
     "customerName": "Alex",
-    "domain": "alexsbakery.co.uk"
+    "domain": "alexsbakery.co.uk",
+    "listingName": "Alex's Bakery",
+    "listingAddress": "12 High St, Oxford OX1 4AB, United Kingdom",
+    "rating": "4.8",
+    "reviewCount": 142
   },
   "expected": {
     "subject": "Your Google reviews are connected to alexsbakery.co.uk",
-    "body": "Hi Alex,\n\nQuick update — I have found your Google Business Profile and\nconnected it to your site. Your latest Google reviews will\nnow appear on alexsbakery.co.uk automatically, and they refresh\nevery day so the rating and quotes stay current as new\nreviews come in.\n\nA few small things on your end (only if applicable):\n\n  - Keep replying to reviews from your Google Business\n    Profile dashboard — replies show up there as normal and\n    they help your search ranking.\n  - If you ever change the business name or move address,\n    update it in Google first; the changes flow through to\n    your site within a day.\n\nThat's it from your end. You can see the live block on your\nhomepage now.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nI have found your Google Business Profile and connected it\nto your site. Your latest reviews will now appear on\nalexsbakery.co.uk automatically, and they refresh every day so the\nrating and quotes stay current as new reviews come in.\n\nQuick sanity check — here is the listing I matched you to:\n\n  Alex's Bakery\n  12 High St, Oxford OX1 4AB, United Kingdom\n  Rating 4.8 from 142 Google review(s)\n\nIf that is NOT your business, hit reply with a fresh Google\nMaps link to your listing and I will repoint it within the\nday. (Most common reason for a wrong match: very common\nbusiness name shared with another shop in the same area.)\n\nA couple of small things on your end (only if applicable):\n\n  - Keep replying to reviews from your Google Business\n    Profile dashboard — replies show up there as normal and\n    help your search ranking.\n  - If you ever change the business name or move address,\n    update it in Google first; the changes flow through to\n    your site within a day.\n\nThat is it from your end. The reviews block is now live on\nyour homepage.\n\n— ModuForge"
   }
 }

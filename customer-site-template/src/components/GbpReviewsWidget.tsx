@@ -81,6 +81,17 @@ export default function GbpReviewsWidget({
   if (!data || data.rating === null || data.topReviews.length === 0) {
     return null;
   }
+  // Staleness gate — if the cron has not refreshed in 14+ days
+  // something is wrong (API key revoked, listing removed, cron
+  // disabled). Better to hide the block than show 3-week-old
+  // reviews to a visitor as if they were fresh. We use 14d (not
+  // 7d) so a one-week ops outage does not silently disappear
+  // the reviews from every customer site — only persistent
+  // failure does.
+  const ageMs = Date.now() - new Date(data.fetchedAt).getTime();
+  if (Number.isFinite(ageMs) && ageMs > 14 * 24 * 60 * 60 * 1000) {
+    return null;
+  }
 
   return (
     <section className="py-20 md:py-28" aria-label="Google reviews">

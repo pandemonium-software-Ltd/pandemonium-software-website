@@ -14,7 +14,10 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getProspectByToken } from "@/lib/notion-prospects";
+import { readSnapshot } from "@/lib/d1-gbp";
+import type { D1Database } from "@/lib/d1-analytics";
 import ChangeRequestEditor from "@/components/admin/ChangeRequestEditor";
 import ReviewEditEditor from "@/components/admin/ReviewEditEditor";
 import ModuleChangeEditor from "@/components/admin/ModuleChangeEditor";
@@ -78,6 +81,27 @@ export default async function AdminDetailPage({
       </Wrapper>
     );
   }
+
+  // GBP snapshot for the "Google reviews" card below. D1 read is
+  // tolerant of a missing binding (admin still renders, just
+  // without the GBP card) and tolerant of "no row yet" (customer
+  // hasn't completed step3 — Section renders "—").
+  let gbpSnapshot: Awaited<ReturnType<typeof readSnapshot>> = null;
+  try {
+    const cfCtx = getCloudflareContext();
+    const env = cfCtx.env as Record<string, unknown>;
+    const db = env.pandemonium_analytics as D1Database | undefined;
+    if (db) {
+      gbpSnapshot = await readSnapshot(db, prospect.token);
+    }
+  } catch (e) {
+    console.error(
+      `[admin/${token}] gbp snapshot load failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  const hasGbpModule = prospect.moduleSelections.includes(
+    "Google Business Profile Setup/Audit",
+  );
 
   // Per-step done snapshot for the step-progress panel below. Each
   // entry shows the dot AND, when done, an "unlock" link that lets
@@ -410,6 +434,35 @@ export default async function AdminDetailPage({
         </Section>
       </div>
 
+      {/* ---------- Google reviews (GBP module) ---------- */}
+      {hasGbpModule && (
+        <div className="mt-8">
+          <h2 className="font-serif text-2xl font-semibold text-navy-900">
+            Google reviews
+          </h2>
+          <div className="mt-3">
+            <GbpAdminCard
+              snapshot={gbpSnapshot}
+              gbpUrl={
+                ((prospect.onboardingData ?? {}) as {
+                  tools?: { gbpUrl?: string };
+                }).tools?.gbpUrl ?? null
+              }
+              gbpPlaceId={
+                ((prospect.onboardingData ?? {}) as {
+                  tools?: { gbpPlaceId?: string };
+                }).tools?.gbpPlaceId ?? null
+              }
+              gbpResolutionError={
+                ((prospect.onboardingData ?? {}) as {
+                  tools?: { gbpResolutionError?: string };
+                }).tools?.gbpResolutionError ?? null
+              }
+            />
+          </div>
+        </div>
+      )}
+
       {/* ---------- Preview URL editor ---------- */}
       <div className="mt-8">
         <h2 className="font-serif text-2xl font-semibold text-navy-900">
@@ -649,6 +702,153 @@ function KV({
       </dd>
     </>
   );
+}
+
+/** GBP module card — admin overview of the reviews pipeline for
+ *  one customer. Shows everything we need to verify "is the GBP
+ *  feed wired up and healthy?" without leaving the page: which
+ *  listing we resolved, current rating, count, last refresh,
+ *  last error (if any), and the raw place_id for ad-hoc Places
+ *  API debugging. */
+function GbpAdminCard({
+  snapshot,
+  gbpUrl,
+  gbpPlaceId,
+  gbpResolutionError,
+}: {
+  snapshot: Awaited<ReturnType<typeof readSnapshot>>;
+  gbpUrl: string | null;
+  gbpPlaceId: string | null;
+  gbpResolutionError: string | null;
+}) {
+  const stateColour = !gbpPlaceId
+    ? "border-navy-200"
+    : snapshot?.lastError
+      ? "border-ember-300"
+      : isStale(snapshot?.fetchedAt)
+        ? "border-amber-300"
+        : "border-green-300";
+  return (
+    <article
+      className={`rounded-2xl border-2 ${stateColour} bg-white p-6 shadow-card`}
+    >
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <KV label="Resolution" value={resolutionLabel(gbpPlaceId, snapshot, gbpResolutionError)} />
+        {snapshot?.displayName && (
+          <KV label="Matched listing" value={snapshot.displayName} />
+        )}
+        {snapshot?.formattedAddress && (
+          <KV label="Address" value={snapshot.formattedAddress} />
+        )}
+        {gbpPlaceId && (
+          <KV label="Place ID" value={gbpPlaceId} />
+        )}
+        {gbpUrl && (
+          <>
+            <dt className="text-navy-600">Customer URL</dt>
+            <dd className="font-medium text-navy-900">
+              <a
+                href={gbpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link break-all"
+              >
+                {gbpUrl}
+              </a>
+            </dd>
+          </>
+        )}
+        {snapshot && (
+          <>
+            <KV
+              label="Rating"
+              value={
+                snapshot.rating !== null
+                  ? `${snapshot.rating.toFixed(1)} ★ (${snapshot.totalReviews ?? 0} reviews)`
+                  : "no rating yet"
+              }
+            />
+            <KV
+              label="Top reviews stored"
+              value={`${snapshot.topReviews.length} review(s)`}
+            />
+            <KV
+              label="Last refreshed"
+              value={formatAge(snapshot.fetchedAt)}
+            />
+          </>
+        )}
+        {snapshot?.lastError && (
+          <KV
+            label="Last error"
+            value={snapshot.lastError}
+            tone="ember"
+          />
+        )}
+        {gbpResolutionError && (
+          <KV
+            label="Resolution error"
+            value={gbpResolutionError}
+            tone="ember"
+          />
+        )}
+      </dl>
+      {snapshot && snapshot.topReviews.length > 0 && (
+        <details className="mt-5">
+          <summary className="cursor-pointer text-sm font-semibold text-navy-700">
+            Show {snapshot.topReviews.length} stored review(s)
+          </summary>
+          <ul className="mt-3 space-y-3">
+            {snapshot.topReviews.map((r, i) => (
+              <li
+                key={i}
+                className="rounded-lg border border-navy-100 bg-cream-50 p-3 text-sm"
+              >
+                <div className="flex items-center justify-between text-xs text-navy-500">
+                  <span className="font-semibold text-navy-700">
+                    {r.authorName}
+                  </span>
+                  <span>
+                    {r.rating} ★ · {r.relativeTimeDescription}
+                  </span>
+                </div>
+                <p className="mt-2 text-navy-800">{r.text}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </article>
+  );
+}
+
+function resolutionLabel(
+  placeId: string | null,
+  snapshot: Awaited<ReturnType<typeof readSnapshot>>,
+  resolutionError: string | null,
+): string {
+  if (!placeId && resolutionError) return "Failed — see error below";
+  if (!placeId) return "Pending — waiting for next ops tick";
+  if (!snapshot) return "Place_id resolved, first fetch pending";
+  if (snapshot.lastError) return "Refresh failed last run";
+  return "Healthy";
+}
+
+function isStale(fetchedAt?: string): boolean {
+  if (!fetchedAt) return false;
+  const ageMs = Date.now() - new Date(fetchedAt).getTime();
+  return Number.isFinite(ageMs) && ageMs > 48 * 60 * 60 * 1000;
+}
+
+function formatAge(iso: string): string {
+  const ageMs = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0) return iso;
+  const minutes = Math.round(ageMs / 60000);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} days ago`;
 }
 
 function ErrorCard({ title, body }: { title: string; body: string }) {

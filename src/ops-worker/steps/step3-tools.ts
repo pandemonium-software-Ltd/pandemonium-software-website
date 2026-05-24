@@ -18,10 +18,12 @@
 
 import type { Step } from "../types";
 import {
-  extractPlaceIdFromMapsUrl,
+  parseMapsUrl,
+  resolveMapsShortUrl,
   findPlaceByQuery,
   fetchPlaceDetails,
   PlacesApiError,
+  type PlaceDetailsSnapshot,
 } from "../../lib/google-places";
 import { upsertSnapshot } from "../../lib/d1-gbp";
 import { updateProspectOnboarding } from "../../lib/notion-prospects";
@@ -96,16 +98,30 @@ export const step3Tools: Step = {
     let resolvedThisTick = false;
     if (!placeId) {
       try {
-        placeId = extractPlaceIdFromMapsUrl(gbpUrl) ?? undefined;
-        if (!placeId) {
-          // Fallback — text-search using business name + location.
-          // Most pasted Google Maps share URLs don't carry an
-          // explicit place_id, so this is the common path.
-          const query = buildSearchQuery(prospect.name, prospect.onboardingData);
-          placeId = await findPlaceByQuery(query, apiKey);
-          events.push(`resolved place_id via text-search "${query}"`);
+        // Resolve short URLs (maps.app.goo.gl/abc) to their canonical
+        // /maps/place/... form before parsing — the share-link
+        // format is the only one most customers know about.
+        const expanded = await resolveMapsShortUrl(gbpUrl);
+        const hints = parseMapsUrl(expanded);
+
+        if (hints.placeId) {
+          placeId = hints.placeId;
+          events.push("resolved place_id from URL (explicit)");
         } else {
-          events.push("resolved place_id from URL");
+          // Text-search with locationBias when we have lat/lng from
+          // the URL — gives a deterministic correct match even for
+          // common business names. Falls back to the Hub-captured
+          // business location when the URL had no @lat,lng segment.
+          const query =
+            hints.name ?? buildSearchQuery(prospect.name, prospect.onboardingData);
+          const bias =
+            hints.lat !== undefined && hints.lng !== undefined
+              ? { lat: hints.lat, lng: hints.lng }
+              : undefined;
+          placeId = await findPlaceByQuery(query, apiKey, bias);
+          events.push(
+            `resolved place_id via text-search "${query}"${bias ? " biased to URL lat/lng" : ""}`,
+          );
         }
         await writeToolsSlice(prospect.pageId, prospect.onboardingData, {
           gbpPlaceId: placeId,
@@ -127,16 +143,19 @@ export const step3Tools: Step = {
     // Idempotent — INSERT OR REPLACE on the gbp_reviews PK. Runs
     // every tick until phase C latches, so a transient Places API
     // failure on the first attempt self-heals on the next tick.
+    // We hold the snapshot in a local so phase C can quote the
+    // resolved listing name + address back to the customer.
+    let snapshot: PlaceDetailsSnapshot | null = null;
     if (placeId && !tools.gbpModuleReadyEmailSentAt) {
       try {
-        const snapshot = await fetchPlaceDetails(placeId, apiKey);
+        snapshot = await fetchPlaceDetails(placeId, apiKey);
         await upsertSnapshot(db, {
           token: prospect.token,
           placeId,
           snapshot,
         });
         events.push(
-          `seeded reviews snapshot (rating ${snapshot.rating ?? "—"}, ${snapshot.topReviews.length} reviews)`,
+          `seeded reviews snapshot (${snapshot.displayName ?? "?"} — rating ${snapshot.rating ?? "—"}, ${snapshot.topReviews.length} reviews)`,
         );
       } catch (e) {
         // Don't latch phase C until we have at least one successful
@@ -153,6 +172,18 @@ export const step3Tools: Step = {
       await sendCustomerEmail(env, prospect.email, "gbp-module-ready", {
         customerName: prospect.name,
         domain,
+        // Quote the resolved listing back so the customer immediately
+        // spots a wrong match — the template renders this in a
+        // confirmation block with a "reply if this isn't yours" line.
+        // Falls back to "(unknown)" when both are missing so the
+        // template still renders coherently.
+        listingName: snapshot?.displayName ?? "(unknown)",
+        listingAddress: snapshot?.formattedAddress ?? "(unknown)",
+        rating:
+          typeof snapshot?.rating === "number"
+            ? snapshot.rating.toFixed(1)
+            : "n/a",
+        reviewCount: snapshot?.totalReviews ?? 0,
       });
       await writeToolsSlice(prospect.pageId, prospect.onboardingData, {
         gbpModuleReadyEmailSentAt: new Date().toISOString(),
