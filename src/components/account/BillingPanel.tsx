@@ -241,9 +241,13 @@ function CancelModal({
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-navy-600">
                   Your site goes offline today. We refund the
-                  unused portion of this month based on days left
+                  unused portion of <strong>this month&apos;s
+                  subscription</strong> based on days left
                   (typically £{Math.round((monthlyFee / 30) * 15)}–£
-                  {monthlyFee} depending on timing).
+                  {monthlyFee} depending on timing).{" "}
+                  <strong>Your one-off setup fee is non-refundable</strong>{" "}
+                  — that paid for building your site, which has
+                  already been delivered.
                 </p>
               </button>
             </div>
@@ -320,10 +324,17 @@ function ConfirmCancel({
               Your site goes offline <strong>today</strong>.
             </p>
             <p>
-              We&apos;ll refund the unused portion of this month
-              (based on days remaining) to the card on file
-              within 5–10 working days. Exact figure confirmed in
-              your final receipt.
+              We&apos;ll refund the unused portion of{" "}
+              <strong>this month&apos;s subscription</strong> (based
+              on days remaining) to the card on file within 5–10
+              working days. Exact figure confirmed in your final
+              receipt.
+            </p>
+            <p className="rounded-lg bg-cream-100 px-3 py-2 text-xs text-navy-700">
+              <strong>The one-off setup fee is not refunded</strong>{" "}
+              — that covered building your site, which has already
+              been delivered. Only the monthly subscription is
+              prorated.
             </p>
             <p className="text-xs text-navy-500">
               You can&apos;t reactivate after this — you&apos;d
@@ -368,10 +379,10 @@ function ConfirmCancel({
 
 function describePending(p: PendingChange): string {
   if (p.kind === "cancel-end-of-period") {
-    return `Account cancels on ${formatDate(p.effectiveDate)} (no refund)`;
+    return `Account cancels on ${formatDate(p.effectiveDate)} (no refund — setup is non-refundable + you've already paid this month)`;
   }
   if (p.kind === "cancel-immediate-prorated") {
-    return `Account cancellation in progress (prorated refund)`;
+    return `Account cancellation in progress (refund of unused monthly subscription only; setup fee is non-refundable)`;
   }
   const parts: string[] = [];
   if (p.added.length > 0) parts.push(`Add ${p.added.join(", ")}`);
