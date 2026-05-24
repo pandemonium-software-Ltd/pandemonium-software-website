@@ -495,10 +495,11 @@ export default async function AdminDetailPage({
             </span>
           </h2>
           <p className="mt-2 text-xs text-navy-600">
-            Customer self-service module re-selections (1-round-only,
-            pre-commit only). Pending entries need a manual Stripe op
-            then &ldquo;Apply&rdquo; — see docs/STRIPE-PHASE-2.md for
-            the auto-Stripe migration path.
+            Module add/remove + cancellation requests from the
+            customer dashboard (post-launch, unlimited) AND legacy
+            pre-launch one-round entries from the Hub. Each pending
+            row shows the exact Stripe op needed — action by the
+            effective date.
           </p>
           <ul className="mt-4 space-y-4">
             {[...prospect.moduleChangeLog]

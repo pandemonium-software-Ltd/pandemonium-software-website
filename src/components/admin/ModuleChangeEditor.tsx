@@ -105,8 +105,23 @@ export default function ModuleChangeEditor({ token, entry: initial }: Props) {
             {entry.id.slice(0, 8)}
           </span>
         </div>
-        <StatusPill status={entry.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          {entry.kind && <KindBadge kind={entry.kind} />}
+          {entry.effectiveDate && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800">
+              Effective {entry.effectiveDate}
+            </span>
+          )}
+          <StatusPill status={entry.status} />
+        </div>
       </div>
+      {/* Operator action checklist — only render for pending
+       *  entries, so resolved entries don't clutter the audit view. */}
+      {!isResolved && entry.kind && (
+        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <strong>Stripe action:</strong> {stripeActionFor(entry.kind, entry.proratedRefund)}
+        </p>
+      )}
 
       {/* Diff */}
       <div className="mt-4 grid gap-2 text-sm text-navy-800">
@@ -281,6 +296,65 @@ export default function ModuleChangeEditor({ token, entry: initial }: Props) {
       )}
     </div>
   );
+}
+
+function KindBadge({
+  kind,
+}: {
+  kind: NonNullable<ModuleChangeLogEntry["kind"]>;
+}) {
+  const palette: Record<
+    NonNullable<ModuleChangeLogEntry["kind"]>,
+    { bg: string; text: string; label: string }
+  > = {
+    "modules-pre-launch": {
+      bg: "bg-navy-100",
+      text: "text-navy-700",
+      label: "Pre-launch",
+    },
+    "modules-post-launch": {
+      bg: "bg-blue-100",
+      text: "text-blue-800",
+      label: "Dashboard",
+    },
+    "cancel-end-of-period": {
+      bg: "bg-ember-100",
+      text: "text-ember-800",
+      label: "Cancel (end of period)",
+    },
+    "cancel-immediate-prorated": {
+      bg: "bg-ember-200",
+      text: "text-ember-900",
+      label: "Cancel (immediate + refund)",
+    },
+  };
+  const p = palette[kind];
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${p.bg} ${p.text}`}
+    >
+      {p.label}
+    </span>
+  );
+}
+
+/** One-line operator instructions for the Stripe op that needs
+ *  to run before flipping this entry to "Applied". Hooks into the
+ *  existing manual Stripe flow until task #56 lands. */
+function stripeActionFor(
+  kind: NonNullable<ModuleChangeLogEntry["kind"]>,
+  proratedRefund: number | undefined,
+): string {
+  switch (kind) {
+    case "modules-pre-launch":
+      return "Pre-launch immediate-apply — usually no Stripe op needed (subscription not yet created).";
+    case "modules-post-launch":
+      return "On the effective date, add/remove subscription items in Stripe with proration_behavior='none' so the customer is billed cleanly from the new cycle.";
+    case "cancel-end-of-period":
+      return "Schedule subscription cancellation for the effective date (cancel_at_period_end=true). On that date, flip prospect Status to 'Cancelled'.";
+    case "cancel-immediate-prorated":
+      return `Cancel subscription NOW (no proration) + issue a refund of £${proratedRefund ?? "?"} to the card on file. Flip prospect Status to 'Cancelled' today.`;
+  }
 }
 
 function StatusPill({ status }: { status: ModuleChangeLogEntry["status"] }) {

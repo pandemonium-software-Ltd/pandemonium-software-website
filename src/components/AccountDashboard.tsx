@@ -13,6 +13,7 @@ import {
   MONTHLY_CHANGE_REQUEST_LIMIT,
   MONTHLY_OFFER_UPDATE_LIMIT,
   type ChangeRequest,
+  type ModuleChangeLogEntry,
   type ProspectStatus,
 } from "@/lib/notion-prospects";
 import { NEWSLETTER_MONTHLY_SEND_LIMIT } from "@/lib/newsletter/limits";
@@ -27,6 +28,10 @@ import AnalyticsCard from "@/components/AnalyticsCard";
 import DashboardTimeline, {
   type TimelineSection,
 } from "@/components/DashboardTimeline";
+import ModulesEditor, {
+  type PendingChange,
+} from "@/components/account/ModulesEditor";
+import BillingPanel from "@/components/account/BillingPanel";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -43,6 +48,11 @@ export type AccountDashboardProps = {
   onboardingCompletedAt: string | null;
   goLiveDate: string | null;
   changeRequests: ChangeRequest[];
+  /** Full module-change log straight from Notion. The dashboard
+   *  derives the pending-changes list from this to drive the
+   *  ModulesEditor and BillingPanel — entries with status
+   *  pending-stripe show as "Pending add / remove / cancel". */
+  moduleChangeLog: ModuleChangeLogEntry[];
   /** Per-step done flags. Used to render green ticks + greyed-out
    *  rows in the dashboard's Hub nav card. */
   hubStepDone: Record<StepId, boolean>;
@@ -153,6 +163,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     onboardingCompletedAt,
     goLiveDate,
     changeRequests,
+    moduleChangeLog,
     hubStepDone,
     hubApplicableStepIds,
     currentOffer,
@@ -162,6 +173,33 @@ export default function AccountDashboard(props: AccountDashboardProps) {
   } = props;
   const hasOffersModule = modules.includes("Offers");
   const hasNewsletterModule = modules.includes("Newsletter");
+
+  // Derive the customer-facing pending-changes list from the raw
+  // module change log. Only `pending-stripe` entries surface to
+  // the dashboard (applied / rejected / billing-failed already
+  // settled). Shape narrowed to what ModulesEditor + BillingPanel
+  // actually need so neither has to know about the full audit log.
+  const pendingChanges: PendingChange[] = moduleChangeLog
+    .filter(
+      (e) =>
+        e.status === "pending-stripe" &&
+        (e.kind === "modules-post-launch" ||
+          e.kind === "cancel-end-of-period" ||
+          e.kind === "cancel-immediate-prorated"),
+    )
+    .map((e) => {
+      const fromSet = new Set(e.fromModules);
+      const toSet = new Set(e.toModules);
+      return {
+        id: e.id,
+        kind: e.kind as PendingChange["kind"],
+        added: [...toSet].filter((m) => !fromSet.has(m)),
+        removed: [...fromSet].filter((m) => !toSet.has(m)),
+        effectiveDate: e.effectiveDate ?? e.submittedAt.slice(0, 10),
+        setupDelta: e.setupDelta,
+        monthlyDelta: e.monthlyDelta,
+      };
+    });
 
   // Resolve each effective cap from props, falling back to the
   // hardcoded default if the caller hasn't supplied one yet. Each
@@ -531,33 +569,21 @@ export default function AccountDashboard(props: AccountDashboardProps) {
              *  block lower on the page; they're not modules. */}
             {isHubUnlocked && !isCancelled && (
               <DashCard title="Your modules" id="section-modules">
-                {/* Bought-modules list — always shown so the customer
-                 *  can audit at a glance "what am I paying for?". */}
-                <ul className="space-y-1 text-sm">
-                  <li className="flex items-center gap-2 text-navy-900">
-                    <CheckIcon /> Base website
-                  </li>
-                  {modules.length === 0 && (
-                    <li className="text-navy-500">
-                      No add-on modules yet.
-                    </li>
-                  )}
-                  {modules.map((m) => (
-                    <li key={m} className="flex items-center gap-2 text-navy-900">
-                      <CheckIcon /> {m}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-3 text-xs text-navy-600">
-                  Want to add or remove a module? Use the{" "}
-                  <Link
-                    href={`/onboarding/${token}?step=tools`}
-                    className="link"
-                  >
-                    Modules step
-                  </Link>{" "}
-                  in your Hub — we&apos;ll review + confirm pricing
-                  before anything changes on your bill.
+                {/* Add / remove modules — same component the
+                 *  Billing section uses, but cancel-account is
+                 *  intentionally cordoned off to Billing only.
+                 *  Drops the old "use the Hub link" guidance — the
+                 *  whole flow is here now. */}
+                <ModulesEditor
+                  token={token}
+                  currentModules={modules}
+                  pendingChanges={pendingChanges}
+                  foundingMember={foundingMember}
+                />
+                <p className="mt-4 text-xs text-navy-500">
+                  Changes apply from your next billing date — no
+                  partial-month charges. To cancel your account,
+                  use the Billing section below.
                 </p>
 
                 {/* Self-serve composers — only render the divider +
@@ -648,30 +674,17 @@ export default function AccountDashboard(props: AccountDashboardProps) {
               </DashCard>
             )}
 
-            {/* ---------- Billing (placeholder for #6) ---------- */}
+            {/* ---------- Billing (self-serve modules + cancel) ---------- */}
             {isHubUnlocked && !isCancelled && (
               <DashCard title="Billing" id="section-billing">
-                <span className="inline-block rounded-full bg-cream-100 px-2.5 py-0.5 text-[11px] font-semibold text-navy-700 ring-1 ring-navy-200">
-                  Self-serve coming soon
-                </span>
-                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                  <dt className="text-navy-600">Setup fee</dt>
-                  <dd className="font-semibold text-navy-900">£{setupFee}</dd>
-                  <dt className="text-navy-600">Monthly</dt>
-                  <dd className="font-semibold text-navy-900">
-                    £{monthlyFee}/mo
-                    {foundingMember && (
-                      <span className="ml-2 inline-block rounded-full bg-ember-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ember-700">
-                        Founding rate
-                      </span>
-                    )}
-                  </dd>
-                </dl>
-                <p className="mt-3 text-xs text-navy-600">
-                  Card management, invoices and pause/cancel will live
-                  here once Stripe is wired up. For now reply to any
-                  email I&apos;ve sent.
-                </p>
+                <BillingPanel
+                  token={token}
+                  setupFee={setupFee}
+                  monthlyFee={monthlyFee}
+                  foundingMember={foundingMember}
+                  currentModules={modules}
+                  pendingChanges={pendingChanges}
+                />
               </DashCard>
             )}
 
@@ -750,15 +763,9 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 {site.contactEmail}
               </a>
               <p className="mt-4 text-xs text-navy-500">
-                Want to cancel?{" "}
-                <a
-                  href={`mailto:${site.contactEmail}?subject=Cancellation%20-%20${encodeURIComponent(business || name)}`}
-                  className="link"
-                >
-                  Email me with &ldquo;Cancellation&rdquo; in the
-                  subject
-                </a>{" "}
-                and I&apos;ll start the 30-day notice straight away.
+                Need to cancel? Use the Billing section above —
+                you can pick end-of-month or immediate with a
+                prorated refund.
               </p>
             </DashCard>
           </div>

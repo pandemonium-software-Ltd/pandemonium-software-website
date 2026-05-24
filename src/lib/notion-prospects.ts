@@ -220,6 +220,37 @@ export type ModuleChangeLogEntry = {
   resolutionNote?: string;
   /** ISO-8601 of resolution. */
   resolvedAt?: string;
+  /**
+   * What kind of change this entry represents — drives both the
+   * operator UI (which Stripe action is needed) and the customer
+   * UI (where the change appears in the dashboard).
+   *
+   * Defaults to `modules-pre-launch` for legacy entries written
+   * before this field was added (the original one-round-per-customer
+   * pre-launch flow).
+   */
+  kind?:
+    | "modules-pre-launch"
+    | "modules-post-launch"
+    | "cancel-end-of-period"
+    | "cancel-immediate-prorated";
+  /**
+   * ISO date (YYYY-MM-DD) the change SHOULD take effect on. Set by
+   * the customer-facing endpoints to:
+   *   - modules-post-launch       → 1st of next month UTC
+   *   - cancel-end-of-period      → 1st of next month UTC
+   *   - cancel-immediate-prorated → today
+   * Pre-launch entries (the original flow) leave this undefined —
+   * they apply immediately on operator action.
+   */
+  effectiveDate?: string;
+  /**
+   * For `cancel-immediate-prorated` only — pounds owed back to the
+   * customer for the unused portion of the current billing period.
+   * Computed client-side from latest charge + days used; operator
+   * uses this value when issuing the Stripe refund.
+   */
+  proratedRefund?: number;
 };
 
 /**
@@ -1364,6 +1395,40 @@ export async function submitModuleChange(
   await notionFetch(`/pages/${pageId}`, {
     method: "PATCH",
     body: { properties },
+  });
+  return entry;
+}
+
+/**
+ * Append a pending change log entry WITHOUT stamping the
+ * one-round-per-customer lock and WITHOUT touching Module
+ * Selections / Setup Fee / Monthly Fee. Used by the post-launch
+ * dashboard flows (module add/remove + cancellation) where:
+ *   - the customer can submit unlimited changes
+ *   - the change takes effect at `entry.effectiveDate`, not now
+ *   - the active selection + fees stay UNTOUCHED until the
+ *     operator (or future Stripe webhook) actions the change
+ *
+ * Read-modify-write on the rich_text log — same concurrency
+ * profile as submitModuleChange (single customer, server-side
+ * tight loop is exceedingly unlikely to race).
+ */
+export async function appendPendingChange(
+  pageId: string,
+  entry: ModuleChangeLogEntry,
+): Promise<ModuleChangeLogEntry> {
+  const page = (await notionFetch(`/pages/${pageId}`)) as NotionPage;
+  const existing = parseModuleChangeLog(
+    readRichTextProp(page.properties["Module Change Log"]),
+  );
+  const next = [...existing, entry];
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Module Change Log": rt(JSON.stringify(next)),
+      },
+    },
   });
   return entry;
 }

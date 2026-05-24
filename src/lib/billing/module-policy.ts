@@ -208,6 +208,97 @@ export function calculateModuleDelta(args: {
   };
 }
 
+// ---------- Post-launch eligibility ----------
+//
+// Different rules from the pre-launch flow above. Post-launch
+// changes come from the customer dashboard (NOT Hub Step 3), are
+// unlimited (no one-round cap), and take effect at the next
+// billing cycle rather than immediately. Cancellation is its own
+// thing — same eligibility window but different action.
+
+export type PostLaunchEligibility =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason: "not-live" | "already-cancelled";
+      message: string;
+    };
+
+/**
+ * Can this prospect change modules / cancel from the dashboard?
+ *
+ * Three states:
+ *   - Live + not cancelled  → allowed (the normal case)
+ *   - Cancelled             → no (account is already gone)
+ *   - Anything else (Build Started, pre-launch, etc.) → no
+ *     (those use the pre-launch flow at /onboarding/<token>?step=tools)
+ */
+export function canChangePostLaunch(
+  prospect: ProspectRecord,
+): PostLaunchEligibility {
+  if (prospect.status === "Cancelled") {
+    return {
+      allowed: false,
+      reason: "already-cancelled",
+      message: "Your account is cancelled. Email us to reopen it.",
+    };
+  }
+  if (prospect.status !== "Live") {
+    return {
+      allowed: false,
+      reason: "not-live",
+      message:
+        "Module changes from your dashboard open once your site is live. Use your onboarding hub for pre-launch changes.",
+    };
+  }
+  return { allowed: true };
+}
+
+/**
+ * First day of the calendar month AFTER `now`, as ISO YYYY-MM-DD
+ * in UTC. Used as the `effectiveDate` for post-launch module
+ * changes and end-of-period cancellations so the customer is
+ * always told a concrete date the change takes effect.
+ *
+ * Examples (UTC):
+ *   2026-05-24 → 2026-06-01
+ *   2026-05-01 → 2026-06-01
+ *   2026-12-31 → 2027-01-01
+ */
+export function nextBillingDate(now: Date = new Date()): string {
+  const d = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
+  );
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Pounds owed back to the customer for the unused portion of the
+ * current month's subscription charge.
+ *
+ * `daysInMonth` defaults to 30 — close enough for plain-English
+ * customer-facing language without per-month edge cases. Operator
+ * confirms the exact number when issuing the refund in Stripe.
+ *
+ * Negative results (now < lastChargedAt) clamp to 0 — we never
+ * say we owe a customer money that they have not paid yet.
+ */
+export function proratedRefundPounds(args: {
+  monthlyFeePounds: number;
+  lastChargedAt: string;
+  now?: Date;
+  daysInMonth?: number;
+}): number {
+  const charged = Date.parse(args.lastChargedAt);
+  if (Number.isNaN(charged)) return 0;
+  const now = args.now?.getTime() ?? Date.now();
+  const daysInMonth = args.daysInMonth ?? 30;
+  const daysUsed = Math.floor((now - charged) / (24 * 60 * 60 * 1000));
+  const daysUnused = Math.max(0, daysInMonth - daysUsed);
+  const perDay = args.monthlyFeePounds / daysInMonth;
+  return Math.round(perDay * daysUnused * 100) / 100;
+}
+
 // ---------- Refund-window helpers ----------
 //
 // 14 days for both setup (if no commit) and per-monthly-payment.

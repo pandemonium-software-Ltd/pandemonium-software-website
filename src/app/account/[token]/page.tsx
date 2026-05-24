@@ -239,6 +239,7 @@ export default async function AccountPage({
       onboardingCompletedAt={prospect.onboardingCompletedAt ?? null}
       goLiveDate={prospect.goLiveDate ?? null}
       changeRequests={prospect.changeRequests}
+      moduleChangeLog={prospect.moduleChangeLog}
       hubStepDone={doneFlags}
       hubApplicableStepIds={applicableStepIds}
       currentOffer={currentOffer}
