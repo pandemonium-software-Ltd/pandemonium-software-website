@@ -39,6 +39,9 @@ import {
   nextBillingDate,
 } from "@/lib/billing/module-policy";
 import { requireCustomerSession } from "@/lib/auth/require-customer-session";
+import { sendCustomerEmail } from "@/ops-worker/notify";
+import { getServerEnv } from "@/lib/env";
+import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
 
@@ -152,6 +155,29 @@ export async function POST(request: Request) {
     effectiveDate: nextBillingDate(),
   };
   await appendPendingChange(prospect.pageId, entry);
+
+  // Customer confirmation email — best-effort. Failure to send
+  // doesn't block the response (the change is in Notion either
+  // way). Logged for ops follow-up.
+  try {
+    const env = getServerEnv();
+    await sendCustomerEmail(env, prospect.email, "module-scheduled", {
+      customerName: prospect.name,
+      moduleName: moduleName,
+      effectiveDate: entry.effectiveDate ?? nextBillingDate(),
+      accountUrl: `${site.url}/account/${token}`,
+      // Conditionals — only one of {added, removed} is true per
+      // entry; the template's `{{#if}}` blocks branch on these.
+      added: action === "add",
+      removed: action === "remove",
+      monthlyDelta: Math.abs(delta.monthlyDelta),
+      setupCharge: action === "add" ? delta.setupDelta : 0,
+    });
+  } catch (e) {
+    console.error(
+      `[api/account/module-change] confirmation email failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
 
   return NextResponse.json({ ok: true, entry });
 }

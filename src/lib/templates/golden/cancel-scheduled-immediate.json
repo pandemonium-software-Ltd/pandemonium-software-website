@@ -1,0 +1,16 @@
+{
+  "description": "Cancellation scheduled — immediate with prorated refund of monthly subscription only",
+  "template": "cancel-scheduled",
+  "values": {
+    "customerName": "Sam",
+    "effectiveDate": "2026-05-24",
+    "modeLabel": "site offline today + £18 refund",
+    "modeBody": "Your site goes offline today. We are processing the\nrefund to the card on file — usually visible in your\nstatement within 5-10 working days.",
+    "refundLine": "  • Prorated refund of £18 — that is the unused\n    portion of this month's monthly subscription.",
+    "accountUrl": "https://modu-forge.co.uk/account/xyz789"
+  },
+  "expected": {
+    "subject": "Cancellation received — site offline today + £18 refund",
+    "body": "Hi Sam,\n\nConfirming your cancellation request.\n\nWhen it takes effect: 2026-05-24\n\nYour site goes offline today. We are processing the\nrefund to the card on file — usually visible in your\nstatement within 5-10 working days.\n\nMoney side:\n  • Prorated refund of £18 — that is the unused\n    portion of this month's monthly subscription.\n  • The one-off setup fee is NOT refunded — that paid for\n    building your site, which has already been delivered.\n    Only the monthly subscription is prorated.\n\nChanged your mind? Reply to this email any time before\n2026-05-24 and I can undo it on the spot. After that\nthe site is offline and the account is closed.\n\nThank you for the run — happy to chat any time if there is\nanything I can do to help.\n\n— ModuForge"
+  }
+}

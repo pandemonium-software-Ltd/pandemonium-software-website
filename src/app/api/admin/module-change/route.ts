@@ -124,6 +124,33 @@ export async function PATCH(request: Request) {
         appliedSelection: entry.toModules,
         appliedFees: { setup: newFees.setup, monthly: newFees.monthly },
       });
+      // Cancellation kinds also flip the prospect's Status to
+      // Cancelled so the dashboard renders the cancelled-state UI
+      // and the site Worker can be taken down on the next ops
+      // tick. Module/setup changes don't touch Status.
+      if (
+        entry.kind === "cancel-end-of-period" ||
+        entry.kind === "cancel-immediate-prorated"
+      ) {
+        try {
+          const { notionFetch } = await import("@/lib/notion");
+          await notionFetch(`/pages/${prospect.pageId}`, {
+            method: "PATCH",
+            body: {
+              properties: {
+                Status: { select: { name: "Cancelled" } },
+              },
+            },
+          });
+        } catch (e) {
+          // Status flip failure is logged but not fatal — operator
+          // will see the change applied + status untouched in
+          // /admin and can flip manually.
+          console.error(
+            `[api/admin/module-change] cancellation Status flip failed: ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      }
       templateId = "module-change-confirmed";
       emailValues = {
         customerName: firstName(prospect.name),

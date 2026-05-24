@@ -41,6 +41,9 @@ import {
   proratedRefundPounds,
 } from "@/lib/billing/module-policy";
 import { requireCustomerSession } from "@/lib/auth/require-customer-session";
+import { sendCustomerEmail } from "@/ops-worker/notify";
+import { getServerEnv } from "@/lib/env";
+import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
 
@@ -142,6 +145,36 @@ export async function POST(request: Request) {
     proratedRefund,
   };
   await appendPendingChange(prospect.pageId, entry);
+
+  // Customer confirmation — best-effort, errors logged not
+  // returned. The two cancellation paths share one template,
+  // varying via `modeLabel`, `modeBody`, and `refundLine` slots
+  // so the email reads as a single coherent message either way.
+  try {
+    const env = getServerEnv();
+    const isImmediate = mode === "immediate-prorated";
+    const modeLabel = isImmediate
+      ? `site offline today${proratedRefund !== undefined ? ` + £${proratedRefund} refund` : ""}`
+      : `ends ${entry.effectiveDate}`;
+    const modeBody = isImmediate
+      ? `Your site goes offline today. We are processing the\nrefund to the card on file — usually visible in your\nstatement within 5-10 working days.`
+      : `Your site stays live until ${entry.effectiveDate}. On that\ndate it goes offline, billing stops, and you will get a\nfinal receipt by email.`;
+    const refundLine = isImmediate
+      ? `  • ${proratedRefund !== undefined ? `Prorated refund of £${proratedRefund} — that is the unused\n    portion of this month's monthly subscription` : "Prorated refund for the unused portion of this month's\n    monthly subscription (exact figure on your final receipt)"}.`
+      : `  • No refund — you keep your site running until\n    ${entry.effectiveDate}, which is what you have already paid for.`;
+    await sendCustomerEmail(env, prospect.email, "cancel-scheduled", {
+      customerName: prospect.name,
+      effectiveDate: entry.effectiveDate ?? "",
+      modeLabel,
+      modeBody,
+      refundLine,
+      accountUrl: `${site.url}/account/${token}`,
+    });
+  } catch (e) {
+    console.error(
+      `[api/account/cancel] confirmation email failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
 
   return NextResponse.json({ ok: true, entry });
 }
