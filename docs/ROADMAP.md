@@ -24,6 +24,13 @@
 | CCRs-compliant terms rewrite + Companies House disclosures | 2026-05-25 |
 | Refund/cancellation policy unified across /terms /pricing /payment /intake | 2026-05-25 |
 | **Pricing-live cutover** — Founding £99/£15, Standard £299/£29, new module prices, Multi-location module, "5 years" not "for life", split Newsletter / Offers, placeholder testimonial removed | 2026-05-25 |
+| **Multi-location module end-to-end** — data model + Hub Step 4 H capture UI + customer-site `<Locations />` renderer + dashboard +/- stepper + admin surface + multilocation-change pending kind | 2026-05-25 |
+| **Build quirk fix** — `outputFileTracingRoot` pin (no more symlink dance on deploy) | 2026-05-25 |
+| **Stripe sandbox integration** — Checkout, webhooks, auto-apply cron, subscription updates from pending changes, Setup-prefixed line items, payment page itemised + totals computed from raw inputs | 2026-05-25 |
+| **Email deliverability** — apex SPF record on modu-forge.co.uk for Outlook/Hotmail strictness | 2026-05-25 |
+| **Sentry error tracking** — ops worker full coverage via withSentry + structured-JSON path for marketing site + /admin inbox with HMAC-verified webhook receiver, D1 alerts table, resolve flow | 2026-05-25 |
+| **Per-module Hub unlock** — Step 3 + Step 4 sections unlock when a paid-for module's setup is incomplete (post-launch adds); server-side mutable + per-step-done gates exempt Live + tools/content; latched against stored state to avoid catch-22 | 2026-05-25 |
+| **Lucas GBP automation verified** — end-to-end Place ID resolution working live (after Google Cloud billing enabled on ModuForge project) | 2026-05-25 |
 
 ---
 
@@ -84,12 +91,9 @@ asks for a second location.
 
 | # | Item | Complexity | Duration | Monthly cost | Status |
 |---|------|------------|----------|--------------|--------|
-| 1 | **Stripe real integration** — Checkout, webhooks, real subscription updates for module changes + refunds. Unblocks every "pending-stripe" state from today's billing work | Medium | 2 days | 1.4% + 20p per txn | Certain — NEXT SESSION |
-| 2 | **Express-request checkbox at payment** — bakes into the Stripe Checkout flow (notice already on page) | Low | Bundled with #1 | £0 | Certain |
-| 3 | **Solicitor T&C review** — UK SaaS specialist signs off the new terms before public launch | Low (1h call) | 1 week elapsed | £200-400 one-off | Certain |
+| 1 | **Stripe LIVE-mode setup** — Stripe sandbox is fully wired (Checkout, webhook, auto-apply cron, line-item itemisation). Live setup = repeat S1 product/price creation in LIVE Stripe account, swap secrets to `sk_live_*`, register live webhook, switch `stripe-products.ts` IDs (env-flag). | Low-Medium | 1-2 h | 1.4% + 20p per txn | Certain — NEXT |
+| 2 | **GBP audit cron ⭐** — weekly Claude-generated audit per GBP-module customer. Reads intake + current GBP via Places API → Claude returns structured recommendations (optimised description, missing services, category fixes, photo gaps, suggested post drafts) → emails Ben for manual application (Manager access already in place). No GBP API / OAuth needed. Closes the "world-class GBP" gap from the £59 setup positioning. | Medium | 4-6 h | trivial (Anthropic + Places API < £0.05/customer/month) | Certain — NEXT |
 | 4 | **R2 brand-asset deletion in GDPR scrub cron** — currently logs intent only; needs R2 binding wired into ops worker | Low | 2-3 h | £0 | Certain |
-| 5 | **Email deliverability hardening** — SPF / DKIM / DMARC on modu-forge.co.uk + DMARC reporting | Low | 1-2 h | £0 | Certain |
-| 6 | **Sentry error tracking in prod** — you don't know what's failing without it | Low | 2-3 h | £0 (free tier) | Certain |
 | 7 | **Professional indemnity insurance** — protects you if a customer's site causes them loss | Low | 1 h | £15-25/mo (£150-300/yr) | Certain |
 
 ---
