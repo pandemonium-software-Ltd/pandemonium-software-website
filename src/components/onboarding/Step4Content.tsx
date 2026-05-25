@@ -281,6 +281,30 @@ export default function Step4Content({
 
   const disabled = readOnly;
 
+  // Per-module unlock pattern (mirrors Step3Modules).
+  //
+  // When a customer adds a NEW module post-launch (Step 4 already
+  // marked Done), this step renders readOnly = true and the
+  // customer can't fill in the new module's setup. We override
+  // the global lock for THAT specific section so it stays
+  // editable until its data is complete.
+  //
+  // Today only Multi-location has a Step-4-side setup
+  // (per-location details). Adding a new "needs Step 4 setup"
+  // module in future:
+  //   1. Compute its section's complete/incomplete state below
+  //   2. Derive sectionDisabled = disabled && completeState
+  //   3. Pass that to the section's editor instead of `disabled`
+  //   4. OR-in to hasUnlockedSection so the Update button shows
+  const locationsAllFilled =
+    extraLocations === 0 ||
+    (locations.length >= extraLocations &&
+      locations
+        .slice(0, extraLocations)
+        .every((l) => l.name?.trim() && l.name.trim().length > 0));
+  const locationsDisabled = disabled && locationsAllFilled;
+  const hasUnlockedSection = extraLocations > 0 && !locationsDisabled;
+
   // ---------- Build patch ----------
   // The patch only includes fields the customer has actually
   // populated. Empty arrays are OK (they explicitly clear) but
@@ -697,7 +721,7 @@ export default function Step4Content({
           <LocationsEditor
             locations={locations}
             onChange={setLocations}
-            disabled={disabled}
+            disabled={locationsDisabled}
           />
         </SectionCard>
       )}
@@ -734,7 +758,7 @@ export default function Step4Content({
               <strong>Done.</strong> Edit above and click Update if you
               want to refine anything.
             </p>
-            {!readOnly && (
+            {(!readOnly || hasUnlockedSection) && (
               <button
                 type="button"
                 onClick={handleUpdate}
