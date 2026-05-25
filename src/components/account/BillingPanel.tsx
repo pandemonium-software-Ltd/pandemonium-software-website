@@ -21,6 +21,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import ModulesEditor, { type PendingChange } from "./ModulesEditor";
+import type { ToolsSlice } from "@/lib/module-setup-status";
 
 type Props = {
   token: string;
@@ -29,6 +30,7 @@ type Props = {
   foundingMember: boolean;
   currentModules: readonly string[];
   pendingChanges: readonly PendingChange[];
+  tools?: ToolsSlice;
 };
 
 export default function BillingPanel({
@@ -38,6 +40,7 @@ export default function BillingPanel({
   foundingMember,
   currentModules,
   pendingChanges,
+  tools,
 }: Props) {
   const router = useRouter();
   const [cancelModal, setCancelModal] = useState<
@@ -134,6 +137,7 @@ export default function BillingPanel({
             foundingMember={foundingMember}
             currentMonthly={monthlyFee}
             paidSetup={setupFee}
+            tools={tools}
           />
         </div>
       </section>

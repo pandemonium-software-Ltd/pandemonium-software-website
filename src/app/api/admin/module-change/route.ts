@@ -104,6 +104,7 @@ export async function PATCH(request: Request) {
   let updated;
   let templateId:
     | "module-change-confirmed"
+    | "module-add-applied"
     | "payment-method-update-needed"
     | null = null;
   let emailValues: Record<string, string | number | boolean> = {};
@@ -148,20 +149,50 @@ export async function PATCH(request: Request) {
           );
         }
       }
-      templateId = "module-change-confirmed";
-      emailValues = {
-        customerName: firstName(prospect.name),
-        addedSummary: diffSummary(entry.fromModules, entry.toModules, "added"),
-        removedSummary: diffSummary(
-          entry.fromModules,
-          entry.toModules,
-          "removed",
-        ),
-        paymentLine: paymentLine!,
-        newSetupTotal: newFees.setup,
-        newMonthlyTotal: newFees.monthly,
-        accountUrl,
-      };
+      // Post-launch module ADDs get the dedicated module-add-applied
+      // template — it includes the Set-up link pointing at the
+      // focused Hub Step 3 page for the added module + per-module
+      // setup instructions. Module removals + multi-module pre-launch
+      // changes still use the original module-change-confirmed.
+      const addedNames = entry.toModules.filter(
+        (m) => !entry.fromModules.includes(m),
+      );
+      const singleAdded = addedNames.length === 1 ? addedNames[0] : null;
+      if (
+        entry.kind === "modules-post-launch" &&
+        singleAdded
+      ) {
+        templateId = "module-add-applied";
+        const setup = setupInfoFor(singleAdded);
+        emailValues = {
+          customerName: firstName(prospect.name),
+          moduleName: singleAdded,
+          newMonthly: newFees.monthly,
+          accountUrl,
+          setupUrl: `${baseUrl}/onboarding/${token}?step=tools&focus=${encodeURIComponent(singleAdded)}`,
+          ...(setup.required
+            ? {
+                setupRequired: true,
+                setupInstructions: setup.instructions ?? "",
+              }
+            : { noSetupRequired: true }),
+        };
+      } else {
+        templateId = "module-change-confirmed";
+        emailValues = {
+          customerName: firstName(prospect.name),
+          addedSummary: diffSummary(entry.fromModules, entry.toModules, "added"),
+          removedSummary: diffSummary(
+            entry.fromModules,
+            entry.toModules,
+            "removed",
+          ),
+          paymentLine: paymentLine!,
+          newSetupTotal: newFees.setup,
+          newMonthlyTotal: newFees.monthly,
+          accountUrl,
+        };
+      }
     } else if (action === "billing-failed") {
       // Billing failed: revert selection to fromModules MINUS any
       // modules the customer was trying to ADD (they shouldn't see
@@ -251,4 +282,38 @@ function diffSummary(
       ? to.filter((m) => !fromSet.has(m))
       : from.filter((m) => !toSet.has(m));
   return list.length ? list.join(", ") : "(none)";
+}
+
+/** Per-module setup instructions for the module-add-applied email.
+ *  Mirrors the per-card content in Hub Step 3 — when the customer
+ *  clicks the email's set-up button they land on the exact same
+ *  page, so a short bullet preview is enough here. */
+function setupInfoFor(moduleName: string): {
+  required: boolean;
+  instructions?: string;
+} {
+  switch (moduleName) {
+    case "Online Booking":
+      return {
+        required: true,
+        instructions:
+          "  • Get your Cal.com booking URL (looks like\n    cal.com/your-name/quote-call)\n  • Paste it into the set-up page below — that's it",
+      };
+    case "Newsletter":
+      return {
+        required: true,
+        instructions:
+          "  • Confirm the sender email address (looks like\n    news@yourdomain)\n  • Invite our ops email as a Resend team member so we\n    can publish your sends on your behalf",
+      };
+    case "Google Business Profile Setup/Audit":
+      return {
+        required: true,
+        instructions:
+          "  • Paste your Google Business Profile URL\n  • Add our ops email as a Manager on the profile so we\n    can audit + keep it tuned",
+      };
+    case "Enquiry Form":
+    case "Offers":
+    default:
+      return { required: false };
+  }
 }

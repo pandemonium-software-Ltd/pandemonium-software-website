@@ -1,0 +1,16 @@
+{
+  "description": "Module add applied — Offers, which needs no customer-side setup (composer is in the dashboard, no external account needed)",
+  "template": "module-add-applied",
+  "values": {
+    "customerName": "Priya",
+    "moduleName": "Offers",
+    "newMonthly": 23,
+    "accountUrl": "https://modu-forge.co.uk/account/xyz789",
+    "setupUrl": "https://modu-forge.co.uk/onboarding/xyz789?step=tools&focus=Offers",
+    "noSetupRequired": true
+  },
+  "expected": {
+    "subject": "Offers is live on your account",
+    "body": "Hi Priya,\n\nGood news — Offers is now active on your account.\n\n  • New monthly: £23/mo (from today)\n  • One-off setup for Offers: already added to the\n    invoice you just paid\n\nNo set-up needed on your side — Offers just appears\non your site / in your dashboard from today.\n\nAny questions, hit reply.\n\n— ModuForge"
+  }
+}

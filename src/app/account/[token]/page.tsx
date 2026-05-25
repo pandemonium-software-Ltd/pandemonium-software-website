@@ -29,6 +29,7 @@ import {
 import { NEWSLETTER_MONTHLY_SEND_LIMIT } from "@/lib/newsletter/limits";
 import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import { deriveStepList, getDoneFlags } from "@/lib/onboarding";
+import { readToolsSlice } from "@/lib/module-setup-status";
 import AccountDashboard from "@/components/AccountDashboard";
 import { site } from "@/lib/site";
 
@@ -240,6 +241,7 @@ export default async function AccountPage({
       goLiveDate={prospect.goLiveDate ?? null}
       changeRequests={prospect.changeRequests}
       moduleChangeLog={prospect.moduleChangeLog}
+      tools={readToolsSlice(prospect.onboardingData)}
       hubStepDone={doneFlags}
       hubApplicableStepIds={applicableStepIds}
       currentOffer={currentOffer}

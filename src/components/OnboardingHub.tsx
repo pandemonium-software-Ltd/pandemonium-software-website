@@ -421,6 +421,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     pendingModuleChange={props.pendingModuleChange}
                     phase3Services={props.phase3Services}
                     phase3Seeds={props.phase3Seeds}
+                    focusModule={searchParams?.get("focus") ?? undefined}
                   />
                 </>
               )}
@@ -451,6 +452,7 @@ function StepRenderer({
   pendingModuleChange,
   phase3Services,
   phase3Seeds,
+  focusModule,
 }: {
   step: StepDef;
   data: OnboardingData;
@@ -474,6 +476,11 @@ function StepRenderer({
   pendingModuleChange: ModuleChangeLogEntry | null;
   phase3Services: ReadonlyArray<{ name: string }>;
   phase3Seeds: import("@/app/onboarding/[token]/page").Phase3Seeds;
+  /** Optional ?focus=<module> query param — when set, Step3Modules
+   *  restricts to just the matching module's setup card. Used when
+   *  the post-launch dashboard sends a customer here to set up one
+   *  newly-added module. */
+  focusModule?: string;
 }) {
   const slice = (data[step.id] ?? {}) as Record<string, unknown>;
   const done = doneFlags[step.id];
@@ -530,6 +537,7 @@ function StepRenderer({
           savePartial={(patch) => savePartial("tools", patch)}
           markDone={(patch) => markDone("tools", patch)}
           saveContentPartial={(patch) => savePartial("content", patch)}
+          focusModule={focusModule}
         />
       );
     }

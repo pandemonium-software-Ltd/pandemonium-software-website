@@ -24,6 +24,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { isModuleSetupComplete, type ToolsSlice } from "@/lib/module-setup-status";
 
 type ModuleMeta = {
   name: string;
@@ -105,6 +106,12 @@ type Props = {
    *  non-refundable). Quoted in the modal so the customer
    *  understands what is and is not part of any change. */
   paidSetup: number;
+  /** Slice of onboardingData.tools — used to decide which active
+   *  modules still need a Set-up button next to them (Cal.com
+   *  URL not yet pasted, Manager invite not yet ticked, etc).
+   *  Optional for backwards-compat with existing call sites that
+   *  do not yet pass it; missing slice = no Set-up buttons. */
+  tools?: ToolsSlice;
 };
 
 export default function ModulesEditor({
@@ -114,6 +121,7 @@ export default function ModulesEditor({
   foundingMember,
   currentMonthly,
   paidSetup,
+  tools,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -200,7 +208,24 @@ export default function ModulesEditor({
                   </p>
                 )}
               </div>
-              <div className="flex-none">
+              <div className="flex flex-none flex-col items-end gap-2">
+                {/* Set-up button — only on active modules that
+                 *  still need customer-side setup (Cal.com URL
+                 *  paste, Resend/GBP Manager invite). Opens the
+                 *  Hub Step 3 page focused on this one module.
+                 *  Modules with no setup task (Enquiry Form,
+                 *  Offers) never trigger this branch since
+                 *  isModuleSetupComplete returns true for them. */}
+                {active &&
+                  !pRemove &&
+                  !isModuleSetupComplete(m.name, tools) && (
+                    <a
+                      href={`/onboarding/${token}?step=tools&focus=${encodeURIComponent(m.name)}`}
+                      className="rounded-lg bg-ember-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-ember-700"
+                    >
+                      Set up →
+                    </a>
+                  )}
                 {active && !pRemove && (
                   <button
                     type="button"

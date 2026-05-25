@@ -71,6 +71,11 @@ type Props = {
    *  content.newsletter / content.offers because the customer-
    *  site adapter reads it from there. */
   saveContentPartial: (patch: Record<string, unknown>) => Promise<boolean>;
+  /** When set, render ONLY the matching module's setup card
+   *  (single-module focused mode). Driven by a `?focus=<module>`
+   *  query param on the URL — used when the post-launch dashboard
+   *  routes a customer here to set up one newly-added module. */
+  focusModule?: string;
 };
 
 const RESEND_SIGNUP_URL = "https://resend.com/signup";
@@ -104,6 +109,7 @@ export default function Step3Modules({
   savePartial,
   markDone,
   saveContentPartial,
+  focusModule,
 }: Props) {
   // ---------- Initial state from saved data ----------
 
@@ -131,12 +137,34 @@ export default function Step3Modules({
   const [error, setError] = useState<string | null>(null);
 
   // Module applicability from the prospect's selections.
-  const hasResend =
-    modules.includes("Newsletter") || modules.includes("Enquiry Form");
-  const hasCalcom = modules.includes("Online Booking");
-  const hasGbp = modules.includes("Google Business Profile Setup/Audit");
-  const hasNewsletter = modules.includes("Newsletter");
-  const hasOffers = modules.includes("Offers");
+  // When focusModule is set (single-module set-up mode from the
+  // post-launch dashboard), AND the focus matches a tool-setup
+  // module, restrict to just that one — otherwise all bought
+  // modules render as normal.
+  const focusActive =
+    !!focusModule &&
+    [
+      "Newsletter",
+      "Enquiry Form",
+      "Online Booking",
+      "Google Business Profile Setup/Audit",
+      "Offers",
+    ].includes(focusModule);
+  const hasResend = focusActive
+    ? focusModule === "Newsletter" || focusModule === "Enquiry Form"
+    : modules.includes("Newsletter") || modules.includes("Enquiry Form");
+  const hasCalcom = focusActive
+    ? focusModule === "Online Booking"
+    : modules.includes("Online Booking");
+  const hasGbp = focusActive
+    ? focusModule === "Google Business Profile Setup/Audit"
+    : modules.includes("Google Business Profile Setup/Audit");
+  const hasNewsletter = focusActive
+    ? focusModule === "Newsletter"
+    : modules.includes("Newsletter");
+  const hasOffers = focusActive
+    ? focusModule === "Offers"
+    : modules.includes("Offers");
 
   // ---------- Per-module status (drives RAG pills + initial collapse) ----------
 

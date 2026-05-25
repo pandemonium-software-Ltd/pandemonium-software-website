@@ -21,6 +21,7 @@ import { domainNoActionNeeded } from "./templates/domain-no-action-needed";
 import { domainZoneActive } from "./templates/domain-zone-active";
 import { gbpModuleReady } from "./templates/gbp-module-ready";
 import { moduleScheduled } from "./templates/module-scheduled";
+import { moduleAddApplied } from "./templates/module-add-applied";
 import { cancelScheduled } from "./templates/cancel-scheduled";
 import { phase1ThanksHereIsQualifyLink } from "./templates/phase1-thanks-here-is-qualify-link";
 import { phase2AcceptHereIsIntakeLink } from "./templates/phase2-accept-here-is-intake-link";
@@ -61,6 +62,7 @@ const TEMPLATES = new Map<string, Template>([
   [domainZoneActive.id, domainZoneActive],
   [gbpModuleReady.id, gbpModuleReady],
   [moduleScheduled.id, moduleScheduled],
+  [moduleAddApplied.id, moduleAddApplied],
   [cancelScheduled.id, cancelScheduled],
   [phase1ThanksHereIsQualifyLink.id, phase1ThanksHereIsQualifyLink],
   [phase2AcceptHereIsIntakeLink.id, phase2AcceptHereIsIntakeLink],

@@ -32,6 +32,10 @@ import ModulesEditor, {
   type PendingChange,
 } from "@/components/account/ModulesEditor";
 import BillingPanel from "@/components/account/BillingPanel";
+import {
+  readToolsSlice,
+  type ToolsSlice,
+} from "@/lib/module-setup-status";
 import { site } from "@/lib/site";
 
 export type AccountDashboardProps = {
@@ -53,6 +57,11 @@ export type AccountDashboardProps = {
    *  ModulesEditor and BillingPanel — entries with status
    *  pending-stripe show as "Pending add / remove / cancel". */
   moduleChangeLog: ModuleChangeLogEntry[];
+  /** Onboarding tools slice — drives the "Set up" button next
+   *  to active-but-not-yet-configured modules in ModulesEditor.
+   *  Empty object when the customer has not captured any tool
+   *  setup yet (newly added module post-launch). */
+  tools?: ToolsSlice;
   /** Per-step done flags. Used to render green ticks + greyed-out
    *  rows in the dashboard's Hub nav card. */
   hubStepDone: Record<StepId, boolean>;
@@ -164,6 +173,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     goLiveDate,
     changeRequests,
     moduleChangeLog,
+    tools,
     hubStepDone,
     hubApplicableStepIds,
     currentOffer,
@@ -581,6 +591,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   foundingMember={foundingMember}
                   currentMonthly={monthlyFee}
                   paidSetup={setupFee}
+                  tools={tools}
                 />
                 <p className="mt-4 text-xs text-navy-500">
                   Changes apply from your next billing date — no
@@ -686,6 +697,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   foundingMember={foundingMember}
                   currentModules={modules}
                   pendingChanges={pendingChanges}
+                  tools={tools}
                 />
               </DashCard>
             )}
