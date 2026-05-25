@@ -171,6 +171,13 @@ describe("calculateFees — locked 2026-05-25 prices", () => {
     const noCounter = calculateFees(modulesToSelection(["Multi-location"], 0));
     expect(noCounter.setup).toBe(299 + 15);
   });
+
+  test("counter > 0 but flag missing → trust the counter (data-drift defence)", () => {
+    // Admin grant or direct Notion edit could push extraLocations
+    // without touching the multi_select. The counter is authoritative.
+    const fees = calculateFees(modulesToSelection([], 3));
+    expect(fees.setup).toBe(299 + 45);
+  });
 });
 
 describe("calculateModuleDelta — multi-location counter", () => {

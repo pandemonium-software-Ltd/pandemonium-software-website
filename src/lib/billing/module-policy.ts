@@ -64,17 +64,27 @@ export function modulesToSelection(
   modules: string[],
   extraLocations = 0,
 ): ModuleSelection {
+  // The counter is the source of truth for how many extra
+  // locations are billed. The "Multi-location" flag in the
+  // multi_select is a UI hint set by calculateFees so the modules
+  // array stays self-describing — but we don't require it:
+  //   - flag present, counter 0 → coerce counter to 1
+  //     (someone ticked the flag without setting a count)
+  //   - counter > 0, flag missing → trust the counter
+  //     (admin grant or data fix added the count but didn't
+  //     touch the multi-select)
+  // Either way, the returned extraLocations matches what the
+  // customer is actually paying for.
   const hasMultiLocation = modules.includes("Multi-location");
-  const effectiveExtra = hasMultiLocation
-    ? Math.max(1, extraLocations)
-    : 0;
+  let effectiveExtra = extraLocations;
+  if (hasMultiLocation && effectiveExtra === 0) effectiveExtra = 1;
   return {
     moduleBooking: modules.includes("Online Booking"),
     moduleEnquiry: modules.includes("Enquiry Form"),
     moduleNewsletter: modules.includes("Newsletter"),
     moduleOffers: modules.includes("Offers"),
     gbpAddon: modules.includes("Google Business Profile Setup/Audit"),
-    extraLocations: effectiveExtra,
+    extraLocations: Math.max(0, effectiveExtra),
   };
 }
 
