@@ -298,9 +298,21 @@ export default function Step3Modules({
   // Resend invite, GBP URL+invite), we unlock JUST that module's
   // card so the customer can complete it. Triggered by the
   // dashboard's "Set up →" button for post-launch module adds.
-  const calcomDisabled = disabled && calcomStatus === "complete";
-  const resendDisabled = disabled && resendStatus === "complete";
-  const gbpDisabled = disabled && gbpStatus === "complete";
+  //
+  // Lock decisions are based on STORED completeness (what's in
+  // Notion when the page loaded), NOT the live React state.
+  // Otherwise the moment the customer starts typing the fields,
+  // local state flips to "complete" → section re-locks → Update
+  // button disappears → save is impossible. Latch behaviour:
+  // once unlocked for a session, stays unlocked until reload.
+  const calcomInitiallyComplete = isValidCalcomUrl(initialCalcomUrl);
+  const resendInitiallyComplete =
+    !!initialResendEmail.trim() && initialResendInvited === true;
+  const gbpInitiallyComplete =
+    !!initialGbpUrl.trim() && initialGbpInvited === true;
+  const calcomDisabled = disabled && calcomInitiallyComplete;
+  const resendDisabled = disabled && resendInitiallyComplete;
+  const gbpDisabled = disabled && gbpInitiallyComplete;
   // True when at least one module's setup is unlocked — drives
   // the post-Done "Update saved data" button so the customer
   // can save the newly-filled setup back to Notion.

@@ -296,13 +296,21 @@ export default function Step4Content({
   //   2. Derive sectionDisabled = disabled && completeState
   //   3. Pass that to the section's editor instead of `disabled`
   //   4. OR-in to hasUnlockedSection so the Update button shows
-  const locationsAllFilled =
+  // Lock decision based on STORED completeness, not live state.
+  // Otherwise typing into the first slot's name field would flip
+  // the section to "complete" → re-lock → Update button disappears.
+  // Latch behaviour: once unlocked for a session, stays unlocked
+  // until reload (matches Step3Modules pattern).
+  const initialLocations = Array.isArray(initial.locations)
+    ? initial.locations
+    : [];
+  const locationsInitiallyComplete =
     extraLocations === 0 ||
-    (locations.length >= extraLocations &&
-      locations
+    (initialLocations.length >= extraLocations &&
+      initialLocations
         .slice(0, extraLocations)
-        .every((l) => l.name?.trim() && l.name.trim().length > 0));
-  const locationsDisabled = disabled && locationsAllFilled;
+        .every((l) => l && typeof l.name === "string" && l.name.trim().length > 0));
+  const locationsDisabled = disabled && locationsInitiallyComplete;
   const hasUnlockedSection = extraLocations > 0 && !locationsDisabled;
 
   // ---------- Build patch ----------
