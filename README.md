@@ -9,6 +9,15 @@ ongoing maintenance, content updates and performance reporting via
 Cowork — the AI operations layer that means Ben never has to log into
 a customer dashboard.
 
+> **What's next?** → [`docs/ROADMAP.md`](./docs/ROADMAP.md) is the single
+> source of truth for the priority list (Critical / High-value /
+> Optional, with complexity, duration, monthly cost, status). Check
+> there before asking "what should I work on?".
+>
+> **How to operate what's built** → [`docs/PLAYBOOK.md`](./docs/PLAYBOOK.md):
+> deploy sequence, cron schedule, common admin actions, secrets,
+> compliance touchstones, what to do when something breaks.
+>
 > **Architecture deep-dive:** see [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
 > for the full PRD: per-service automation feasibility, Cowork Ops
 > Worker design, post-launch operations contracts, and the operational

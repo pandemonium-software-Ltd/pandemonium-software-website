@@ -2,6 +2,15 @@
 
 > **Living document.** Captures the architectural decisions for ModuForge
 > (the Pandemonium Software Ltd product). Updated as Stage 2 phases ship.
+>
+> **Looking for what to build next?** → [`ROADMAP.md`](./ROADMAP.md) is the
+> single source of truth for the priority list. Architecture documents
+> the WHY and HOW; the roadmap documents the WHEN. Both files live
+> next to each other in `/docs`.
+>
+> **Operating the live system?** → [`PLAYBOOK.md`](./PLAYBOOK.md) has
+> deploy commands, cron schedule, admin actions, and break/fix
+> procedures.
 
 ## 1. Product positioning
 
