@@ -18,6 +18,7 @@ import type {
   BusinessInfo,
   CustomCopy,
   DayOfWeek,
+  ExtraLocation,
   FaqEntry,
   HexColor,
   ModuleConfig,
@@ -658,6 +659,13 @@ export function adaptProspect(prospect: ProspectRecord): {
     faqAnswers: (faq ?? []).map((e) => (e.answer ? "content" : undefined)),
   };
 
+  // Multi-location — read content.locations[] (captured in Hub
+  // Step 4 H) and map to the customer-site ExtraLocation shape.
+  // Drop entries without a name (incomplete Hub saves) defensively
+  // — the schema already validates server-side, but adapters are
+  // strict-resilient.
+  const extraLocations = readExtraLocations(content.locations);
+
   return {
     input: {
       business,
@@ -668,6 +676,8 @@ export function adaptProspect(prospect: ProspectRecord): {
       copy,
       vibe,
       structure,
+      extraLocations:
+        extraLocations.length > 0 ? extraLocations : undefined,
       domain,
     },
     copySources,
@@ -760,6 +770,38 @@ function readOpeningHoursStructured(
     hasAny = true;
   }
   return hasAny ? out : undefined;
+}
+
+/**
+ * Read the Hub Step 4 content.locations[] array and map to the
+ * customer-site ExtraLocation shape. Defensive on every field —
+ * the schema validates server-side, but the adapter never trusts
+ * raw blobs. Drops entries with no `name` (incomplete saves).
+ */
+function readExtraLocations(raw: unknown): ExtraLocation[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ExtraLocation[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const obj = entry as Record<string, unknown>;
+    const name = optionalString(obj.name);
+    if (!name) continue;
+    const loc: ExtraLocation = { name };
+    const address = optionalString(obj.address);
+    if (address) loc.address = address;
+    const phoneDisplay = optionalString(obj.phoneDisplay);
+    if (phoneDisplay) loc.phoneDisplay = phoneDisplay;
+    const phoneTel = optionalString(obj.phoneTel);
+    if (phoneTel) loc.phoneTel = phoneTel;
+    const publicEmail = optionalString(obj.publicEmail);
+    if (publicEmail) loc.publicEmail = publicEmail;
+    const mapUrl = optionalString(obj.mapUrl);
+    if (mapUrl) loc.mapUrl = mapUrl;
+    const hoursStructured = readOpeningHoursStructured(obj.openingHours);
+    if (hoursStructured) loc.hoursStructured = hoursStructured;
+    out.push(loc);
+  }
+  return out;
 }
 
 function readDomainSlug(ob: Record<string, unknown>): string {

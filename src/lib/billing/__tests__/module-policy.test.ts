@@ -22,6 +22,7 @@ const liveProspect: ProspectRecord = {
   status: "Live",
   softBlockersTriggered: [],
   moduleSelections: ["Newsletter"],
+  extraLocations: 0,
   foundingMember: false,
   onboardingStep1Done: true,
   onboardingStep2Done: true,

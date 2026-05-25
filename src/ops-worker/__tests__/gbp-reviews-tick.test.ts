@@ -51,6 +51,7 @@ const baseProspect = (
     status: "Live",
     softBlockersTriggered: [],
     moduleSelections: ["Google Business Profile Setup/Audit"],
+  extraLocations: 0,
     foundingMember: false,
     onboardingStep1Done: true,
     onboardingStep2Done: true,

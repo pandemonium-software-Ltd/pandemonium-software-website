@@ -262,6 +262,20 @@ export type CustomCopy = {
  * The single canonical input passed to every template's render
  * function. Adapters normalise from Notion into this shape.
  */
+/** Extra location — captured per prospect.extraLocations slot in
+ *  Hub Step 4 H. Adapter passes the array through; templates pass
+ *  it into the customer-site's <Locations /> component. Absent /
+ *  empty for single-location customers. */
+export type ExtraLocation = {
+  name: string;
+  address?: string;
+  phoneDisplay?: string;
+  phoneTel?: string;
+  publicEmail?: string;
+  mapUrl?: string;
+  hoursStructured?: Partial<Record<DayOfWeek, OpeningHoursEntry>>;
+};
+
 export type SiteGeneratorInput = {
   business: BusinessInfo;
   services: readonly Service[];
@@ -276,6 +290,10 @@ export type SiteGeneratorInput = {
    *  carry an explicit structure (legacy customers from before
    *  2026-05-13 had only a vibe field). */
   structure: Structure;
+  /** Extra locations beyond `business`. Undefined / empty for
+   *  single-location customers — multi-location module ROADMAP
+   *  2026-05-25. */
+  extraLocations?: readonly ExtraLocation[];
   /** Customer's primary domain (apex). Used for canonical URLs +
    *  open-graph tags. e.g. "alexsbakery.co.uk". */
   domain: string;

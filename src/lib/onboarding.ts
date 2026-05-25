@@ -686,6 +686,58 @@ const step4ContentSchema = z.object({
         .optional(),
     })
     .optional(),
+  /** Multi-location module — the customer has paid £15 per extra
+   *  location at intake; this is where the per-location details
+   *  are captured. The array length should match the customer's
+   *  prospect-level `extraLocations` count (Hub Step 4 UI hides
+   *  the section entirely when count is 0). Each entry maps to a
+   *  contact/map/hours block on the live site.
+   *
+   *  The primary/HQ location lives in `business` above (single
+   *  address); these are EXTRAS beyond that. So a customer with
+   *  extraLocations=2 has 3 locations total on their site: HQ +
+   *  two extras. */
+  locations: z
+    .array(
+      z.object({
+        /** Friendly label shown above the block ("Witney office",
+         *  "Oxford branch"). Required so the customer-site can
+         *  distinguish blocks. */
+        name: z.string().trim().min(1).max(100),
+        address: z.string().trim().max(500).optional(),
+        phoneDisplay: z.string().trim().max(30).optional(),
+        phoneTel: z.string().trim().max(30).optional(),
+        publicEmail: z
+          .string()
+          .trim()
+          .email("Enter a valid email")
+          .max(254)
+          .optional()
+          .or(z.literal("")),
+        /** Google Maps URL the customer pastes from their phone /
+         *  desktop. Renders as an "Open in Maps" link on the site
+         *  (we don't iframe-embed to avoid Google's tracking
+         *  cookies firing without consent). */
+        mapUrl: z.string().trim().url().max(500).optional().or(z.literal("")),
+        /** Per-day hours record. Same shape as business.openingHours
+         *  above so the renderer / JSON-LD generator can reuse the
+         *  exact same helpers per block. */
+        openingHours: z
+          .record(
+            z.string(),
+            z
+              .object({
+                open: z.boolean(),
+                from: z.string().optional(),
+                to: z.string().optional(),
+              })
+              .optional(),
+          )
+          .optional(),
+      }),
+    )
+    .max(50)
+    .optional(),
   /** Offers module — homepage promo strip. Only customers with
    *  moduleOffers selected see the UI for this; the data is
    *  optional everywhere so non-Offers customers carry an empty

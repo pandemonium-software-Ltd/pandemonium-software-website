@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SITE_DATA } from "@/lib/site-data";
 import type { DayOfWeek } from "@/lib/types";
 import EnquiryFormWidget from "@/components/EnquiryFormWidget";
+import Locations from "@/components/Locations";
 
 /** Display order for the opening-hours table. Mon-first matches
  *  most UK convention; flip to Sun-first for US-style if a future
@@ -259,6 +260,10 @@ export default function ContactPage() {
           </div>
         </section>
       )}
+      {/* Extra locations for multi-location customers. Component
+       *  returns null when extraLocations is empty so single-
+       *  location customers see no change. */}
+      <Locations locations={SITE_DATA.extraLocations} />
     </>
   );
 }

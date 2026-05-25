@@ -166,6 +166,22 @@ export type CustomCopy = {
   trust?: TrustSignals;
 };
 
+/** Extra branch/location for multi-location customers. Captured
+ *  in the marketing-site Hub Step 4 Content (per
+ *  prospect.extraLocations slots) and surfaced here for rendering
+ *  alongside the primary business above. Multi-location module
+ *  ROADMAP 2026-05-25. Adapter-passes-through-or-omits — array is
+ *  optional and absent on single-location customers. */
+export type ExtraLocation = {
+  name: string;
+  address?: string;
+  phoneDisplay?: string;
+  phoneTel?: string;
+  publicEmail?: string;
+  mapUrl?: string;
+  hoursStructured?: Partial<Record<DayOfWeek, OpeningHoursEntry>>;
+};
+
 export type SiteData = {
   business: BusinessInfo;
   services: readonly Service[];
@@ -178,5 +194,9 @@ export type SiteData = {
    *  adapter doesn't carry an explicit value (legacy customers).
    *  Drives which hero variant the homepage renders. */
   structure: Structure;
+  /** Extra locations beyond `business`. Empty / undefined for
+   *  single-location customers. Renders as a Locations section
+   *  on the home + Contact pages. */
+  extraLocations?: readonly ExtraLocation[];
   domain: string;
 };

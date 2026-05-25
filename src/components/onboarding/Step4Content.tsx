@@ -72,6 +72,22 @@ type BusinessDetails = {
   >;
 };
 
+/** Extra location — captured for each of the customer's
+ *  prospect.extraLocations slots. Mirrors the locations[] entry
+ *  in onboardingData.content (see lib/onboarding.ts schema). */
+type LocationDetail = {
+  name: string;
+  address?: string;
+  phoneDisplay?: string;
+  phoneTel?: string;
+  publicEmail?: string;
+  mapUrl?: string;
+  openingHours?: Record<
+    string,
+    { open: boolean; from?: string; to?: string }
+  >;
+};
+
 type ContentData = {
   tagline?: string;
   aboutBlurb?: string;
@@ -81,6 +97,7 @@ type ContentData = {
   testimonials?: Testimonial[];
   trust?: TrustData;
   business?: BusinessDetails;
+  locations?: LocationDetail[];
   notes?: string;
 };
 
@@ -99,6 +116,10 @@ type Props = {
    *  trust signals, business details). Each section seeds ONLY when
    *  the customer's content-step value is blank for that section. */
   phase3Seeds: Phase3Seeds;
+  /** Prospect-level multi-location counter. >0 unlocks a new
+   *  per-location capture section (one form per extra location).
+   *  When the count is 0, the section hides entirely. */
+  extraLocations: number;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
@@ -144,6 +165,7 @@ export default function Step4Content({
   readOnly,
   services,
   phase3Seeds,
+  extraLocations,
   savePartial,
   markDone,
 }: Props) {
@@ -233,6 +255,22 @@ export default function Step4Content({
       return initial.business;
     }
     return phase3Seeds.business;
+  });
+  // Locations — one slot per prospect.extraLocations. Pad / trim
+  // saved data to match the current count so the UI always shows
+  // exactly the right number of forms. If the customer dropped
+  // their count from 3 → 2 via the dashboard, the third saved
+  // entry is hidden (not destroyed — it lives in onboardingData
+  // until the customer revisits this step and saves, at which
+  // point the trimmed array is persisted).
+  const [locations, setLocations] = useState<LocationDetail[]>(() => {
+    const savedRaw = Array.isArray(initial.locations) ? initial.locations : [];
+    const saved = savedRaw.slice(0, extraLocations);
+    const padded: LocationDetail[] = [];
+    for (let i = 0; i < extraLocations; i++) {
+      padded.push(saved[i] ?? { name: "" });
+    }
+    return padded;
   });
   const [notes, setNotes] = useState(initial.notes ?? "");
 
@@ -342,6 +380,32 @@ export default function Step4Content({
     }
     const businessHasContent = Object.keys(businessClean).length > 0;
 
+    // Locations — clean each entry; drop entries with no name
+    // (incomplete adds). Entries beyond extraLocations are NEVER
+    // saved (defence-in-depth: state is already capped on load).
+    const locationsClean: LocationDetail[] = locations
+      .slice(0, extraLocations)
+      .map((loc): LocationDetail | null => {
+        const name = loc.name?.trim();
+        if (!name) return null;
+        const entry: LocationDetail = { name };
+        const addr = loc.address?.trim();
+        if (addr) entry.address = addr;
+        const pd = loc.phoneDisplay?.trim();
+        if (pd) entry.phoneDisplay = pd;
+        const pt = loc.phoneTel?.trim();
+        if (pt) entry.phoneTel = pt;
+        const em = loc.publicEmail?.trim();
+        if (em) entry.publicEmail = em;
+        const mu = loc.mapUrl?.trim();
+        if (mu) entry.mapUrl = mu;
+        if (loc.openingHours && Object.keys(loc.openingHours).length > 0) {
+          entry.openingHours = loc.openingHours;
+        }
+        return entry;
+      })
+      .filter((l): l is LocationDetail => l !== null);
+
     return {
       tagline: trimmedTagline || undefined,
       aboutBlurb: trimmedAbout || undefined,
@@ -352,6 +416,7 @@ export default function Step4Content({
         cleanedTestimonials.length > 0 ? cleanedTestimonials : undefined,
       trust: trustHasContent ? trustClean : undefined,
       business: businessHasContent ? businessClean : undefined,
+      locations: locationsClean.length > 0 ? locationsClean : undefined,
       notes: notes.trim() || undefined,
     };
   }
@@ -617,6 +682,25 @@ export default function Step4Content({
 
       {/* Newsletter + Offers config moved to Step 3 Modules
        *  (May 2026) — see Step3Modules.tsx for the mount. */}
+
+      {/* Multi-location capture — only shown when the customer has
+       *  paid for one or more extra locations at intake. Each slot
+       *  is a per-location contact block; renders on the live site
+       *  alongside the primary business address from G above. */}
+      {extraLocations > 0 && (
+        <SectionCard
+          letter="H"
+          title={`Extra locations (${extraLocations})`}
+          helper={`You've paid for ${extraLocations} extra location${extraLocations === 1 ? "" : "s"} beyond the main one above. Fill in each one — they appear as separate contact/map/hours blocks on your site.`}
+          filled={locations.some((l) => l.name?.trim())}
+        >
+          <LocationsEditor
+            locations={locations}
+            onChange={setLocations}
+            disabled={disabled}
+          />
+        </SectionCard>
+      )}
 
       {/* ---------- Notes + buttons ---------- */}
       <section className="mt-9">
@@ -1734,6 +1818,193 @@ function BusinessDetailsEditor({
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- LocationsEditor ----------
+//
+// Renders one card per location slot. Each card is a stripped-down
+// BusinessDetailsEditor (no service area, plus a Google Maps URL
+// field) so the rendered live-site block can show name + address +
+// phone + email + map link + opening hours per location.
+//
+// The number of cards is driven entirely by `locations.length` —
+// the parent caps state to extraLocations on load, so this
+// component doesn't need to know the counter.
+
+function LocationsEditor({
+  locations,
+  onChange,
+  disabled,
+}: {
+  locations: LocationDetail[];
+  onChange: (next: LocationDetail[]) => void;
+  disabled: boolean;
+}) {
+  function patchAt(i: number, p: Partial<LocationDetail>) {
+    onChange(locations.map((loc, idx) => (idx === i ? { ...loc, ...p } : loc)));
+  }
+  function patchHoursAt(
+    i: number,
+    day: Day,
+    p: Partial<{ open: boolean; from?: string; to?: string }>,
+  ) {
+    const loc = locations[i];
+    if (!loc) return;
+    const current = loc.openingHours ?? {};
+    const dayCurrent = current[day] ?? { open: false };
+    patchAt(i, {
+      openingHours: {
+        ...current,
+        [day]: { ...dayCurrent, ...p },
+      },
+    });
+  }
+  return (
+    <div className="space-y-6">
+      {locations.map((loc, i) => (
+        <div
+          key={i}
+          className="space-y-4 rounded-2xl border border-navy-100 bg-cream-50 p-4"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wider text-ember-700">
+            Location {i + 1}
+          </p>
+          <div>
+            <FieldLabel>Location name</FieldLabel>
+            <input
+              type="text"
+              value={loc.name ?? ""}
+              disabled={disabled}
+              onChange={(e) => patchAt(i, { name: e.target.value })}
+              maxLength={100}
+              placeholder='e.g. "Witney branch" or "Oxford workshop"'
+              className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <FieldLabel>Phone (display)</FieldLabel>
+              <input
+                type="text"
+                value={loc.phoneDisplay ?? ""}
+                disabled={disabled}
+                onChange={(e) => patchAt(i, { phoneDisplay: e.target.value })}
+                maxLength={PHONE_MAX}
+                placeholder="e.g. 01865 123 456"
+                className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+              />
+            </div>
+            <div>
+              <FieldLabel>Phone (tap-to-call)</FieldLabel>
+              <input
+                type="tel"
+                value={loc.phoneTel ?? ""}
+                disabled={disabled}
+                onChange={(e) => patchAt(i, { phoneTel: e.target.value })}
+                maxLength={PHONE_MAX}
+                placeholder="e.g. 01865123456"
+                className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+              />
+            </div>
+            <div>
+              <FieldLabel>Public email (optional)</FieldLabel>
+              <input
+                type="email"
+                value={loc.publicEmail ?? ""}
+                disabled={disabled}
+                onChange={(e) => patchAt(i, { publicEmail: e.target.value })}
+                maxLength={EMAIL_MAX}
+                placeholder="e.g. witney@bobbuilders.co.uk"
+                className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+              />
+            </div>
+            <div>
+              <FieldLabel>Google Maps URL (optional)</FieldLabel>
+              <input
+                type="url"
+                value={loc.mapUrl ?? ""}
+                disabled={disabled}
+                onChange={(e) => patchAt(i, { mapUrl: e.target.value })}
+                maxLength={500}
+                placeholder="https://maps.app.goo.gl/…"
+                className="mt-1 w-full rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+              />
+            </div>
+          </div>
+          <div>
+            <FieldLabel>Address</FieldLabel>
+            <textarea
+              value={loc.address ?? ""}
+              disabled={disabled}
+              onChange={(e) => patchAt(i, { address: e.target.value })}
+              maxLength={ADDRESS_MAX}
+              rows={2}
+              placeholder="e.g. 5 Market Square, Witney OX28 1AB"
+              className="mt-1 w-full resize-y rounded-lg border-2 border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+            />
+          </div>
+          <div>
+            <FieldLabel>Opening hours (optional)</FieldLabel>
+            <p className="text-xs text-navy-600">
+              Leave blank to inherit the main location&apos;s hours.
+            </p>
+            <div className="mt-2 space-y-2">
+              {DAYS.map((day) => {
+                const h = loc.openingHours?.[day];
+                const open = h?.open ?? false;
+                return (
+                  <div
+                    key={day}
+                    className="flex flex-wrap items-center gap-3 rounded-lg border border-navy-100 bg-white px-3 py-1.5"
+                  >
+                    <label className="flex w-20 flex-none items-center gap-2 text-sm font-semibold text-navy-900">
+                      <input
+                        type="checkbox"
+                        checked={open}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          patchHoursAt(i, day, { open: e.target.checked })
+                        }
+                        className="h-4 w-4 accent-navy-900"
+                      />
+                      {day}
+                    </label>
+                    {open ? (
+                      <>
+                        <input
+                          type="time"
+                          value={h?.from ?? ""}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            patchHoursAt(i, day, { from: e.target.value })
+                          }
+                          aria-label={`${day} open from`}
+                          className="rounded-lg border-2 border-navy-200 bg-white px-2 py-1 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                        />
+                        <span className="text-xs text-navy-600">to</span>
+                        <input
+                          type="time"
+                          value={h?.to ?? ""}
+                          disabled={disabled}
+                          onChange={(e) =>
+                            patchHoursAt(i, day, { to: e.target.value })
+                          }
+                          aria-label={`${day} open until`}
+                          className="rounded-lg border-2 border-navy-200 bg-white px-2 py-1 text-sm text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                        />
+                      </>
+                    ) : (
+                      <span className="text-xs text-navy-500">Closed</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

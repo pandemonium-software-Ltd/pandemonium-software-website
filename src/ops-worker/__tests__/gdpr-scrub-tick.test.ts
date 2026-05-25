@@ -44,6 +44,7 @@ const prospect = (
     status: "Cancelled",
     softBlockersTriggered: [],
     moduleSelections: [],
+  extraLocations: 0,
     foundingMember: false,
     onboardingStep1Done: true,
     onboardingStep2Done: true,

@@ -206,7 +206,13 @@ export async function POST(request: Request) {
   );
 
   try {
-    await updateProspectPhase3(prospect.pageId, phase3, true, fees);
+    await updateProspectPhase3(
+      prospect.pageId,
+      phase3,
+      true,
+      fees,
+      phase3.modules.extraLocations,
+    );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[api/intake] Notion final-save error:", msg);

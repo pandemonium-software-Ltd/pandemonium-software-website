@@ -176,6 +176,7 @@ export default async function OnboardingPage({
       pendingModuleChange={pendingModuleChange}
       phase3Services={phase3Services}
       phase3Seeds={phase3Seeds}
+      extraLocations={prospect.extraLocations}
     />
   );
 }

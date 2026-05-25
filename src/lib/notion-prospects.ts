@@ -89,6 +89,14 @@ export type ProspectRecord = {
   hardBlockerTriggered?: string;
   softBlockersTriggered: string[];
   moduleSelections: string[];
+  /** Multi-location counter — how many EXTRA locations beyond the
+   *  one included in the base. £15 setup each, no monthly. Maps
+   *  to the Notion "Extra Locations" number column (0 when the
+   *  customer hasn't bought any). The per-location details
+   *  (name / address / hours) live in `onboardingData.content
+   *  .locations[]` once the customer fills them in via Hub
+   *  Step 4. */
+  extraLocations: number;
   setupFeeCalculated?: number;
   monthlyFeeCalculated?: number;
   foundingMember: boolean;
@@ -814,6 +822,11 @@ export async function updateProspectPhase3(
     founding: boolean;
     modules: string[];
   },
+  /** Multi-location counter — written to the Notion "Extra
+   *  Locations" number column when set. Pass undefined to leave
+   *  the existing value alone (e.g. partial-save flows). Pass 0
+   *  explicitly to clear it. */
+  extraLocations?: number,
 ): Promise<void> {
   const properties: Record<string, unknown> = {
     "Phase 3 Data": rt(JSON.stringify(phase3Partial)),
@@ -829,6 +842,9 @@ export async function updateProspectPhase3(
     properties["Monthly Fee Calculated"] = { number: fees.monthly };
     properties["Founding Member"] = { checkbox: fees.founding };
     properties["Module Selections"] = multiSelectProp(fees.modules);
+  }
+  if (extraLocations !== undefined) {
+    properties["Extra Locations"] = { number: extraLocations };
   }
   await notionFetch(`/pages/${pageId}`, {
     method: "PATCH",
@@ -976,6 +992,10 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
       readRichText(p["Hard Blocker Triggered"]) || undefined,
     softBlockersTriggered: readMultiSelect(p["Soft Blockers Triggered"]),
     moduleSelections: readMultiSelect(p["Module Selections"]),
+    // Defensive: "Extra Locations" column may not exist yet on
+    // legacy Notion DBs. readNumber returns undefined for missing
+    // columns, which we coerce to 0 — the no-multi-location default.
+    extraLocations: readNumber(p["Extra Locations"]) ?? 0,
     setupFeeCalculated: readNumber(p["Setup Fee Calculated"]),
     monthlyFeeCalculated: readNumber(p["Monthly Fee Calculated"]),
     foundingMember: readCheckbox(p["Founding Member"]),

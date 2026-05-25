@@ -46,6 +46,7 @@ const baseProspect: ProspectRecord = {
   status: "Onboarding Started",
   softBlockersTriggered: [],
   moduleSelections: [],
+  extraLocations: 0,
   foundingMember: false,
   onboardingStep1Done: true,
   onboardingStep2Done: false,

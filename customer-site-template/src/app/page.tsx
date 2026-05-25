@@ -14,6 +14,7 @@ import { SITE_DATA } from "@/lib/site-data";
 import OfferStrip from "@/components/OfferStrip";
 import HomeHero from "@/components/HomeHero";
 import HomeBody from "@/components/HomeBody";
+import Locations from "@/components/Locations";
 
 export default function HomePage() {
   const { modules } = SITE_DATA;
@@ -33,6 +34,9 @@ export default function HomePage() {
       )}
       <HomeHero data={SITE_DATA} />
       <HomeBody data={SITE_DATA} />
+      {/* Locations — renders only for multi-location customers; the
+       *  component returns null when extraLocations is empty. */}
+      <Locations locations={SITE_DATA.extraLocations} />
     </>
   );
 }

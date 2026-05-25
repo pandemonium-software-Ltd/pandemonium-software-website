@@ -79,6 +79,11 @@ export type OnboardingHubProps = {
    *  business details) the FIRST time the customer touches them.
    *  Once a content-step value exists, it overrides the seed. */
   phase3Seeds: import("@/app/onboarding/[token]/page").Phase3Seeds;
+  /** Multi-location counter from the prospect record — how many
+   *  EXTRA locations the customer has paid for. When > 0, Step 4
+   *  Content shows a per-location capture section. 0 hides the
+   *  whole section. */
+  extraLocations: number;
 };
 
 type SaveState =
@@ -421,6 +426,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     pendingModuleChange={props.pendingModuleChange}
                     phase3Services={props.phase3Services}
                     phase3Seeds={props.phase3Seeds}
+                    extraLocations={props.extraLocations}
                     focusModule={searchParams?.get("focus") ?? undefined}
                   />
                 </>
@@ -452,6 +458,7 @@ function StepRenderer({
   pendingModuleChange,
   phase3Services,
   phase3Seeds,
+  extraLocations,
   focusModule,
 }: {
   step: StepDef;
@@ -476,6 +483,7 @@ function StepRenderer({
   pendingModuleChange: ModuleChangeLogEntry | null;
   phase3Services: ReadonlyArray<{ name: string }>;
   phase3Seeds: import("@/app/onboarding/[token]/page").Phase3Seeds;
+  extraLocations: number;
   /** Optional ?focus=<module> query param — when set, Step3Modules
    *  restricts to just the matching module's setup card. Used when
    *  the post-launch dashboard sends a customer here to set up one
@@ -549,6 +557,7 @@ function StepRenderer({
           readOnly={readOnly}
           services={phase3Services}
           phase3Seeds={phase3Seeds}
+          extraLocations={extraLocations}
           savePartial={(patch) => savePartial("content", patch)}
           markDone={(patch) => markDone("content", patch)}
         />
