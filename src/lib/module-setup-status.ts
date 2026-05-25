@@ -16,11 +16,18 @@
 
 /** Subset of onboardingData.tools we care about for setup-status.
  *  Loose typing because Notion can hand us anything in that JSON
- *  blob — the readers below all defensively narrow before use. */
+ *  blob — the readers below all defensively narrow before use.
+ *
+ *  Field names MUST match what Step3Modules persists via
+ *  savePartial — see the patch object in handleSave / handleDone:
+ *    - resendInvitedMe   (NOT resendManagerInvited)
+ *    - gbpManagerInvited (this one's a happy match)
+ *    - calcomBookingUrl
+ */
 export type ToolsSlice = {
   calcomBookingUrl?: unknown;
   resendSignupEmail?: unknown;
-  resendManagerInvited?: unknown;
+  resendInvitedMe?: unknown;
   gbpUrl?: unknown;
   gbpManagerInvited?: unknown;
 };
@@ -53,7 +60,7 @@ export function isModuleSetupComplete(
       return isValidCalcomUrl(asString(t.calcomBookingUrl));
     case "Newsletter":
       return asString(t.resendSignupEmail).length > 0 &&
-        t.resendManagerInvited === true;
+        t.resendInvitedMe === true;
     case "Google Business Profile Setup/Audit":
       return asString(t.gbpUrl).length > 0 &&
         t.gbpManagerInvited === true;
