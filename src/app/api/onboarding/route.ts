@@ -137,7 +137,20 @@ export async function POST(request: Request) {
   }
   // Mutation gate: post-sign-off the Hub is read-only. Customer goes
   // through the account dashboard for any further changes.
-  if (!isOnboardingMutable(prospect.status)) {
+  //
+  // EXCEPTION: Live customers CAN edit "tools" + "content" steps —
+  // those host per-module setup (Cal.com URL, Resend invite, GBP
+  // URL+invite in tools; per-location details in content). When a
+  // customer adds a new module post-launch via the dashboard, they
+  // need to land here and complete its setup. The customer-side
+  // UI's per-module unlock (Step3Modules.tsx + Step4Content.tsx)
+  // restricts editing to incomplete-setup sections; server-side
+  // we trust that gate. Other steps stay locked for Live.
+  const isPostLaunchSetupStep = stepId === "tools" || stepId === "content";
+  if (
+    !isOnboardingMutable(prospect.status) &&
+    !(prospect.status === "Live" && isPostLaunchSetupStep)
+  ) {
     return NextResponse.json(
       {
         error:
