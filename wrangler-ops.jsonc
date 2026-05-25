@@ -43,21 +43,20 @@
   //     resolved gbpPlaceId, INSERT OR REPLACE into the
   //     gbp_reviews D1 table. 30-min offset from the analytics
   //     cron so the two outbound API loads do not stack.
-  //   - "0 3 * * *"   daily at 03:00 UTC — GDPR scrub enforcer
-  //     for the 30-day personal-data retention policy stated in
-  //     /terms section 11. For every Cancelled prospect whose
-  //     Data Retention Until <= today AND has not been scrubbed,
-  //     deletes their D1 rows (3 tables) and replaces their
-  //     personal-data Notion props with placeholders. Money
-  //     fields kept 7 years for HMRC. Pure D1 + Notion writes
-  //     so no external API stack.
-  //   - "0 4 * * *"   daily at 04:00 UTC — Stripe applier
-  //     fallback. Scans every prospect for pending-stripe
-  //     module-change entries whose effectiveDate <= today and
-  //     applies them via the shared applyPendingChange helper
-  //     (Stripe update + Notion resolveModuleChange). Belt-and-
-  //     braces for cases the invoice.paid webhook missed
-  //     (annual billing, mid-period cancels, etc).
+  //   - "0 3 * * *"   daily at 03:00 UTC — daily sweep
+  //     dispatching BOTH:
+  //       (a) GDPR scrub: deletes personal data + replaces
+  //           Notion props for Cancelled prospects past their
+  //           30-day Data Retention Until (per /terms s11).
+  //           Money fields kept 7 years for HMRC.
+  //       (b) Stripe applier: scans pending-stripe module-change
+  //           entries whose effectiveDate <= today and applies
+  //           them via applyPendingChange (Stripe update +
+  //           Notion resolveModuleChange). Belt-and-braces
+  //           fallback for cases the invoice.paid webhook
+  //           missed (annual billing, mid-period cancels, etc).
+  //     Co-located because Cloudflare caps Worker crons at 5
+  //     per script and both jobs scan listAllProspects.
   //   - "0 8 1 * *"   1st of each month at 08:00 UTC — sends
   //     ModuForge-branded "your monthly results" email to every
   //     Live customer. 08:00 UTC ≈ 09:00 UK summer time, 08:00
@@ -70,7 +69,6 @@
       "0 2 * * *",
       "30 2 * * *",
       "0 3 * * *",
-      "0 4 * * *",
       "0 8 1 * *"
     ]
   },

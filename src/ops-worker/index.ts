@@ -49,8 +49,12 @@ type CfEnvBindings = {
 
 const ANALYTICS_CRON = "0 2 * * *";
 const GBP_REVIEWS_CRON = "30 2 * * *";
-const GDPR_SCRUB_CRON = "0 3 * * *";
-const STRIPE_APPLIER_CRON = "0 4 * * *";
+// Daily 03:00 UTC sweep dispatches BOTH gdpr-scrub AND
+// stripe-applier — co-located because Cloudflare caps Worker
+// crons at 5 per script and both jobs scan listAllProspects.
+// Run order: scrub first (cancels-finalised), then applier
+// (so a same-day cancel + pending change resolve cleanly).
+const DAILY_SWEEP_CRON = "0 3 * * *";
 const MONTHLY_DIGEST_CRON = "0 8 1 * *";
 
 const handler = {
@@ -82,21 +86,24 @@ const handler = {
       ctx.waitUntil(runGbpReviewsTick({ db }));
       return;
     }
-    if (event.cron === GDPR_SCRUB_CRON) {
+    if (event.cron === DAILY_SWEEP_CRON) {
       const db = envBindings.pandemonium_analytics;
       if (!db) {
         console.error(
-          "[ops] gdpr scrub cron fired but pandemonium_analytics D1 binding is missing",
+          "[ops] daily sweep cron fired but pandemonium_analytics D1 binding is missing",
         );
         return;
       }
-      ctx.waitUntil(runGdprScrubTick({ db }));
-      return;
-    }
-    if (event.cron === STRIPE_APPLIER_CRON) {
-      // No D1 binding needed — pure Notion + Stripe calls. Pure
-      // fallback for cases the invoice.paid webhook missed.
-      ctx.waitUntil(runStripeApplierTick({}));
+      // Run sequentially: scrub first (releases cancelled
+      // prospects + retention housekeeping), then applier
+      // (handles pending changes including any cancel-now
+      // entries that just settled).
+      ctx.waitUntil(
+        (async () => {
+          await runGdprScrubTick({ db });
+          await runStripeApplierTick({});
+        })(),
+      );
       return;
     }
     if (event.cron === MONTHLY_DIGEST_CRON) {

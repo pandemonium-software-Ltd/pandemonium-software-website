@@ -135,8 +135,8 @@ export async function createCheckoutSession(
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     { price: basePriceId, quantity: 1 },
   ];
-  for (const module of selection.modules) {
-    const priceId = STRIPE_MODULE_PRICE_IDS[module];
+  for (const moduleName of selection.modules) {
+    const priceId = STRIPE_MODULE_PRICE_IDS[moduleName];
     if (!priceId) continue;
     lineItems.push({ price: priceId, quantity: 1 });
   }
