@@ -31,7 +31,7 @@
   "main": "src/ops-worker/index.ts",
   "compatibility_date": "2026-04-11",
   "compatibility_flags": ["nodejs_compat"],
-  // Four cron schedules:
+  // Five cron schedules:
   //   - "* * * * *"   every minute — drives the onboarding/build
   //     dispatcher (§4.2). Tick is ~50ms when idle.
   //   - "0 2 * * *"   daily at 02:00 UTC — fetches yesterday's
@@ -43,6 +43,14 @@
   //     resolved gbpPlaceId, INSERT OR REPLACE into the
   //     gbp_reviews D1 table. 30-min offset from the analytics
   //     cron so the two outbound API loads do not stack.
+  //   - "0 3 * * *"   daily at 03:00 UTC — GDPR scrub enforcer
+  //     for the 30-day personal-data retention policy stated in
+  //     /terms section 11. For every Cancelled prospect whose
+  //     Data Retention Until <= today AND has not been scrubbed,
+  //     deletes their D1 rows (3 tables) and replaces their
+  //     personal-data Notion props with placeholders. Money
+  //     fields kept 7 years for HMRC. Pure D1 + Notion writes
+  //     so no external API stack.
   //   - "0 8 1 * *"   1st of each month at 08:00 UTC — sends
   //     ModuForge-branded "your monthly results" email to every
   //     Live customer. 08:00 UTC ≈ 09:00 UK summer time, 08:00
@@ -50,7 +58,13 @@
   //     season without daylight-saving branching.
   // ops-worker/index.ts branches on event.cron to dispatch.
   "triggers": {
-    "crons": ["* * * * *", "0 2 * * *", "30 2 * * *", "0 8 1 * *"]
+    "crons": [
+      "* * * * *",
+      "0 2 * * *",
+      "30 2 * * *",
+      "0 3 * * *",
+      "0 8 1 * *"
+    ]
   },
   "observability": {
     "enabled": true

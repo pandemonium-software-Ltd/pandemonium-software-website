@@ -124,30 +124,27 @@ export async function PATCH(request: Request) {
         appliedSelection: entry.toModules,
         appliedFees: { setup: newFees.setup, monthly: newFees.monthly },
       });
-      // Cancellation kinds also flip the prospect's Status to
-      // Cancelled so the dashboard renders the cancelled-state UI
-      // and the site Worker can be taken down on the next ops
-      // tick. Module/setup changes don't touch Status.
+      // Cancellation kinds also flip Status to Cancelled AND
+      // stamp Cancelled At + Data Retention Until — that triplet
+      // is what the gdpr-scrub-tick cron reads to decide when to
+      // delete the customer's personal data (30 days after this
+      // point per /terms section 11). Module/setup changes don't
+      // touch any of those.
       if (
         entry.kind === "cancel-end-of-period" ||
         entry.kind === "cancel-immediate-prorated"
       ) {
         try {
-          const { notionFetch } = await import("@/lib/notion");
-          await notionFetch(`/pages/${prospect.pageId}`, {
-            method: "PATCH",
-            body: {
-              properties: {
-                Status: { select: { name: "Cancelled" } },
-              },
-            },
-          });
+          const { markCancelled } = await import("@/lib/notion-prospects");
+          await markCancelled(prospect.pageId);
         } catch (e) {
-          // Status flip failure is logged but not fatal — operator
-          // will see the change applied + status untouched in
-          // /admin and can flip manually.
+          // Status + retention stamp failure is logged but not
+          // fatal — operator will see the change applied + status
+          // untouched in /admin and can flip manually. The cron
+          // won't scrub until Data Retention Until is set, so a
+          // miss here is safe (no premature deletion).
           console.error(
-            `[api/admin/module-change] cancellation Status flip failed: ${e instanceof Error ? e.message : String(e)}`,
+            `[api/admin/module-change] cancellation Status + retention stamp failed: ${e instanceof Error ? e.message : String(e)}`,
           );
         }
       }

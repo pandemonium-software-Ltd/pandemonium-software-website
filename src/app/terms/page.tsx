@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const lastUpdated = "11 April 2026";
+const lastUpdated = "25 May 2026";
 
 export default function TermsPage() {
   return (
@@ -33,16 +33,40 @@ export default function TermsPage() {
           <h2>1. Who I am</h2>
           <p>
             I&apos;m Ben Pandher. I run{" "}
-            <strong>Pandemonium Software Ltd</strong> ({site.location.city},{" "}
-            {site.location.region}, United Kingdom), a one-person business
-            building websites for UK trades and small businesses. In these
-            terms, &quot;I&quot; and &quot;me&quot; means Ben Pandher
-            trading as Pandemonium Software Ltd, and &quot;you&quot; means
-            the business or person who hires me.
+            <strong>Pandemonium Software Ltd</strong>, a one-person
+            business building websites for UK trades and small
+            businesses, trading as ModuForge.
           </p>
+          <div className="rounded-lg border border-navy-100 bg-cream-50 p-4 text-[0.95rem] not-prose">
+            <p className="font-semibold text-navy-900">Trader details</p>
+            <ul className="mt-2 space-y-1">
+              <li>
+                <strong>Legal entity:</strong> Pandemonium Software Ltd
+              </li>
+              <li>
+                <strong>Companies House number:</strong>{" "}
+                {site.legal.companyNumber}
+              </li>
+              <li>
+                <strong>Registered office:</strong>{" "}
+                {site.legal.registeredOfficeOneLine}
+              </li>
+              <li>
+                <strong>Contact:</strong>{" "}
+                <a href={`mailto:${site.contactEmail}`}>
+                  {site.contactEmail}
+                </a>
+              </li>
+              <li>
+                <strong>Trading name:</strong> ModuForge (
+                <a href={site.url}>{site.url.replace("https://", "")}</a>)
+              </li>
+            </ul>
+          </div>
           <p>
-            You can reach me at{" "}
-            <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>.
+            In these terms, &quot;I&quot;, &quot;me&quot; and
+            &quot;we&quot; means Pandemonium Software Ltd, and
+            &quot;you&quot; means the business or person who hires me.
           </p>
 
           <h2>2. What I provide</h2>
@@ -80,22 +104,62 @@ export default function TermsPage() {
             you shouldn&apos;t be rushed.
           </p>
 
-          <h2>4. Setup fee</h2>
+          <h2>4. Setup fee and your 14-day cancellation right</h2>
           <p>
-            The £129 setup fee (or £99 for Founding Members) is payable up
-            front, at the same time as your first monthly payment. It
+            The £129 setup fee (or £99 for Founding Members) is payable
+            up front, at the same time as your first monthly payment. It
             covers building your site — design, copy work, module setup,
             domain wiring, the lot.
           </p>
+
+          <h3>14-day right to cancel (consumers)</h3>
           <p>
-            <strong>The setup fee is non-refundable</strong> once your
-            site is delivered (i.e. once the preview build has been
-            shown to you or the site has been pushed live). This is
-            consistent with UK Consumer Contracts Regulations 2013 for
-            services that have been performed at the customer&apos;s
-            express request. If something has gone seriously wrong with
-            the build before then, email me — I&apos;m a reasonable
-            human and will sort it.
+            Under the Consumer Contracts (Information, Cancellation and
+            Additional Charges) Regulations 2013, if you are a{" "}
+            <strong>consumer</strong> (buying for purposes outside your
+            trade or profession) you have the right to cancel this
+            contract within <strong>14 days of payment</strong> without
+            giving any reason. If most of what you buy ModuForge for is
+            running a business — even a sole trader business — these
+            consumer-cancellation rights do not apply to you.
+          </p>
+          <p>
+            To exercise your cancellation right, send a clear statement
+            (email is fine — to{" "}
+            <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>
+            ) saying you want to cancel. You can also use the model
+            cancellation form at the end of these terms (Schedule A).
+            Any refund owed is processed within{" "}
+            <strong>14 days of cancellation</strong>, back to the
+            original payment method, at no cost to you.
+          </p>
+
+          <h3>Express request to begin work immediately</h3>
+          <p>
+            At payment, you will be asked to tick a box that says: &ldquo;I
+            expressly request that Pandemonium Software Ltd begins work
+            immediately, and I acknowledge that the setup fee becomes
+            non-refundable as soon as development work has started.&rdquo;
+          </p>
+          <p>
+            This express request is required because development work on
+            your site (intake review, design choices, copy drafting,
+            domain configuration) begins within minutes of payment. Once
+            you have given this consent and{" "}
+            <strong>development work has started</strong>, the setup fee
+            is non-refundable under Regulation 36 of the CCRs (services
+            performed at the customer&apos;s express request during the
+            cancellation period). If you choose not to tick the box,
+            work will not start until the 14-day cancellation period
+            ends.
+          </p>
+          <p>
+            &ldquo;Development work has started&rdquo; means I have
+            opened your file and begun any of: reading your intake
+            answers in detail, drafting site copy, configuring your
+            domain or Cloudflare account, building site components, or
+            preparing your preview. In practice this is within minutes
+            of payment when you have ticked the box.
           </p>
 
           <h3>Changing modules during onboarding</h3>
@@ -108,7 +172,7 @@ export default function TermsPage() {
             no cap, no notice period. See section 5 below for the timing.
           </p>
           <p>
-            If you remove a module you&apos;ve already set up (e.g. you
+            If you remove a module you have already set up (e.g. you
             entered a Cal.com link then later removed Online Booking),
             we keep your data safely in case you ever re-add it. The
             module just disappears from your dashboard.
@@ -130,39 +194,44 @@ export default function TermsPage() {
             For an add: the new module activates on the 1st, your next
             invoice includes the one-off setup for that module plus the
             new monthly rate. For a remove: you keep access until the
-            1st (you&apos;ve already paid for the month), then the
-            monthly drops accordingly. No refund for the current month —
-            you used the service.
+            1st (you have already paid for the month), then the monthly
+            drops accordingly. No refund for the current month — you
+            used the service.
           </p>
 
           <h3>Cancelling your whole subscription</h3>
           <p>
-            You can cancel from the dashboard&apos;s Billing section
-            any time. Two options:
+            You can cancel from the dashboard&apos;s Billing section any
+            time. Two options:
           </p>
           <ul>
             <li>
               <strong>Cancel at end of month (free).</strong> Site stays
               live until the 1st of the following month. After that the
               site goes offline, billing stops, no refund — you keep
-              what you&apos;ve paid for through to the end of the month.
+              what you have paid for through to the end of the month.
             </li>
             <li>
               <strong>Cancel now with prorated refund.</strong> Site
               goes offline today. You get a refund of the unused portion
               of <em>this month&apos;s monthly subscription</em>, based
-              on days remaining (typically credited within 5-10 working
-              days). The one-off setup fee is <strong>not</strong>{" "}
-              refunded under either option — that paid for building the
-              site, which has already been delivered.
+              on days remaining. Refund processed within{" "}
+              <strong>14 days of cancellation</strong>, back to the
+              original payment method.
             </li>
           </ul>
           <p>
-            No 30-day notice. No exit fees. No &ldquo;but wait&rdquo;
-            calls. If you can&apos;t get to your dashboard for any
-            reason, email{" "}
+            <strong>The one-off setup fee is never refunded</strong>{" "}
+            under either option (subject only to your 14-day consumer
+            cancellation right above) — that paid for building the
+            site, which has already been delivered.
+          </p>
+          <p>
+            No notice period. No exit fees. No &ldquo;but wait&rdquo;
+            calls. If you cannot get to your dashboard for any reason,
+            email{" "}
             <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>{" "}
-            and I&apos;ll process it within one working day.
+            and I will process it within one working day.
           </p>
 
           <h3>What happens to your site</h3>
@@ -230,7 +299,7 @@ export default function TermsPage() {
             ready to continue or formally cancel.
           </p>
 
-          <h2>7. Ownership</h2>
+          <h2>6. Ownership</h2>
           <p>
             <strong>You own your website content, your domain, your
             hosting account, and all connected service accounts</strong>,
@@ -246,7 +315,7 @@ export default function TermsPage() {
             running, hosting or modifying your site elsewhere.
           </p>
 
-          <h2>8. No territorial exclusivity</h2>
+          <h2>7. No territorial exclusivity</h2>
           <p>
             I don&apos;t offer geographic or trade exclusivity. If I
             already work with a plumber in your town, I&apos;m free to
@@ -255,7 +324,7 @@ export default function TermsPage() {
             between clients.
           </p>
 
-          <h2>9. Case study permission</h2>
+          <h2>8. Case study permission</h2>
           <p>
             I&apos;d love to show off a good result, so I may{" "}
             <strong>ask</strong> to feature your finished site on my own
@@ -264,7 +333,7 @@ export default function TermsPage() {
             impact on your service.
           </p>
 
-          <h2>10. Post-launch support</h2>
+          <h2>9. Post-launch support</h2>
           <p>After your site is live:</p>
           <ul>
             <li>
@@ -285,7 +354,7 @@ export default function TermsPage() {
             </li>
           </ul>
 
-          <h2>11. What you agree to do</h2>
+          <h2>10. What you agree to do</h2>
           <ul>
             <li>Give me accurate information about your business.</li>
             <li>
@@ -300,6 +369,59 @@ export default function TermsPage() {
           <p>
             If any of those go sideways, I&apos;ll talk to you first
             before taking anything down.
+          </p>
+
+          <h2>11. Data protection and retention after cancellation</h2>
+          <p>
+            I handle your personal data under UK GDPR and the Data
+            Protection Act 2018. While you are an active customer I
+            hold whatever is needed to deliver the service: your
+            contact details, business details, content you upload,
+            subscriber lists (where applicable), and payment records.
+            See the <a href="/privacy">privacy notice</a> for the full
+            list and lawful bases.
+          </p>
+          <p>
+            <strong>When you cancel:</strong>
+          </p>
+          <ul>
+            <li>
+              <strong>Personal data is deleted 30 days after
+              cancellation</strong>: your site content, brand assets,
+              login credentials, subscriber list, dashboard analytics,
+              and any third-party access I held on your behalf. The
+              30-day window gives breathing room for &ldquo;I changed
+              my mind&rdquo; calls and final-invoice handling.
+            </li>
+            <li>
+              <strong>Financial records are retained for 7 years</strong>
+              {" "}from the end of the tax year in which they arose.
+              This is the minimum required by HMRC for VAT and Income
+              Tax records (Companies Act 2006 s388, VATA 1994 Sch 11).
+              These records hold the minimum needed for the legal
+              obligation: your invoice amounts, payment dates, and
+              business name. Photos, content, subscribers, dashboard
+              data — all gone.
+            </li>
+            <li>
+              <strong>Your right to early erasure</strong>: if you want
+              your personal data deleted before the 30-day window
+              expires (or, where lawful, ahead of the 7-year financial
+              retention), email{" "}
+              <a href={`mailto:${site.contactEmail}`}>
+                {site.contactEmail}
+              </a>{" "}
+              and I will action it within 30 days of your request, as
+              required by Article 17 UK GDPR.
+            </li>
+          </ul>
+          <p>
+            The 30-day personal-data deletion runs as an automated
+            daily process — there is no possibility of me forgetting
+            to do it. After deletion completes, an internal audit
+            record is kept (anonymised — no personal data, just the
+            timestamp + the customer reference) so we can prove the
+            scrub happened if you ever ask.
           </p>
 
           <h2>12. Limits of my liability</h2>
@@ -318,19 +440,71 @@ export default function TermsPage() {
             fraud or death caused by negligence.
           </p>
 
-          <h2>13. Governing law</h2>
+          <h2>13. Governing law and dispute resolution</h2>
           <p>
-            These terms are governed by the laws of England and Wales. Any
-            disputes will be handled by the courts of England and Wales.
+            These terms are governed by the laws of England and Wales.
+            Any disputes will be handled by the courts of England and
+            Wales. Before going to court I would much rather talk it
+            through — email{" "}
+            <a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a>{" "}
+            and we will work it out.
+          </p>
+          <p>
+            <strong>Alternative dispute resolution:</strong> I am not
+            currently a member of an ADR scheme. If a dispute cannot
+            be resolved between us, consumers can contact the{" "}
+            <a
+              href="https://www.citizensadvice.org.uk/consumer/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Citizens Advice consumer service
+            </a>{" "}
+            (0808 223 1133) or pursue a small-claims action in the
+            County Court.
           </p>
 
           <h2>14. Changes to these terms</h2>
           <p>
-            If I update these terms, I&apos;ll let current clients know
-            by email and update the &quot;Last updated&quot; date above. If
-            a change materially affects you, you&apos;ll have the chance to
-            cancel before it takes effect.
+            If I update these terms, I will let current clients know by
+            email and update the &quot;Last updated&quot; date above.
+            If a change materially affects you, you will have the
+            chance to cancel before it takes effect.
           </p>
+
+          <h2 id="schedule-a">Schedule A — Model cancellation form</h2>
+          <p className="text-sm text-navy-600">
+            Provided per CCRs 2013 Schedule 3. You do not have to use
+            this form — any clear statement of cancellation works
+            (email, dashboard click, letter). It is here for
+            completeness so the right is fully accessible.
+          </p>
+          <div className="rounded-lg border border-navy-200 bg-cream-50 p-5 text-[0.95rem] not-prose font-mono">
+            <p className="mb-3 font-semibold">
+              To: Pandemonium Software Ltd, {site.contactEmail}<br />
+              {site.legal.registeredOfficeOneLine}
+            </p>
+            <p className="mt-3">
+              I/We [*] hereby give notice that I/We [*] cancel my/our [*]
+              contract for the supply of the following service:
+              ModuForge website build + monthly subscription
+            </p>
+            <p className="mt-3">
+              Ordered on [*] / received on [*]: ____________________
+            </p>
+            <p className="mt-3">
+              Name of consumer(s): ____________________
+            </p>
+            <p className="mt-3">
+              Address of consumer(s): ____________________
+            </p>
+            <p className="mt-3">
+              Signature of consumer(s) (only if this form is notified
+              on paper): ____________________
+            </p>
+            <p className="mt-3">Date: ____________________</p>
+            <p className="mt-3 text-xs italic">[*] Delete as appropriate.</p>
+          </div>
         </div>
       </div>
     </section>

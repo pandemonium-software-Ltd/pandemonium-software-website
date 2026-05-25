@@ -81,10 +81,21 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-white/10 pt-8 text-sm text-cream-300/60 md:flex-row md:items-center">
-          <p>© {year} {site.name}. All rights reserved.</p>
-          <p>
-            Made in {site.location.city}, {site.location.region}.
+        <div className="mt-14 border-t border-white/10 pt-8 text-sm text-cream-300/60">
+          <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-center">
+            <p>© {year} {site.name}. All rights reserved.</p>
+            <p>
+              Made in {site.location.city}, {site.location.region}.
+            </p>
+          </div>
+          {/* Companies Act 2006 s82 + Electronic Commerce
+              Regulations 2002 require company number + registered
+              office on the website where transactions take place.
+              Surfaced here once so every page carries it. */}
+          <p className="mt-3 text-xs text-cream-300/50">
+            {site.name} is a company registered in England and Wales,
+            number {site.legal.companyNumber}. Registered office:{" "}
+            {site.legal.registeredOfficeOneLine}.
           </p>
         </div>
       </div>

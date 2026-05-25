@@ -22,6 +22,7 @@ import { runOpsTick } from "./tick";
 import { runAnalyticsTick } from "./analytics-tick";
 import { runMonthlyDigestTick } from "./monthly-digest-tick";
 import { runGbpReviewsTick } from "./gbp-reviews-tick";
+import { runGdprScrubTick } from "./gdpr-scrub-tick";
 import type { D1Database } from "../lib/d1-analytics";
 
 // Minimal Cloudflare Worker types (we don't pull in @cloudflare/workers-types
@@ -47,6 +48,7 @@ type CfEnvBindings = {
 
 const ANALYTICS_CRON = "0 2 * * *";
 const GBP_REVIEWS_CRON = "30 2 * * *";
+const GDPR_SCRUB_CRON = "0 3 * * *";
 const MONTHLY_DIGEST_CRON = "0 8 1 * *";
 
 const handler = {
@@ -76,6 +78,17 @@ const handler = {
         return;
       }
       ctx.waitUntil(runGbpReviewsTick({ db }));
+      return;
+    }
+    if (event.cron === GDPR_SCRUB_CRON) {
+      const db = envBindings.pandemonium_analytics;
+      if (!db) {
+        console.error(
+          "[ops] gdpr scrub cron fired but pandemonium_analytics D1 binding is missing",
+        );
+        return;
+      }
+      ctx.waitUntil(runGdprScrubTick({ db }));
       return;
     }
     if (event.cron === MONTHLY_DIGEST_CRON) {

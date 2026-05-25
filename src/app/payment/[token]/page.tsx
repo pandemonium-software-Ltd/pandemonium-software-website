@@ -119,10 +119,48 @@ export default async function PaymentPage({
                 that&apos;s the setup fee + your first month.
               </p>
               <p className="mt-2 text-xs text-navy-500">
-                Cancel any time from your dashboard, no notice
-                period. Monthly subscription prorated on
-                immediate-cancel; setup fee non-refundable once
-                site delivered. You own everything either way.
+                Monthly subscription prorated on immediate-cancel;
+                setup fee non-refundable once development work has
+                started. You own everything either way.
+              </p>
+            </div>
+
+            {/* CCRs 2013 Reg 36 express-request notice. Customers
+             *  need to know BEFORE paying that ticking the
+             *  "begin work immediately" box at checkout (added when
+             *  Stripe Checkout is wired in task #56) waives their
+             *  14-day refund right on the setup fee. Surfaced
+             *  prominently here so it doesn't read as small-print
+             *  legalese at the moment of consent. */}
+            <div className="mt-6 rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm leading-relaxed text-navy-800">
+              <p className="font-semibold text-navy-900">
+                Before you pay — your cancellation rights
+              </p>
+              <p className="mt-2">
+                If you are a consumer (i.e. NOT buying for a business
+                you operate), you have a statutory right to cancel
+                this contract within{" "}
+                <strong>14 days of payment</strong> and receive a full
+                refund.
+              </p>
+              <p className="mt-2">
+                Because development work on your site starts within
+                minutes of payment, at checkout you will be asked to
+                tick: &ldquo;<em>I expressly request work begins
+                immediately and acknowledge that the setup fee
+                becomes non-refundable as soon as development work
+                has started.</em>&rdquo;
+              </p>
+              <p className="mt-2">
+                If you don&apos;t tick the box, we will hold off
+                starting work until the 14-day cancellation period
+                ends. Either way, you can cancel the monthly
+                subscription at any time from your dashboard. Full
+                details in our{" "}
+                <a href="/terms#schedule-a" className="link">
+                  terms (sections 4 and 5)
+                </a>
+                .
               </p>
             </div>
 

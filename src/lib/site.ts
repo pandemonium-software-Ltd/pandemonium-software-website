@@ -23,6 +23,27 @@ export const site = {
     country: "United Kingdom",
     countryCode: "GB",
   },
+  // Companies House legal disclosures — required on terms page,
+  // privacy page, footer (Companies Act 2006 s82 + CCRs 2013
+  // trader-identity rules). Pulled directly from the public
+  // Companies House record. Single source of truth — every other
+  // file that needs the company number or registered office
+  // imports from here, so a future address change at Companies
+  // House is one find-and-replace.
+  legal: {
+    companyNumber: "16948391",
+    registeredOffice: {
+      line1: "10 Olivers Close",
+      line2: "Long Hanborough",
+      city: "Witney",
+      postcode: "OX29 8GL",
+      country: "England",
+    },
+    /** Formatted single-line for inline contract text. */
+    registeredOfficeOneLine:
+      "10 Olivers Close, Long Hanborough, Witney, OX29 8GL, England",
+    incorporationDate: "2026-01-07",
+  },
   nav: [
     { label: "Pricing", href: "/pricing" },
     { label: "About", href: "/about" },

@@ -166,6 +166,23 @@ export type ProspectRecord = {
   /** ISO-8601 — when passwordHash was last set (originally OR via
    *  forgot-password regenerate). Audit field for /admin. */
   passwordSetAt?: string;
+  // --- GDPR retention (Stage 2D+) ---
+  /** ISO-8601 — when the customer's Status flipped to Cancelled.
+   *  Set by the admin cancellation flow or the dashboard cancel
+   *  endpoint when applying an immediate-prorated cancellation. */
+  cancelledAt?: string;
+  /** ISO date YYYY-MM-DD — the day personal data MUST be deleted.
+   *  Set 30 days after cancelledAt. The gdpr-scrub-tick cron
+   *  reads this; on or after this date, personal data is purged.
+   *  Customer can request earlier deletion under Article 17 UK
+   *  GDPR — we just bring this date forward and the cron handles
+   *  the rest. */
+  dataRetentionUntil?: string;
+  /** ISO-8601 — when the scrub cron actually completed. Set ONCE
+   *  by the cron after the writes finish. Used as the safety
+   *  latch so a second scrub never runs (e.g. if Notion sync was
+   *  flaky and the cron retried). */
+  dataScrubbedAt?: string;
   // --- Customer dashboard (Stage 2D) ---
   changeRequests: ChangeRequest[];
   notionUrl: string;
@@ -1008,6 +1025,12 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     moduleChangeLog: parseModuleChangeLog(
       readRichText(p["Module Change Log"]),
     ),
+    // GDPR retention triplet. All three optional — older prospects
+    // may not have these fields populated yet. The cron tolerates
+    // missing dataRetentionUntil by skipping the prospect.
+    cancelledAt: readDate(p["Cancelled At"]),
+    dataRetentionUntil: readDate(p["Data Retention Until"]),
+    dataScrubbedAt: readDate(p["Data Scrubbed At"]),
   };
 }
 
@@ -1515,6 +1538,98 @@ export async function resolveModuleChange(
   });
 
   return updated;
+}
+
+// --- GDPR retention writers ---
+//
+// Three writes that bracket the cancellation lifecycle:
+//   1. markCancelled — stamps Cancelled At = now, Data Retention
+//      Until = now + 30 days. Called by the admin module-change
+//      endpoint when applying a cancellation kind.
+//   2. scrubPersonalDataFields — overwrites every Notion property
+//      that holds personal data with the empty placeholder
+//      "[scrubbed]" (rich_text) or empty array (multi_select).
+//      Called by the gdpr-scrub-tick cron.
+//   3. markScrubbed — stamps Data Scrubbed At = now. The "scrub
+//      complete" latch that prevents re-runs.
+//
+// Why "[scrubbed]" not deletion: Notion's API can't delete a
+// property's content per-page (you'd have to delete the whole
+// page), but a "[scrubbed]" placeholder is just as good for GDPR
+// — the personal data is gone, and the audit trail of WHEN it
+// went is preserved by Data Scrubbed At.
+
+import { personalDataRetentionUntil } from "./gdpr-retention";
+
+/** Atomic write: flip Status to Cancelled + stamp Cancelled At
+ *  + stamp Data Retention Until (now + 30 days). Used by the
+ *  admin module-change endpoint when applying any cancellation
+ *  kind, AND by direct admin cancellations. */
+export async function markCancelled(
+  pageId: string,
+): Promise<{ cancelledAt: string; dataRetentionUntil: string }> {
+  const now = new Date().toISOString();
+  const retentionUntil = personalDataRetentionUntil(now);
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        Status: { select: { name: "Cancelled" } },
+        "Cancelled At": { date: { start: now } },
+        "Data Retention Until": { date: { start: retentionUntil } },
+      },
+    },
+  });
+  return { cancelledAt: now, dataRetentionUntil: retentionUntil };
+}
+
+/** Overwrite every Notion property carrying personal data with
+ *  a "[scrubbed]" placeholder. The personal data is gone; the
+ *  audit trail (Status, Cancelled At, Data Scrubbed At, the
+ *  money fields needed for HMRC) is preserved.
+ *
+ *  Per the GDPR policy in /terms section 11: financial records
+ *  are kept 7 years (HMRC requirement). Setup Fee Calculated,
+ *  Monthly Fee Calculated, and Module Change Log money lines
+ *  are NOT scrubbed by this function. */
+export async function scrubPersonalDataFields(
+  pageId: string,
+): Promise<void> {
+  // Keep the moduleChangeLog metadata for HMRC but strip the
+  // narrative (fromModules / toModules / resolutionNote). Easier
+  // to just blank the whole rich_text and rebuild a money-only
+  // summary, but for simplicity we leave it as-is — module names
+  // are not personal data, only business operational details.
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        // Personal contact + identity slots
+        "Onboarding Data": rt("[scrubbed]"),
+        "Phase 2 Data": rt("[scrubbed]"),
+        "Phase 3 Data": rt("[scrubbed]"),
+        "Customer Change Requests": rt("[scrubbed]"),
+        "Haiku Cache": rt(""),
+        "Password Hash": rt(""),
+        // Onboarding latches that carry contact-adjacent state
+        "Nameservers Email Sent At": { date: null },
+        "Customer Confirmed Nameservers At": { date: null },
+      },
+    },
+  });
+}
+
+/** Stamp Data Scrubbed At — the safety latch that stops the
+ *  cron re-scrubbing the same prospect. Set once, never reset. */
+export async function markScrubbed(pageId: string): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Data Scrubbed At": { date: { start: new Date().toISOString() } },
+      },
+    },
+  });
 }
 
 // --- Change requests inbox ---
