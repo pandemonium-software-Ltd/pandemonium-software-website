@@ -12,6 +12,77 @@
 ranked priority list (Critical / High-value / Optional) with complexity,
 duration, monthly cost, and status for every outstanding item.
 
+The current top priority is the **pricing-live cutover** (item #0 on the
+roadmap). The file-by-file implementation queue is in the section below.
+
+---
+
+## Implementation queue — pricing-live cutover
+
+**Source of truth:** the "🧭 Strategic decisions locked 2026-05-25"
+section in `ROADMAP.md`. Every price below comes from there. If the
+ROADMAP and this section disagree, ROADMAP wins.
+
+### Phase A — Constants (do first, sets up everything else)
+
+Files: `src/lib/fees.ts`, `src/lib/schemas.ts`, `src/lib/billing/module-policy.ts`
+
+- Update all `MODULE_*_GBP` constants to new numbers:
+  - Booking: 19 / 6
+  - Enquiry: 19 / 6
+  - Newsletter: 49 / 9
+  - Offers: 19 / 6
+  - GBP add-on: 59 / 3
+- Add `MODULE_MULTILOCATION_SETUP_GBP = 15` (no monthly constant — multi-location is one-off only)
+- Add `"Multi-location"` to `MODULE_OPTIONS` enum in `schemas.ts` AND the duplicate in `module-policy.ts`
+- Extend `ModuleSelection` type with `extraLocations: number` (multi-location is a counter, not a boolean)
+- Update `calculateFees`: add `selection.extraLocations * MODULE_MULTILOCATION_SETUP_GBP` to setup, no monthly contribution
+- Founding/Standard base constants: confirm `BASE_SETUP_GBP = 299` and `BASE_MONTHLY_GBP = 29` (live currently has 129/19 — UPDATE)
+- Founding constants: confirm `FOUNDING_MEMBER_SETUP_GBP = 99` and `FOUNDING_MEMBER_MONTHLY_GBP = 15` (already correct)
+
+### Phase B — Pricing page, intake, home
+
+Files: `src/app/pricing/page.tsx`, `src/components/IntakeForm.tsx`, `src/components/PricingCalculator.tsx`, `src/app/page.tsx`, `src/components/OptionalExtras.tsx`
+
+- `/pricing`: rewrite tier section — Founding + Standard only (drop any Premium copy). Update module list rows. Update worked example. FAQ already aligned (today's commit `632064e`).
+- `IntakeForm`: refresh module rows; **add Multi-location** with a `<input type="number">` for "How many extra locations?" (defaults to 0, min 0)
+- `PricingCalculator`: handle multi-location counter in the live total — it's `extraLocations × £15` setup contribution
+- Home: remove `<TestimonialBlock>` placeholder. Whatever section that was, drop it. Surrounding spacing may need a small adjustment.
+
+### Phase C — Dashboard
+
+Files: `src/components/account/ModulesEditor.tsx`, `src/components/account/BillingPanel.tsx`, `src/components/onboarding/Step3Modules.tsx`
+
+- `ModulesEditor.ALL_MODULES`: stop hardcoding prices — read from `fees.ts` exported constants
+- **Add Multi-location row** with counter UI: shows current `extraLocations`, "+" / "-" buttons, calls a new endpoint to update. Reuses the modal for confirmation showing "+£15 setup".
+- Verify `BeforeAfterPanel` still computes the new monthly correctly with new numbers (it should — it reads delta from server, not constants)
+- `BillingPanel` cancel modal: spot-check that the new £29 vs £15 numbers render sensibly
+- `Step3Modules`: pricing references in the module cards — update to read from constants
+
+### Phase D — Tests + golden fixtures
+
+- `src/lib/billing/__tests__/module-policy.test.ts`: fee-delta assertions — update for new numbers. Add multi-location counter tests (`{extraLocations: 0}` → 0; `{extraLocations: 3}` → 45 setup, 0 monthly).
+- `src/lib/templates/golden/*.json`: any fixture quoting old prices needs updating. Likely candidates: `module-scheduled-add.json`, `module-scheduled-remove.json`, `module-add-applied-*.json`, `phase3-thanks-fees-and-payment-coming-*.json`.
+
+### Phase E — Docs
+
+- ROADMAP: move "pricing-live cutover" (#0) to ✅ Shipped section
+- PLAYBOOK: delete this whole "Implementation queue" section once shipped (it'll be obsolete)
+
+### Phase F — Deploy
+
+```bash
+npm run deploy         # ships A-E + today's compliance work
+npm run deploy:ops     # ships GDPR scrub cron from today
+```
+
+### Watch-items after deploy
+
+- **Multi-location at £15 setup** is acknowledged under-priced vs operator effort (2-4h per location). Add a `console.warn` in the admin grant-module flow if a customer's extraLocations exceeds 3 so you notice early.
+- **Standard at £299/£29** is ~70% above the previous live price. Watch conversion rate on /enquiry over the first 10 enquiries post-deploy. If it craters, you have data to negotiate the price down — DON'T just react to early friction without seeing the rate.
+
+---
+
 ---
 
 ## Quick reference

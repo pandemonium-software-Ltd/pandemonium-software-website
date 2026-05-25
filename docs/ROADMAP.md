@@ -26,10 +26,54 @@
 
 ---
 
+## 🧭 Strategic decisions locked 2026-05-25
+
+These are the authoritative answers to "what is ModuForge selling, at
+what price, to who?" — supersedes any earlier copy on the live site
+or in the codebase that disagrees.
+
+### Pricing
+
+| Tier | Setup | Monthly | Notes |
+|---|---|---|---|
+| **Founding** | £99 | £15 | 3 spots, locked 5 years (not "for life"). None signed yet. |
+| **Standard** | £299 | £29 | Flat — no first-10 vs 11+ banding. |
+| **Premium** | — | — | **Deferred entirely.** Revisit only when 5-10 Standard customers ask for a specific feature. |
+
+| Module | Setup | Monthly |
+|---|---|---|
+| Online Booking | £19 | £6 |
+| Enquiry Form | £19 | £6 |
+| Newsletter | £49 | £9 |
+| Offers | £19 | £6 |
+| Google Business Profile + reviews | £59 | £3 |
+| Multi-location (per extra location) | £15 | — (one-off only) |
+
+Notes:
+- Module pricing is **honest-effort** — setup fees roughly reflect actual operator time per module (GBP audit = 1-3h, Newsletter setup = 45-90 min, etc.)
+- **Multi-location at £15** is acknowledged as under-priced vs the 2-4 hours of provisioning per location. Watch-item: revisit if Standard customers add 5+ locations and operator time becomes a real bottleneck.
+- Newsletter + Offers are **two separate modules** (not merged into one combined SKU).
+
+### Strategy
+
+- **Geography**: stay horizontal-UK in Y1, segmented by trade via the existing `businessType` dropdown on qualification. Niche commit at start of Y2 based on Y1 enquiry / conversion / ARPU data.
+- **Niche-pick reporting dashboard**: defer to Q3-Q4 Y1 — Notion's native filter is enough until volume justifies a built view.
+- **Premium tier**: deferred. Launch with Founding + Standard only.
+- **Placeholder homepage testimonial**: remove the block entirely. Re-add when a real testimonial exists.
+- **Y1 capacity**: 10 hr/week (up from 2). 5-year base-case forecast: ~£300k ARR, ~£135k take-home (~5× the prior 2hr/wk plan).
+- **Cancellation/refund/GDPR/Companies House compliance**: shipped in code, awaiting `npm run deploy`.
+
+### Implementation queue (next session)
+
+Phases A → F. ROADMAP entry below tracks each phase.
+
+---
+
 ## 🔴 Critical (Certain — before paying customers land)
 
 | # | Item | Complexity | Duration | Monthly cost | Status |
 |---|------|------------|----------|--------------|--------|
+| 0 | **Pricing-live cutover** — update fees.ts + pricing page + intake + dashboard + tests to the 2026-05-25 locked pricing (above). Adds Multi-location module (counter, not boolean). Removes placeholder testimonial. Ships today's compliance work in the same deploy. See [`PLAYBOOK.md` § Implementation queue: pricing-live cutover](./PLAYBOOK.md#implementation-queue--pricing-live-cutover) for the file-by-file plan. | Medium | 5-7 hrs | £0 | Certain — NEXT SESSION |
 | 1 | **Stripe real integration** — Checkout, webhooks, real subscription updates for module changes + refunds. Unblocks every "pending-stripe" state from today's billing work | Medium | 2 days | 1.4% + 20p per txn | Certain |
 | 2 | **Express-request checkbox at payment** — bakes into the Stripe Checkout flow (notice already on page) | Low | Bundled with #1 | £0 | Certain |
 | 3 | **Solicitor T&C review** — UK SaaS specialist signs off the new terms before public launch | Low (1h call) | 1 week elapsed | £200-400 one-off | Certain |
