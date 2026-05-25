@@ -30,7 +30,9 @@ import {
   GBP_ADDON_ONE_OFF_GBP,
   GBP_ADDON_MONTHLY_GBP,
   MODULE_MULTILOCATION_SETUP_GBP,
+  calculateFees,
 } from "@/lib/fees";
+import { modulesToSelection } from "@/lib/billing/module-policy";
 
 /** Per-module display data — costs + friendly labels for the
  *  payment-page line items. Multi-location handled separately
@@ -114,6 +116,19 @@ export default async function PaymentPage({
     prospect.status === "Paid" ||
     prospect.status === "Build Started" ||
     prospect.status === "Live";
+
+  // Compute totals from raw inputs (modules + extraLocations +
+  // foundingMember) — the SAME inputs Stripe Checkout uses to
+  // build its line items. Single source of truth eliminates the
+  // drift class of bugs where the cached Notion setupFeeCalculated
+  // and the Stripe charge disagree (e.g. if the prospect was
+  // edited via /admin without recomputing fees). Cached Notion
+  // numbers are kept for back-office reporting but no longer
+  // drive the customer-facing total.
+  const computedFees = calculateFees(
+    modulesToSelection(prospect.moduleSelections, prospect.extraLocations),
+    prospect.foundingMember,
+  );
 
   return (
     <>
@@ -214,10 +229,10 @@ export default async function PaymentPage({
                 <tr>
                   <td className="pt-3">Total</td>
                   <td className="pt-3 text-right font-mono">
-                    £{prospect.setupFeeCalculated}
+                    £{computedFees.setup}
                   </td>
                   <td className="pt-3 text-right font-mono">
-                    £{prospect.monthlyFeeCalculated}/mo
+                    £{computedFees.monthly}/mo
                   </td>
                 </tr>
               </tfoot>
@@ -228,9 +243,7 @@ export default async function PaymentPage({
                 Today you pay
               </p>
               <p className="mt-1 font-serif text-3xl font-semibold">
-                £
-                {(prospect.setupFeeCalculated ?? 0) +
-                  (prospect.monthlyFeeCalculated ?? 0)}
+                £{computedFees.setup + computedFees.monthly}
               </p>
               <p className="mt-1 text-xs text-cream-300/80">
                 Setup fee + first month, charged together. The
@@ -259,10 +272,7 @@ export default async function PaymentPage({
               ) : isStripeConfigured() ? (
                 <CheckoutButton
                   token={token}
-                  totalToday={
-                    (prospect.setupFeeCalculated ?? 0) +
-                    (prospect.monthlyFeeCalculated ?? 0)
-                  }
+                  totalToday={computedFees.setup + computedFees.monthly}
                 />
               ) : (
                 <div className="rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm text-navy-700">
