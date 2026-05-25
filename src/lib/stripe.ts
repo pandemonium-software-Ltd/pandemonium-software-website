@@ -29,6 +29,27 @@ import {
   STRIPE_BASE_STANDARD_PRICE_ID,
   STRIPE_MODULE_PRICE_IDS,
 } from "./stripe-products";
+import {
+  BASE_SETUP_GBP,
+  FOUNDING_MEMBER_SETUP_GBP,
+  MODULE_BOOKING_SETUP_GBP,
+  MODULE_ENQUIRY_SETUP_GBP,
+  MODULE_NEWSLETTER_SETUP_GBP,
+  MODULE_OFFERS_SETUP_GBP,
+  GBP_ADDON_ONE_OFF_GBP,
+  MODULE_MULTILOCATION_SETUP_GBP,
+} from "./fees";
+
+/** Per-module setup-fee map (pence) — drives the itemised
+ *  one-time line items on Checkout. Customer sees a separate
+ *  line per module setup on the Stripe payment page. */
+const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
+  "Online Booking": MODULE_BOOKING_SETUP_GBP * 100,
+  "Enquiry Form": MODULE_ENQUIRY_SETUP_GBP * 100,
+  Newsletter: MODULE_NEWSLETTER_SETUP_GBP * 100,
+  Offers: MODULE_OFFERS_SETUP_GBP * 100,
+  "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
+};
 
 let cachedStripe: Stripe | null = null;
 
@@ -94,29 +115,42 @@ export type CheckoutSelection = {
    *  so the webhook can map session → prospect without a separate lookup. */
   token: string;
   /** Stripe Customer ID — created via getOrCreateStripeCustomer
-   *  BEFORE this call so we can attach the setup-fee InvoiceItem
-   *  to the customer first (pending until the first invoice
-   *  finalises, where it lands alongside the recurring lines). */
+   *  BEFORE this call so the same customer record persists across
+   *  abandoned Checkout retries. */
   customerId: string;
   /** Whether the customer qualifies for the founding-member price.
    *  Picks STANDARD vs FOUNDING base subscription. */
   foundingMember: boolean;
   /** Module names selected (canonical Notion strings — same set as
-   *  MODULE_OPTIONS). Maps to per-module monthly price IDs. */
+   *  MODULE_OPTIONS). Maps to per-module monthly price IDs + setup
+   *  fees. Multi-location is treated separately. */
   modules: readonly string[];
-  /** Success / cancel return URLs — typically /payment/[token]/success
-   *  and /payment/[token]. */
+  /** Multi-location counter — adds £15 × N as a one-off line item. */
+  extraLocations: number;
+  /** Success / cancel return URLs. */
   successUrl: string;
   cancelUrl: string;
 };
 
 /**
  * Create a Subscription-mode Checkout Session for a prospect's
- * first payment. Caller MUST have added the setup-fee InvoiceItem
- * to the Customer FIRST via addOneOffInvoiceItem (without a
- * subscriptionId) — Stripe folds any pending invoice items on
- * the customer into the first subscription invoice automatically.
- * Returns the hosted Checkout URL — caller redirects the browser.
+ * first payment. Mixes one-time setup-fee line items with the
+ * recurring monthly subscription items so the customer sees an
+ * itemised breakdown on Stripe's payment page:
+ *
+ *   ─ ModuForge — Site setup ............ £299  one-time
+ *   ─ ModuForge — Newsletter setup ......  £49  one-time
+ *   ─ ModuForge — Offers setup .......... £19  one-time
+ *   ─ ModuForge — Multi-location setup
+ *     (1 extra location)  .................... £15  one-time
+ *   ─ Standard subscription .............. £29 / month
+ *   ─ Newsletter ..........................  £9 / month
+ *   ─ Offers ..............................  £6 / month
+ *
+ * Setup fees use Stripe `price_data` (inline price create) rather
+ * than pre-created Prices so we can name each line dynamically
+ * (e.g. "Multi-location setup (3 extra locations)"). Recurring
+ * lines use the Price IDs created at S1.
  */
 export async function createCheckoutSession(
   selection: CheckoutSelection,
@@ -129,12 +163,60 @@ export async function createCheckoutSession(
     ? STRIPE_BASE_FOUNDING_PRICE_ID
     : STRIPE_BASE_STANDARD_PRICE_ID;
 
-  // line_items: base subscription + one recurring item per module.
-  // Multi-location is NOT here — it has no monthly fee (it's in
-  // the setup-fee InvoiceItem the caller added).
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
-    { price: basePriceId, quantity: 1 },
-  ];
+  const baseSetupPence = selection.foundingMember
+    ? FOUNDING_MEMBER_SETUP_GBP * 100
+    : BASE_SETUP_GBP * 100;
+
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+
+  // 1. Base setup fee (one-time)
+  lineItems.push({
+    price_data: {
+      currency: "gbp",
+      unit_amount: baseSetupPence,
+      product_data: {
+        name: selection.foundingMember
+          ? "ModuForge — Site setup (Founding Member)"
+          : "ModuForge — Site setup",
+      },
+    },
+    quantity: 1,
+  });
+
+  // 2. Per-module setup fees (one-time) — itemised so customer
+  //    sees exactly what each module is costing on Checkout.
+  for (const moduleName of selection.modules) {
+    const setupPence = MODULE_SETUP_PENCE[moduleName];
+    if (!setupPence) continue;
+    lineItems.push({
+      price_data: {
+        currency: "gbp",
+        unit_amount: setupPence,
+        product_data: { name: `${moduleName} — setup` },
+      },
+      quantity: 1,
+    });
+  }
+
+  // 3. Multi-location setup fee (one-time) — quantity > 1 when
+  //    multiple extra locations; Stripe renders as "qty × £15".
+  if (selection.extraLocations > 0) {
+    lineItems.push({
+      price_data: {
+        currency: "gbp",
+        unit_amount: MODULE_MULTILOCATION_SETUP_GBP * 100,
+        product_data: {
+          name: `Multi-location setup (extra location${selection.extraLocations === 1 ? "" : "s"})`,
+        },
+      },
+      quantity: selection.extraLocations,
+    });
+  }
+
+  // 4. Base recurring subscription (Standard or Founding)
+  lineItems.push({ price: basePriceId, quantity: 1 });
+
+  // 5. Per-module recurring fees (no Multi-location — no monthly)
   for (const moduleName of selection.modules) {
     const priceId = STRIPE_MODULE_PRICE_IDS[moduleName];
     if (!priceId) continue;

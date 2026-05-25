@@ -14,6 +14,56 @@ import { getProspectByToken } from "@/lib/notion-prospects";
 import { isStripeConfigured } from "@/lib/stripe";
 import { site } from "@/lib/site";
 import CheckoutButton from "@/components/CheckoutButton";
+import {
+  BASE_SETUP_GBP,
+  BASE_MONTHLY_GBP,
+  FOUNDING_MEMBER_SETUP_GBP,
+  FOUNDING_MEMBER_MONTHLY_GBP,
+  MODULE_BOOKING_SETUP_GBP,
+  MODULE_BOOKING_MONTHLY_GBP,
+  MODULE_ENQUIRY_SETUP_GBP,
+  MODULE_ENQUIRY_MONTHLY_GBP,
+  MODULE_NEWSLETTER_SETUP_GBP,
+  MODULE_NEWSLETTER_MONTHLY_GBP,
+  MODULE_OFFERS_SETUP_GBP,
+  MODULE_OFFERS_MONTHLY_GBP,
+  GBP_ADDON_ONE_OFF_GBP,
+  GBP_ADDON_MONTHLY_GBP,
+  MODULE_MULTILOCATION_SETUP_GBP,
+} from "@/lib/fees";
+
+/** Per-module display data — costs + friendly labels for the
+ *  payment-page line items. Multi-location handled separately
+ *  because it's a counter with no monthly. */
+const MODULE_LINE: Readonly<
+  Record<string, { label: string; setup: number; monthly: number }>
+> = {
+  "Online Booking": {
+    label: "Online Booking",
+    setup: MODULE_BOOKING_SETUP_GBP,
+    monthly: MODULE_BOOKING_MONTHLY_GBP,
+  },
+  "Enquiry Form": {
+    label: "Enquiry Form",
+    setup: MODULE_ENQUIRY_SETUP_GBP,
+    monthly: MODULE_ENQUIRY_MONTHLY_GBP,
+  },
+  Newsletter: {
+    label: "Newsletter",
+    setup: MODULE_NEWSLETTER_SETUP_GBP,
+    monthly: MODULE_NEWSLETTER_MONTHLY_GBP,
+  },
+  Offers: {
+    label: "Offers",
+    setup: MODULE_OFFERS_SETUP_GBP,
+    monthly: MODULE_OFFERS_MONTHLY_GBP,
+  },
+  "Google Business Profile Setup/Audit": {
+    label: "Google Business Profile + reviews",
+    setup: GBP_ADDON_ONE_OFF_GBP,
+    monthly: GBP_ADDON_MONTHLY_GBP,
+  },
+};
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -87,93 +137,116 @@ export default async function PaymentPage({
         <div className="container-content max-w-2xl">
           <div className="card bg-white">
             <h2 className="font-serif text-xl font-semibold text-navy-900">
-              Your quote
+              Your order
             </h2>
-
-            <dl className="mt-5 grid gap-3 text-navy-900">
-              <Row label="Setup fee (one-off)" value={`£${prospect.setupFeeCalculated}`} />
-              <Row label="Monthly subscription" value={`£${prospect.monthlyFeeCalculated}/month`} />
-              {prospect.foundingMember && (
-                <Row label="Status" value="Founding Member rate locked for 5 years" tone="ember" />
-              )}
-            </dl>
-
-            {(prospect.moduleSelections.length > 0 ||
-              prospect.extraLocations > 0) && (
-              <div className="mt-6 rounded-xl bg-cream-100 p-4">
-                <p className="text-sm font-semibold text-navy-900">
-                  Modules included
-                </p>
-                <ul className="mt-2 space-y-1 text-sm text-navy-700">
-                  <li>• Base website (always included)</li>
-                  {prospect.moduleSelections
-                    .filter((m) => m !== "Multi-location")
-                    .map((m) => (
-                      <li key={m}>• {m}</li>
-                    ))}
-                  {prospect.extraLocations > 0 && (
-                    <li>
-                      • Multi-location ({prospect.extraLocations} extra
-                      location{prospect.extraLocations === 1 ? "" : "s"} ×
-                      £15 setup)
-                    </li>
-                  )}
-                </ul>
-              </div>
+            {prospect.foundingMember && (
+              <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-ember-100 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-ember-800">
+                Founding member · rate locked 5 years
+              </p>
             )}
 
-            <div className="mt-8 border-t border-navy-100 pt-6">
-              <p className="text-sm text-navy-700">
-                <strong className="text-navy-900">Today, you&apos;ll be charged:</strong>{" "}
-                £{(prospect.setupFeeCalculated ?? 0) + (prospect.monthlyFeeCalculated ?? 0)}
-                {" — "}
-                that&apos;s the setup fee + your first month.
+            <table className="mt-5 w-full text-sm text-navy-900">
+              <thead className="text-xs uppercase tracking-wider text-navy-500">
+                <tr>
+                  <th className="pb-2 text-left font-semibold">Item</th>
+                  <th className="pb-2 text-right font-semibold">Setup</th>
+                  <th className="pb-2 text-right font-semibold">Monthly</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-100">
+                <tr>
+                  <td className="py-2.5">
+                    Site + hosting
+                    <span className="block text-xs text-navy-500">
+                      base subscription
+                    </span>
+                  </td>
+                  <td className="py-2.5 text-right font-mono">
+                    £
+                    {prospect.foundingMember
+                      ? FOUNDING_MEMBER_SETUP_GBP
+                      : BASE_SETUP_GBP}
+                  </td>
+                  <td className="py-2.5 text-right font-mono">
+                    £
+                    {prospect.foundingMember
+                      ? FOUNDING_MEMBER_MONTHLY_GBP
+                      : BASE_MONTHLY_GBP}
+                  </td>
+                </tr>
+                {prospect.moduleSelections
+                  .filter((m) => m !== "Multi-location" && MODULE_LINE[m])
+                  .map((m) => {
+                    const line = MODULE_LINE[m];
+                    return (
+                      <tr key={m}>
+                        <td className="py-2.5">{line.label}</td>
+                        <td className="py-2.5 text-right font-mono">
+                          +£{line.setup}
+                        </td>
+                        <td className="py-2.5 text-right font-mono">
+                          +£{line.monthly}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                {prospect.extraLocations > 0 && (
+                  <tr>
+                    <td className="py-2.5">
+                      Multi-location
+                      <span className="block text-xs text-navy-500">
+                        {prospect.extraLocations} extra location
+                        {prospect.extraLocations === 1 ? "" : "s"}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right font-mono">
+                      +£
+                      {prospect.extraLocations *
+                        MODULE_MULTILOCATION_SETUP_GBP}
+                    </td>
+                    <td className="py-2.5 text-right font-mono text-navy-400">
+                      —
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot className="border-t-2 border-navy-200 text-base font-semibold">
+                <tr>
+                  <td className="pt-3">Total</td>
+                  <td className="pt-3 text-right font-mono">
+                    £{prospect.setupFeeCalculated}
+                  </td>
+                  <td className="pt-3 text-right font-mono">
+                    £{prospect.monthlyFeeCalculated}/mo
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div className="mt-5 rounded-xl bg-navy-950 p-4 text-white">
+              <p className="text-xs uppercase tracking-wider text-cream-300/70">
+                Today you pay
               </p>
-              <p className="mt-2 text-xs text-navy-500">
-                Monthly subscription prorated on immediate-cancel;
-                setup fee non-refundable once development work has
-                started. You own everything either way.
+              <p className="mt-1 font-serif text-3xl font-semibold">
+                £
+                {(prospect.setupFeeCalculated ?? 0) +
+                  (prospect.monthlyFeeCalculated ?? 0)}
+              </p>
+              <p className="mt-1 text-xs text-cream-300/80">
+                Setup fee + first month, charged together. The
+                monthly bills on the same day each month after that.
               </p>
             </div>
 
-            {/* CCRs 2013 Reg 36 express-request notice. Customers
-             *  need to know BEFORE paying that ticking the
-             *  "begin work immediately" box at checkout (added when
-             *  Stripe Checkout is wired in task #56) waives their
-             *  14-day refund right on the setup fee. Surfaced
-             *  prominently here so it doesn't read as small-print
-             *  legalese at the moment of consent. */}
-            <div className="mt-6 rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm leading-relaxed text-navy-800">
-              <p className="font-semibold text-navy-900">
-                Before you pay — your cancellation rights
-              </p>
-              <p className="mt-2">
-                If you are a consumer (i.e. NOT buying for a business
-                you operate), you have a statutory right to cancel
-                this contract within{" "}
-                <strong>14 days of payment</strong> and receive a full
-                refund.
-              </p>
-              <p className="mt-2">
-                Because development work on your site starts within
-                minutes of payment, at checkout you will be asked to
-                tick: &ldquo;<em>I expressly request work begins
-                immediately and acknowledge that the setup fee
-                becomes non-refundable as soon as development work
-                has started.</em>&rdquo;
-              </p>
-              <p className="mt-2">
-                If you don&apos;t tick the box, we will hold off
-                starting work until the 14-day cancellation period
-                ends. Either way, you can cancel the monthly
-                subscription at any time from your dashboard. Full
-                details in our{" "}
-                <a href="/terms#schedule-a" className="link">
-                  terms (sections 4 and 5)
-                </a>
-                .
-              </p>
-            </div>
+            <p className="mt-4 text-xs text-navy-500">
+              Cancel any time from your dashboard. Setup fee
+              non-refundable once development has started — full
+              terms in our{" "}
+              <a href="/terms#schedule-a" className="link">
+                cancellation policy
+              </a>
+              .
+            </p>
 
             <div className="mt-8">
               {alreadyPaid ? (
@@ -236,30 +309,6 @@ export default async function PaymentPage({
         </div>
       </section>
     </>
-  );
-}
-
-function Row({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "ember";
-}) {
-  return (
-    <div className="flex items-baseline justify-between border-b border-navy-100 pb-2 last:border-b-0 last:pb-0">
-      <dt className="text-sm text-navy-700">{label}</dt>
-      <dd
-        className={[
-          "font-serif text-lg font-semibold",
-          tone === "ember" ? "text-ember-700" : "text-navy-900",
-        ].join(" ")}
-      >
-        {value}
-      </dd>
-    </div>
   );
 }
 

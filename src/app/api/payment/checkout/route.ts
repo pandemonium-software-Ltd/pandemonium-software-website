@@ -28,12 +28,10 @@ import {
   type ProspectRecord,
 } from "@/lib/notion-prospects";
 import {
-  addOneOffInvoiceItem,
   createCheckoutSession,
   getOrCreateStripeCustomer,
   isStripeConfigured,
 } from "@/lib/stripe";
-import { MODULE_MULTILOCATION_SETUP_GBP } from "@/lib/fees";
 import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
@@ -107,25 +105,10 @@ export async function POST(request: Request) {
       await setProspectStripeCustomerId(prospect.pageId, customer.id);
     }
 
-    // 3. Setup fee + multi-location as a one-off pending invoice
-    //    item. Idempotency keyed on the prospect token so retries
-    //    on the same prospect don't double-charge.
-    const setupFeePence = (prospect.setupFeeCalculated ?? 0) * 100;
-    if (setupFeePence > 0) {
-      const multiLocPart =
-        prospect.extraLocations > 0
-          ? ` + ${prospect.extraLocations} × £${MODULE_MULTILOCATION_SETUP_GBP} multi-location`
-          : "";
-      await addOneOffInvoiceItem({
-        customerId: customer.id,
-        amountPence: setupFeePence,
-        description: `ModuForge setup${multiLocPart}`,
-        idempotencyKey: `setup-fee:${token}`,
-      });
-    }
-
-    // 4. Module list — strip Multi-location (no recurring) +
-    //    skip unknown names.
+    // 3. Module list — strip Multi-location (no recurring) +
+    //    skip unknown names. Setup fees go through Checkout's
+    //    line_items, not as pre-attached invoice items, so they
+    //    show on Stripe's payment-page summary panel.
     const recurringModules = prospect.moduleSelections.filter(
       (m) => m !== "Multi-location",
     );
@@ -136,11 +119,12 @@ export async function POST(request: Request) {
       customerId: customer.id,
       foundingMember: prospect.foundingMember,
       modules: recurringModules,
+      extraLocations: prospect.extraLocations,
       successUrl: `${baseUrl}/payment/${token}?stripe=success`,
       cancelUrl: `${baseUrl}/payment/${token}?stripe=cancel`,
     });
 
-    // 5. Stamp the express-request preference on the prospect's
+    // 4. Stamp the express-request preference on the prospect's
     //    notes column so it's auditable later. (A dedicated
     //    Notion column would be cleaner — schedule for Stripe
     //    polish pass.) For now we append a tagged line.
