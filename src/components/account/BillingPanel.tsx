@@ -132,6 +132,8 @@ export default function BillingPanel({
             currentModules={currentModules}
             pendingChanges={pendingChanges}
             foundingMember={foundingMember}
+            currentMonthly={monthlyFee}
+            paidSetup={setupFee}
           />
         </div>
       </section>
@@ -326,9 +328,11 @@ function ConfirmCancel({
             <p>
               We&apos;ll refund the unused portion of{" "}
               <strong>this month&apos;s subscription</strong> (based
-              on days remaining) to the card on file within 5–10
-              working days. Exact figure confirmed in your final
-              receipt.
+              on days remaining) to the card on file{" "}
+              <strong>within 14 days</strong> of cancellation. Most
+              card refunds land in 5–10 working days; the
+              14-day backstop matches our statutory commitment.
+              Exact figure confirmed in your final receipt.
             </p>
             <p className="rounded-lg bg-cream-100 px-3 py-2 text-xs text-navy-700">
               <strong>The one-off setup fee is not refunded</strong>{" "}

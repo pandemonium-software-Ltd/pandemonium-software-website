@@ -17,8 +17,16 @@ import type { Template } from "../types";
 export const moduleScheduled: Template = {
   id: "module-scheduled",
   riskTier: "low",
-  required: ["customerName", "moduleName", "effectiveDate", "accountUrl"],
-  optional: ["added", "removed", "monthlyDelta", "setupCharge"],
+  required: [
+    "customerName",
+    "moduleName",
+    "effectiveDate",
+    "accountUrl",
+    "paidSetupSoFar",
+    "currentMonthly",
+    "newMonthly",
+  ],
+  optional: ["added", "removed", "extraSetupCharge"],
   cta: { urlKey: "accountUrl", label: "View your account" },
   subject:
     "Got it — {{moduleName}} scheduled for {{effectiveDate}}",
@@ -31,21 +39,32 @@ Quick confirmation — your module change is queued.
 {{/if}}
 Effective from: {{effectiveDate}}
 
+Where you stand on money:
+
+  • Setup paid to date:      £{{paidSetupSoFar}} (non-refundable)
+  • Current monthly:         £{{currentMonthly}}/mo
+  • New monthly from {{effectiveDate}}: £{{newMonthly}}/mo
+{{#if added}}  • Extra one-off setup on
+    {{effectiveDate}} invoice:  +£{{extraSetupCharge}}
+{{/if}}
 What happens between now and then:
 {{#if added}}  • Your subscription stays the same until {{effectiveDate}}.
-  • On {{effectiveDate}}: your next invoice includes the
-    one-off setup of £{{setupCharge}} for {{moduleName}}
-    plus the new monthly rate (+£{{monthlyDelta}}/mo).
+  • On {{effectiveDate}}: your next invoice picks up the
+    extra one-off setup (above) PLUS the new monthly rate.
   • {{moduleName}} activates the same day so you can start
     using it straight away.
 {{/if}}{{#if removed}}  • Nothing changes on your bill THIS month — you keep
     full access to {{moduleName}} until {{effectiveDate}}
     since you have already paid.
-  • From {{effectiveDate}}: your monthly bill drops by
-    £{{monthlyDelta}}/mo and {{moduleName}} is gone.
-  • No refund for the rest of this month — that is
-    consistent across every billing change.
+  • From {{effectiveDate}}: your monthly drops to the new
+    figure above and {{moduleName}} is gone.
+  • No refund for the rest of this month — you are using
+    the service through to the end of it.
 {{/if}}
+The setup figure above is what you have already paid to
+build the site. It is not refunded under any module change
+or cancellation — that work has been delivered.
+
 Changed your mind? Just open your dashboard and remove the
 pending change. Anything done by you before the effective
 date is reversible from there.

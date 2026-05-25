@@ -96,6 +96,15 @@ type Props = {
   /** Founding members see a different pricing line because they
    *  pay a flat rate, not the per-module add-ons. */
   foundingMember: boolean;
+  /** What the customer is paying RIGHT NOW. Drives the
+   *  "current £X → new £Y" before-after totals in every
+   *  modal so the customer sees the impact of the change on
+   *  the actual numbers on their bill, not just a delta. */
+  currentMonthly: number;
+  /** What the customer has already PAID in setup (historical,
+   *  non-refundable). Quoted in the modal so the customer
+   *  understands what is and is not part of any change. */
+  paidSetup: number;
 };
 
 export default function ModulesEditor({
@@ -103,6 +112,8 @@ export default function ModulesEditor({
   currentModules,
   pendingChanges,
   foundingMember,
+  currentMonthly,
+  paidSetup,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -223,6 +234,8 @@ export default function ModulesEditor({
           module={modal.module}
           action={modal.action}
           foundingMember={foundingMember}
+          currentMonthly={currentMonthly}
+          paidSetup={paidSetup}
           pending={pending}
           error={error}
           onCancel={() => {
@@ -240,6 +253,8 @@ function ConfirmModal({
   module: moduleName,
   action,
   foundingMember,
+  currentMonthly,
+  paidSetup,
   pending,
   error,
   onCancel,
@@ -248,6 +263,8 @@ function ConfirmModal({
   module: ModuleName;
   action: "add" | "remove";
   foundingMember: boolean;
+  currentMonthly: number;
+  paidSetup: number;
   pending: boolean;
   error: string | null;
   onCancel: () => void;
@@ -260,6 +277,14 @@ function ConfirmModal({
   // render + submit), the server is authoritative.
   const effectiveDate = clientNextBillingDate();
   const effectiveLabel = formatDate(effectiveDate);
+  // Founding members don't see per-module monthly changes — they
+  // pay a flat rate. So the new-monthly figure for them equals
+  // the current-monthly figure regardless of add/remove.
+  const newMonthly = foundingMember
+    ? currentMonthly
+    : action === "add"
+      ? currentMonthly + meta.monthly
+      : currentMonthly - meta.monthly;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4">
       <div
@@ -281,21 +306,14 @@ function ConfirmModal({
               module activates and your bill goes up from that date.
               You won&apos;t be charged anything extra this month.
             </Bullet>
-            {!foundingMember && (
-              <Bullet>
-                One-off setup of <strong>£{meta.setup}</strong> and
-                monthly increase of{" "}
-                <strong>+£{meta.monthly}/mo</strong>. Both bill on
-                your {effectiveLabel} invoice.
-              </Bullet>
-            )}
-            {foundingMember && (
-              <Bullet>
-                On the Founding rate — no extra monthly charge.
-                The one-off setup of <strong>£{meta.setup}</strong>{" "}
-                bills on your {effectiveLabel} invoice.
-              </Bullet>
-            )}
+            <BeforeAfterPanel
+              paidSetup={paidSetup}
+              currentMonthly={currentMonthly}
+              newMonthly={newMonthly}
+              extraSetup={meta.setup}
+              foundingMember={foundingMember}
+              effectiveLabel={effectiveLabel}
+            />
           </div>
         ) : (
           <div className="mt-4 space-y-3 text-sm leading-relaxed text-navy-700">
@@ -309,18 +327,14 @@ function ConfirmModal({
               No refund — you&apos;ve already paid for the rest of
               this month.
             </Bullet>
-            {!foundingMember && (
-              <Bullet>
-                From {effectiveLabel} your monthly bill drops by{" "}
-                <strong>£{meta.monthly}/mo</strong>.
-              </Bullet>
-            )}
-            {foundingMember && (
-              <Bullet>
-                Your Founding rate stays the same — no monthly
-                change.
-              </Bullet>
-            )}
+            <BeforeAfterPanel
+              paidSetup={paidSetup}
+              currentMonthly={currentMonthly}
+              newMonthly={newMonthly}
+              extraSetup={0}
+              foundingMember={foundingMember}
+              effectiveLabel={effectiveLabel}
+            />
           </div>
         )}
         {error && (
@@ -354,6 +368,77 @@ function ConfirmModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The numeric table in every Add/Remove modal: setup paid
+ *  to date (non-refundable), current monthly, new monthly,
+ *  and any extra setup that lands on the next invoice. Replaces
+ *  the previous "delta-only" copy so the customer reads the
+ *  actual numbers that will be on their bill — not a maths
+ *  problem they have to solve in their head. */
+function BeforeAfterPanel({
+  paidSetup,
+  currentMonthly,
+  newMonthly,
+  extraSetup,
+  foundingMember,
+  effectiveLabel,
+}: {
+  paidSetup: number;
+  currentMonthly: number;
+  newMonthly: number;
+  extraSetup: number;
+  foundingMember: boolean;
+  effectiveLabel: string;
+}) {
+  const monthlyChanged = currentMonthly !== newMonthly;
+  return (
+    <div className="rounded-lg bg-cream-50 p-3 text-sm">
+      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5">
+        <dt className="text-navy-600">Setup paid to date</dt>
+        <dd className="font-semibold text-navy-900">£{paidSetup}</dd>
+        {extraSetup > 0 && (
+          <>
+            <dt className="text-navy-600">
+              Extra setup on {effectiveLabel} invoice
+            </dt>
+            <dd className="font-semibold text-ember-700">
+              +£{extraSetup}
+            </dd>
+          </>
+        )}
+        <dt className="text-navy-600">Current monthly</dt>
+        <dd className="font-semibold text-navy-900">
+          £{currentMonthly}/mo
+        </dd>
+        <dt className="text-navy-600">
+          New monthly from {effectiveLabel}
+        </dt>
+        <dd
+          className={`font-semibold ${
+            monthlyChanged
+              ? newMonthly > currentMonthly
+                ? "text-ember-700"
+                : "text-green-700"
+              : "text-navy-900"
+          }`}
+        >
+          £{newMonthly}/mo
+        </dd>
+      </dl>
+      {foundingMember && (
+        <p className="mt-2 text-xs text-navy-500">
+          Founding rate is flat — your monthly fee covers all
+          modules included in the plan.
+        </p>
+      )}
+      <p className="mt-2 text-[11px] text-navy-500">
+        Setup paid to date is{" "}
+        <strong>non-refundable</strong> — it covered building
+        your site, which has been delivered.
+      </p>
     </div>
   );
 }

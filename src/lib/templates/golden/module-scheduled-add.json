@@ -1,5 +1,5 @@
 {
-  "description": "Module add scheduled — customer added Newsletter from the dashboard, effective next billing date",
+  "description": "Module add scheduled — customer added Newsletter from the dashboard, effective next billing date; quotes paid-setup-so-far, current monthly, new monthly, and the extra setup charge that lands on the effective-date invoice",
   "template": "module-scheduled",
   "values": {
     "customerName": "Alex",
@@ -7,11 +7,13 @@
     "effectiveDate": "2026-06-01",
     "accountUrl": "https://modu-forge.co.uk/account/abc123",
     "added": true,
-    "monthlyDelta": 6,
-    "setupCharge": 39
+    "paidSetupSoFar": 129,
+    "currentMonthly": 19,
+    "newMonthly": 25,
+    "extraSetupCharge": 39
   },
   "expected": {
     "subject": "Got it — Newsletter scheduled for 2026-06-01",
-    "body": "Hi Alex,\n\nQuick confirmation — your module change is queued.\n\nYou are ADDING: Newsletter\n\nEffective from: 2026-06-01\n\nWhat happens between now and then:\n  • Your subscription stays the same until 2026-06-01.\n  • On 2026-06-01: your next invoice includes the\n    one-off setup of £39 for Newsletter\n    plus the new monthly rate (+£6/mo).\n  • Newsletter activates the same day so you can start\n    using it straight away.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nQuick confirmation — your module change is queued.\n\nYou are ADDING: Newsletter\n\nEffective from: 2026-06-01\n\nWhere you stand on money:\n\n  • Setup paid to date:      £129 (non-refundable)\n  • Current monthly:         £19/mo\n  • New monthly from 2026-06-01: £25/mo\n  • Extra one-off setup on\n    2026-06-01 invoice:  +£39\n\nWhat happens between now and then:\n  • Your subscription stays the same until 2026-06-01.\n  • On 2026-06-01: your next invoice picks up the\n    extra one-off setup (above) PLUS the new monthly rate.\n  • Newsletter activates the same day so you can start\n    using it straight away.\n\nThe setup figure above is what you have already paid to\nbuild the site. It is not refunded under any module change\nor cancellation — that work has been delivered.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
   }
 }

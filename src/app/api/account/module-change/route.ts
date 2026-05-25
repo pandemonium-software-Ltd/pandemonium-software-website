@@ -170,8 +170,17 @@ export async function POST(request: Request) {
       // entry; the template's `{{#if}}` blocks branch on these.
       added: action === "add",
       removed: action === "remove",
-      monthlyDelta: Math.abs(delta.monthlyDelta),
-      setupCharge: action === "add" ? delta.setupDelta : 0,
+      // Money panel — the template renders these as the
+      // before/after table so the customer sees actual numbers
+      // not a delta they have to compute in their head.
+      // `paidSetupSoFar` is the historical (non-refundable)
+      // amount they paid to build the site; `currentMonthly`
+      // is what they are paying TODAY; `newMonthly` is what
+      // they will pay from the effective date.
+      paidSetupSoFar: prospect.setupFeeCalculated ?? 0,
+      currentMonthly: delta.fromFees.monthly,
+      newMonthly: delta.toFees.monthly,
+      extraSetupCharge: action === "add" ? delta.setupDelta : 0,
     });
   } catch (e) {
     console.error(

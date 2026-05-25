@@ -579,6 +579,8 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   currentModules={modules}
                   pendingChanges={pendingChanges}
                   foundingMember={foundingMember}
+                  currentMonthly={monthlyFee}
+                  paidSetup={setupFee}
                 />
                 <p className="mt-4 text-xs text-navy-500">
                   Changes apply from your next billing date — no
