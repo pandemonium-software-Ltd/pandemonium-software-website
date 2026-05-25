@@ -225,8 +225,29 @@ Production secrets are set per-worker via `wrangler secret put`.
 | `INTERNAL_BUILD_SECRET` | Marketing + Ops + GitHub | Shared secret for customer-site-build pipeline |
 | `GITHUB_TOKEN` | Ops | Dispatch customer-site-build workflow |
 | `ANTHROPIC_API_KEY` | Marketing | Haiku copy polish at site-build time |
-| `STRIPE_SECRET_KEY` | TBD (task #1) | Real Stripe ops |
-| `STRIPE_WEBHOOK_SECRET` | TBD (task #1) | Stripe webhook signature verification |
+| `STRIPE_SECRET_KEY` | Marketing + Ops | Real Stripe ops |
+| `STRIPE_WEBHOOK_SECRET` | Marketing | Stripe webhook signature verification |
+| `SENTRY_DSN` | Ops (today); Marketing + Customer-sites (deferred — see #89) | Error tracking destination |
+| `SENTRY_ENVIRONMENT` | Ops | "production" / "development" tag on Sentry events |
+
+---
+
+## Sentry — DSN reference
+
+Three Sentry projects live in our org (EU region —
+o4511452405825536). DSNs are public identifiers in Sentry's
+model (anyone can submit errors with them, no read access), so
+safe to commit here.
+
+| Project | DSN | Wired today? |
+|---|---|---|
+| `ops-worker` | `https://1c0268178f58d80e682224f27d0714c7@o4511452405825536.ingest.de.sentry.io/4511452444950608` | ✅ Yes — set via `wrangler secret put SENTRY_DSN --config wrangler-ops.jsonc` |
+| `marketing-site` | `https://8645de9d9d676087dd1bcdc7bd2e8903@o4511452405825536.ingest.de.sentry.io/4511452441215056` | ❌ Deferred (#89 — needs opennext worker bundle wrapping) |
+| `customer-sites` | `https://f51d941814c5105e4ceeee7febdcad35@o4511452405825536.ingest.de.sentry.io/4511452447768656` | ❌ Deferred (#89 — wire when first customer site needs error tracking) |
+
+When deferred projects get wired, set their DSN as the worker's
+`SENTRY_DSN` secret. The shared init code in `src/lib/sentry.ts`
+auto-picks it up from env.
 
 ---
 
