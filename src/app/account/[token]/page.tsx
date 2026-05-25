@@ -236,6 +236,7 @@ export default async function AccountPage({
       modules={prospect.moduleSelections}
       setupFee={prospect.setupFeeCalculated ?? 0}
       monthlyFee={prospect.monthlyFeeCalculated ?? 0}
+      extraLocations={prospect.extraLocations}
       foundingMember={prospect.foundingMember}
       onboardingCompletedAt={prospect.onboardingCompletedAt ?? null}
       goLiveDate={prospect.goLiveDate ?? null}

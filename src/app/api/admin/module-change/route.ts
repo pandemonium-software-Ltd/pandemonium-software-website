@@ -115,8 +115,17 @@ export async function PATCH(request: Request) {
   try {
     if (action === "applied") {
       // Apply: write the new module list + recalculated fees.
+      // For multilocation-change entries, also write the new
+      // extraLocations counter so the Hub knows how many slots
+      // to render in Step 4 H, and so future fee recalcs honour
+      // the new count. The counter is captured on the entry
+      // (toExtraLocations) for atomic resolve.
+      const isMultiLocationChange = entry.kind === "multilocation-change";
+      const targetExtraLocations = isMultiLocationChange
+        ? (entry.toExtraLocations ?? 0)
+        : prospect.extraLocations;
       const newFees = calculateFees(
-        modulesToSelection(entry.toModules),
+        modulesToSelection(entry.toModules, targetExtraLocations),
         prospect.foundingMember,
       );
       updated = await resolveModuleChange(prospect.pageId, changeId, {
@@ -124,6 +133,9 @@ export async function PATCH(request: Request) {
         resolutionNote,
         appliedSelection: entry.toModules,
         appliedFees: { setup: newFees.setup, monthly: newFees.monthly },
+        appliedExtraLocations: isMultiLocationChange
+          ? targetExtraLocations
+          : undefined,
       });
       // Cancellation kinds also flip Status to Cancelled AND
       // stamp Cancelled At + Data Retention Until — that triplet

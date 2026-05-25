@@ -36,6 +36,7 @@ import {
   MODULE_OFFERS_MONTHLY_GBP,
   GBP_ADDON_ONE_OFF_GBP,
   GBP_ADDON_MONTHLY_GBP,
+  MODULE_MULTILOCATION_SETUP_GBP,
 } from "@/lib/fees";
 
 type ModuleMeta = {
@@ -94,12 +95,17 @@ export type PendingChange = {
   kind:
     | "modules-post-launch"
     | "cancel-end-of-period"
-    | "cancel-immediate-prorated";
+    | "cancel-immediate-prorated"
+    | "multilocation-change";
   added: string[];
   removed: string[];
   effectiveDate: string;
   setupDelta: number;
   monthlyDelta: number;
+  /** Only populated for multilocation-change entries — the new
+   *  extra-locations count the customer is moving TO. Drives
+   *  the dashboard's "pending: N → M extra locations" badge. */
+  toExtraLocations?: number;
 };
 
 type Props = {
@@ -118,6 +124,10 @@ type Props = {
    *  non-refundable). Quoted in the modal so the customer
    *  understands what is and is not part of any change. */
   paidSetup: number;
+  /** Current multi-location counter. Drives the new
+   *  Multi-location row's stepper + "+£15 per extra" copy.
+   *  0 = customer has no extra locations today. */
+  extraLocations: number;
   /** Slice of onboardingData.tools — used to decide which active
    *  modules still need a Set-up button next to them (Cal.com
    *  URL not yet pasted, Manager invite not yet ticked, etc).
@@ -133,6 +143,7 @@ export default function ModulesEditor({
   foundingMember,
   currentMonthly,
   paidSetup,
+  extraLocations,
   tools,
 }: Props) {
   const router = useRouter();
@@ -141,9 +152,24 @@ export default function ModulesEditor({
     module: ModuleName;
     action: "add" | "remove";
   } | null>(null);
+  // Separate modal state for multi-location changes — the
+  // shape (target count) is different from a module add/remove
+  // (boolean action), so a discriminated state would be ugly.
+  // Keep them parallel for clarity.
+  const [locModal, setLocModal] = useState<{ target: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const current = new Set(currentModules);
+
+  // The customer's effective extra-locations target if there's a
+  // pending change queued — otherwise the current count. The
+  // stepper's "value" starts here so re-opens don't lose the
+  // pending state.
+  const pendingLocChange = pendingChanges.find(
+    (p) => p.kind === "multilocation-change",
+  );
+  const targetExtraLocations =
+    pendingLocChange?.toExtraLocations ?? extraLocations;
 
   /** True if this exact module is queued for an add (so we should
    *  show "Pending add" on the row + suppress the Add button). */
@@ -179,6 +205,30 @@ export default function ModulesEditor({
         return;
       }
       setModal(null);
+      router.refresh();
+    });
+  }
+
+  async function submitLocChange() {
+    if (!locModal) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await fetch("/api/account/multilocation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          newExtraLocations: locModal.target,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setError(body.error ?? "Couldn't submit just now. Try again.");
+        return;
+      }
+      setLocModal(null);
       router.refresh();
     });
   }
@@ -264,6 +314,78 @@ export default function ModulesEditor({
             </li>
           );
         })}
+
+        {/* Multi-location — counter, not a boolean. £15 per extra
+            location, no monthly. The stepper UI shows the current
+            (or pending-effective) count with +/- buttons that open
+            a confirmation modal before committing. */}
+        <li className="flex items-start gap-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-navy-900">
+              Multi-location
+              {extraLocations > 0 && (
+                <StateBadge
+                  tone="green"
+                  label={`${extraLocations} extra location${extraLocations === 1 ? "" : "s"}`}
+                />
+              )}
+              {pendingLocChange && (
+                <StateBadge
+                  tone="amber"
+                  label={`Pending → ${pendingLocChange.toExtraLocations} · ${formatDate(pendingLocChange.effectiveDate)}`}
+                />
+              )}
+            </p>
+            <p className="mt-0.5 text-xs leading-relaxed text-navy-600">
+              Each extra location appears as its own contact / map /
+              hours block on your site. Add details in your Hub
+              Step 4 once a change is applied.
+            </p>
+            {!foundingMember && (
+              <p className="mt-0.5 text-xs text-navy-500">
+                £{MODULE_MULTILOCATION_SETUP_GBP} setup per extra
+                location · no monthly fee
+              </p>
+            )}
+          </div>
+          <div className="flex flex-none flex-col items-end gap-2">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-navy-200 bg-white px-2 py-1">
+              <button
+                type="button"
+                disabled={targetExtraLocations === 0 || !!pendingLocChange}
+                onClick={() =>
+                  setLocModal({ target: targetExtraLocations - 1 })
+                }
+                aria-label="Remove one extra location"
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-navy-900 text-white disabled:bg-navy-200"
+              >
+                −
+              </button>
+              <span
+                className="min-w-[2rem] text-center text-sm font-semibold text-navy-900"
+                aria-live="polite"
+              >
+                {targetExtraLocations}
+              </span>
+              <button
+                type="button"
+                disabled={!!pendingLocChange}
+                onClick={() =>
+                  setLocModal({ target: targetExtraLocations + 1 })
+                }
+                aria-label="Add one extra location"
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-navy-900 text-white disabled:bg-navy-200"
+              >
+                +
+              </button>
+            </div>
+            {pendingLocChange && (
+              <p className="text-[10px] text-navy-500">
+                Change queued — wait for {formatDate(pendingLocChange.effectiveDate)}
+              </p>
+            )}
+          </div>
+        </li>
       </ul>
 
       {modal && (
@@ -280,6 +402,21 @@ export default function ModulesEditor({
             setError(null);
           }}
           onConfirm={submit}
+        />
+      )}
+
+      {locModal && (
+        <LocationChangeModal
+          fromCount={extraLocations}
+          toCount={locModal.target}
+          paidSetup={paidSetup}
+          pending={pending}
+          error={error}
+          onCancel={() => {
+            setLocModal(null);
+            setError(null);
+          }}
+          onConfirm={submitLocChange}
         />
       )}
     </div>
@@ -527,4 +664,127 @@ function formatDate(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+// ---------- Multi-location confirm modal ----------
+//
+// Lighter than ConfirmModal — multi-location has no monthly
+// impact, only setup-fee delta. Modal shows:
+//   - "Going from N → M extra locations"
+//   - £15 × diff = total charge / refund (calculated client-side)
+//   - effective date (1st of next month)
+//   - confirm / cancel
+//
+// Once confirmed, the customer can fill in per-location details
+// in their Hub Step 4 once the change applies.
+
+function LocationChangeModal({
+  fromCount,
+  toCount,
+  paidSetup,
+  pending,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  fromCount: number;
+  toCount: number;
+  paidSetup: number;
+  pending: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const diff = toCount - fromCount;
+  const isAdding = diff > 0;
+  const setupCharge = Math.abs(diff) * MODULE_MULTILOCATION_SETUP_GBP;
+  const effectiveDate = clientNextBillingDate();
+  const effectiveLabel = formatDate(effectiveDate);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/60 p-4">
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-card"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h2 className="font-serif text-xl font-semibold text-navy-900">
+          {isAdding ? "Add an extra location?" : "Remove an extra location?"}
+        </h2>
+        <div className="mt-4 space-y-3 text-sm leading-relaxed text-navy-700">
+          <p>
+            You&apos;re going from <strong>{fromCount}</strong> extra
+            location{fromCount === 1 ? "" : "s"} to{" "}
+            <strong>{toCount}</strong>.
+          </p>
+          <Bullet>
+            <strong>Effective {effectiveLabel}</strong> — your{" "}
+            {isAdding
+              ? "next invoice picks up the one-off setup below; the new location slot opens in your Hub Step 4 so you can fill in name, address and hours."
+              : "monthly stays the same; no refund of the original setup (that work was already delivered)."}
+          </Bullet>
+          <div className="rounded-xl bg-cream-50 p-4">
+            <table className="w-full text-xs text-navy-800">
+              <tbody>
+                <tr>
+                  <td className="py-1 text-navy-600">Setup paid to date</td>
+                  <td className="py-1 text-right font-mono text-navy-900">
+                    £{paidSetup}
+                  </td>
+                </tr>
+                {isAdding ? (
+                  <tr>
+                    <td className="py-1 text-navy-600">
+                      Extra setup on {effectiveLabel}
+                    </td>
+                    <td className="py-1 text-right font-mono text-navy-900">
+                      +£{setupCharge}
+                    </td>
+                  </tr>
+                ) : (
+                  <tr>
+                    <td className="py-1 text-navy-600">
+                      Setup adjustment
+                    </td>
+                    <td className="py-1 text-right font-mono text-navy-500">
+                      £0 (no refund)
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="py-1 text-navy-600">Monthly impact</td>
+                  <td className="py-1 text-right font-mono text-navy-500">
+                    £0
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {error && (
+          <p className="mt-4 text-sm text-ember-700" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={pending}
+            className="rounded-lg border border-navy-200 px-4 py-2 text-sm font-semibold text-navy-700 hover:border-navy-400"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:bg-navy-400"
+          >
+            {pending ? "Submitting…" : isAdding ? "Confirm add" : "Confirm remove"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

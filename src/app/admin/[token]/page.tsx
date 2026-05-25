@@ -311,6 +311,14 @@ export default async function AdminDetailPage({
                 : "Base only"
             }
           />
+          <KV
+            label="Extra locations"
+            value={
+              prospect.extraLocations > 0
+                ? `${prospect.extraLocations} (£${prospect.extraLocations * 15} setup, no monthly)`
+                : "None"
+            }
+          />
         </Section>
 
         {/* ---------- Onboarding ----------

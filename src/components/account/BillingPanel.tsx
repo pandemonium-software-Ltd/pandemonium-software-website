@@ -30,6 +30,7 @@ type Props = {
   foundingMember: boolean;
   currentModules: readonly string[];
   pendingChanges: readonly PendingChange[];
+  extraLocations: number;
   tools?: ToolsSlice;
 };
 
@@ -40,6 +41,7 @@ export default function BillingPanel({
   foundingMember,
   currentModules,
   pendingChanges,
+  extraLocations,
   tools,
 }: Props) {
   const router = useRouter();
@@ -137,6 +139,7 @@ export default function BillingPanel({
             foundingMember={foundingMember}
             currentMonthly={monthlyFee}
             paidSetup={setupFee}
+            extraLocations={extraLocations}
             tools={tools}
           />
         </div>

@@ -97,16 +97,26 @@ export default async function PaymentPage({
               )}
             </dl>
 
-            {prospect.moduleSelections.length > 0 && (
+            {(prospect.moduleSelections.length > 0 ||
+              prospect.extraLocations > 0) && (
               <div className="mt-6 rounded-xl bg-cream-100 p-4">
                 <p className="text-sm font-semibold text-navy-900">
                   Modules included
                 </p>
                 <ul className="mt-2 space-y-1 text-sm text-navy-700">
                   <li>• Base website (always included)</li>
-                  {prospect.moduleSelections.map((m) => (
-                    <li key={m}>• {m}</li>
-                  ))}
+                  {prospect.moduleSelections
+                    .filter((m) => m !== "Multi-location")
+                    .map((m) => (
+                      <li key={m}>• {m}</li>
+                    ))}
+                  {prospect.extraLocations > 0 && (
+                    <li>
+                      • Multi-location ({prospect.extraLocations} extra
+                      location{prospect.extraLocations === 1 ? "" : "s"} ×
+                      £15 setup)
+                    </li>
+                  )}
                 </ul>
               </div>
             )}

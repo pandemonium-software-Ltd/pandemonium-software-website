@@ -48,6 +48,10 @@ export type AccountDashboardProps = {
   modules: string[];
   setupFee: number;
   monthlyFee: number;
+  /** Multi-location counter — drives the ModulesEditor's stepper
+   *  + BillingPanel money breakdown. 0 for single-location
+   *  customers; >0 for paid extra locations. */
+  extraLocations: number;
   foundingMember: boolean;
   onboardingCompletedAt: string | null;
   goLiveDate: string | null;
@@ -168,6 +172,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     modules,
     setupFee,
     monthlyFee,
+    extraLocations,
     foundingMember,
     onboardingCompletedAt,
     goLiveDate,
@@ -195,7 +200,8 @@ export default function AccountDashboard(props: AccountDashboardProps) {
         e.status === "pending-stripe" &&
         (e.kind === "modules-post-launch" ||
           e.kind === "cancel-end-of-period" ||
-          e.kind === "cancel-immediate-prorated"),
+          e.kind === "cancel-immediate-prorated" ||
+          e.kind === "multilocation-change"),
     )
     .map((e) => {
       const fromSet = new Set(e.fromModules);
@@ -208,6 +214,9 @@ export default function AccountDashboard(props: AccountDashboardProps) {
         effectiveDate: e.effectiveDate ?? e.submittedAt.slice(0, 10),
         setupDelta: e.setupDelta,
         monthlyDelta: e.monthlyDelta,
+        // Only set for multilocation-change entries — drives the
+        // stepper's "pending → N" badge in ModulesEditor.
+        toExtraLocations: e.toExtraLocations,
       };
     });
 
@@ -591,6 +600,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   foundingMember={foundingMember}
                   currentMonthly={monthlyFee}
                   paidSetup={setupFee}
+                  extraLocations={extraLocations}
                   tools={tools}
                 />
                 <p className="mt-4 text-xs text-navy-500">
@@ -697,6 +707,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                   foundingMember={foundingMember}
                   currentModules={modules}
                   pendingChanges={pendingChanges}
+                  extraLocations={extraLocations}
                   tools={tools}
                 />
               </DashCard>

@@ -258,7 +258,15 @@ export type ModuleChangeLogEntry = {
     | "modules-pre-launch"
     | "modules-post-launch"
     | "cancel-end-of-period"
-    | "cancel-immediate-prorated";
+    | "cancel-immediate-prorated"
+    | "multilocation-change";
+  /** Multi-location counter snapshots — only set when
+   *  kind === "multilocation-change". The customer is moving
+   *  from `fromExtraLocations` extra locations to
+   *  `toExtraLocations`. `setupDelta` reflects the £15 × diff
+   *  charge / refund. */
+  fromExtraLocations?: number;
+  toExtraLocations?: number;
   /**
    * ISO date (YYYY-MM-DD) the change SHOULD take effect on. Set by
    * the customer-facing endpoints to:
@@ -1505,6 +1513,10 @@ export async function resolveModuleChange(
     /** Required if status="billing-failed": the cleaned-up module
      *  list (= original minus added modules that didn't get paid). */
     revertedSelection?: string[];
+    /** Optional: write a new "Extra Locations" count alongside the
+     *  module selection + fees. Only set for multilocation-change
+     *  applies; pass undefined to leave the column alone. */
+    appliedExtraLocations?: number;
   },
 ): Promise<ModuleChangeLogEntry> {
   const page = (await notionFetch(`/pages/${pageId}`)) as NotionPage;
@@ -1541,6 +1553,11 @@ export async function resolveModuleChange(
     properties["Monthly Fee Calculated"] = {
       number: resolution.appliedFees.monthly,
     };
+    if (resolution.appliedExtraLocations !== undefined) {
+      properties["Extra Locations"] = {
+        number: resolution.appliedExtraLocations,
+      };
+    }
   } else if (resolution.status === "billing-failed") {
     if (!resolution.revertedSelection) {
       throw new Error(

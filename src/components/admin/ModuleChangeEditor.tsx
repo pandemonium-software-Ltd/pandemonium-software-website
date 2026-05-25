@@ -327,6 +327,11 @@ function KindBadge({
       text: "text-ember-900",
       label: "Cancel (immediate + refund)",
     },
+    "multilocation-change": {
+      bg: "bg-purple-100",
+      text: "text-purple-800",
+      label: "Multi-location",
+    },
   };
   const p = palette[kind];
   return (
@@ -354,6 +359,8 @@ function stripeActionFor(
       return "Schedule subscription cancellation for the effective date (cancel_at_period_end=true). On that date, flip prospect Status to 'Cancelled'.";
     case "cancel-immediate-prorated":
       return `Cancel subscription NOW (no proration) + issue a refund of £${proratedRefund ?? "?"} to the card on file. Flip prospect Status to 'Cancelled' today.`;
+    case "multilocation-change":
+      return "On the effective date, adjust the one-off Multi-location setup line on the customer's next invoice. No subscription items change (multi-location is one-off only).";
   }
 }
 

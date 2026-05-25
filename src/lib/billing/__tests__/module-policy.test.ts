@@ -219,4 +219,39 @@ describe("calculateModuleDelta — multi-location counter", () => {
     expect(d.setupDelta).toBe(49);
     expect(d.monthlyDelta).toBe(9);
   });
+
+  test("multi-location post-launch stepper: 0 → 2 = +£30 setup, monthly unchanged, flag added", () => {
+    // Mirrors what /api/account/multilocation calls calculateModuleDelta
+    // with when the customer bumps from 0 → 2 extras.
+    const d = calculateModuleDelta({
+      fromModules: [],
+      toModules: ["Multi-location"],
+      foundingMember: false,
+      fromExtraLocations: 0,
+      toExtraLocations: 2,
+    });
+    expect(d.setupDelta).toBe(30);
+    expect(d.monthlyDelta).toBe(0);
+    expect(d.added).toEqual(["Multi-location"]);
+  });
+
+  test("multi-location post-launch stepper: 3 → 0 = removes flag, setup change = -45", () => {
+    // Setup delta is negative because we're going from a paid-for
+    // 3-extras setup (£45) to 0. NOT refundable in practice (the
+    // £15 was for past provisioning work) — the API surfaces this
+    // negative as a "no refund — work already delivered" message
+    // and the operator doesn't actually credit. Test pins the
+    // arithmetic so the UI's "no refund" copy stays consistent
+    // with what the policy layer reports.
+    const d = calculateModuleDelta({
+      fromModules: ["Multi-location"],
+      toModules: [],
+      foundingMember: false,
+      fromExtraLocations: 3,
+      toExtraLocations: 0,
+    });
+    expect(d.setupDelta).toBe(-45);
+    expect(d.monthlyDelta).toBe(0);
+    expect(d.removed).toEqual(["Multi-location"]);
+  });
 });
