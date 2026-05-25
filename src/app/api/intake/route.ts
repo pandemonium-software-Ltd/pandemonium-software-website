@@ -47,6 +47,7 @@ import {
 } from "@/lib/email";
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { reportError } from "@/lib/sentry";
 
 export const runtime = "nodejs";
 
@@ -132,7 +133,7 @@ export async function POST(request: Request) {
     prospect = await getProspectByToken(token);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[api/intake] Notion lookup error:", msg);
+    reportError("api/intake:lookup", e);
     return NextResponse.json(
       { error: "Could not load your intake. Please try again." },
       { status: 500 },
@@ -164,7 +165,7 @@ export async function POST(request: Request) {
       await updateProspectPhase3(prospect.pageId, merged, false);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[api/intake] Notion partial-save error:", msg);
+      reportError("api/intake:partial-save", e);
       return NextResponse.json(
         { error: "Could not save your progress. Please try again." },
         { status: 500 },
@@ -215,7 +216,7 @@ export async function POST(request: Request) {
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[api/intake] Notion final-save error:", msg);
+    reportError("api/intake:final-save", e);
     return NextResponse.json(
       {
         error:

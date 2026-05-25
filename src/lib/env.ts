@@ -86,6 +86,19 @@ const serverEnvSchema = z.object({
   STRIPE_SETUP_PRICE_ID: z.string().optional(),
   STRIPE_SUBSCRIPTION_PRICE_ID: z.string().optional(),
 
+  // Sentry error tracking. Set per worker via wrangler secrets.
+  // When SENTRY_DSN is missing, the SDK no-ops gracefully (still
+  // imported but no events sent) so local dev / tests don't need
+  // a DSN configured. SENTRY_ENVIRONMENT defaults to "production"
+  // for deployed workers; override to "development" locally.
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_ENVIRONMENT: z.string().optional(),
+  /** Git SHA stamped at deploy time so Sentry can group errors
+   *  by release + show regressions. Auto-populated in CI; set by
+   *  wrangler.toml deploy injection locally. Falls back to
+   *  "unknown" when missing. */
+  SENTRY_RELEASE: z.string().optional(),
+
   // Stage 2C C5.4 — customer-site build pipeline.
   //
   // Shared secret between marketing site, GitHub Actions, and ops

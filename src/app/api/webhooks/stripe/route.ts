@@ -43,6 +43,7 @@ import {
 import { verifyStripeWebhook } from "@/lib/stripe";
 import type Stripe from "stripe";
 import { applyPendingChange } from "@/lib/billing/apply-pending";
+import { reportError } from "@/lib/sentry";
 
 export const runtime = "nodejs";
 
@@ -92,8 +93,7 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ received: true });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[webhooks/stripe] handler ${event.type} failed: ${msg}`);
+    reportError(`webhooks/stripe:${event.type}`, e);
     // Return 500 so Stripe retries — most failures here are
     // Notion blips. Idempotency keys on Stripe writes + the
     // markPaidViaStripe writer being safe-to-re-run make this safe.
@@ -196,10 +196,7 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
     try {
       await applyPendingChange(prospect, entry);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error(
-        `[webhooks/stripe] applying ${entry.id} for ${prospect.name} failed: ${msg}`,
-      );
+      reportError(`webhooks/stripe:apply:${entry.kind ?? "unknown"}`, e);
     }
   }
   if (due.length > 0) {

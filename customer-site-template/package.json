@@ -12,6 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@sentry/cloudflare": "^10.53.1",
     "next": "^15.5.18",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

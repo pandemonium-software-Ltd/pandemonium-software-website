@@ -33,6 +33,7 @@ import {
   isStripeConfigured,
 } from "@/lib/stripe";
 import { site } from "@/lib/site";
+import { reportError } from "@/lib/sentry";
 
 export const runtime = "nodejs";
 
@@ -135,8 +136,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ url: session.url });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error(`[api/payment/checkout] failed: ${msg}`);
+    reportError("api/payment/checkout", e);
     return NextResponse.json(
       { error: "Couldn't start checkout. Try again in a minute." },
       { status: 502 },

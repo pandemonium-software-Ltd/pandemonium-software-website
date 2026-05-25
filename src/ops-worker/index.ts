@@ -25,6 +25,8 @@ import { runGbpReviewsTick } from "./gbp-reviews-tick";
 import { runGdprScrubTick } from "./gdpr-scrub-tick";
 import { runStripeApplierTick } from "./stripe-applier-tick";
 import type { D1Database } from "../lib/d1-analytics";
+import * as Sentry from "@sentry/cloudflare";
+import { sentryOptions } from "../lib/sentry";
 
 // Minimal Cloudflare Worker types (we don't pull in @cloudflare/workers-types
 // since the rest of the project doesn't either; these are the shapes
@@ -42,9 +44,14 @@ type CfExecutionContext = {
 
 /** Subset of the env bindings object the runtime passes to scheduled().
  *  D1 bindings live here (not on process.env). The binding name
- *  matches wrangler-ops.jsonc's d1_databases[].binding. */
+ *  matches wrangler-ops.jsonc's d1_databases[].binding. Also
+ *  includes the Sentry secrets so withSentry can pick them up
+ *  from the same env arg. */
 type CfEnvBindings = {
   pandemonium_analytics?: D1Database;
+  SENTRY_DSN?: string;
+  SENTRY_ENVIRONMENT?: string;
+  SENTRY_RELEASE?: string;
 };
 
 const ANALYTICS_CRON = "0 2 * * *";
@@ -138,4 +145,16 @@ const handler = {
   },
 };
 
-export default handler;
+// Wrap with Sentry so unhandled exceptions in scheduled() and
+// fetch() are captured automatically. withSentry expects an
+// options factory taking the env arg so the DSN can be read
+// from per-request bindings (vs hardcoded at module load).
+export default Sentry.withSentry(
+  (env: CfEnvBindings) =>
+    sentryOptions({
+      SENTRY_DSN: env.SENTRY_DSN,
+      SENTRY_ENVIRONMENT: env.SENTRY_ENVIRONMENT,
+      SENTRY_RELEASE: env.SENTRY_RELEASE,
+    }),
+  handler,
+);

@@ -20,6 +20,7 @@
     "@anthropic-ai/sdk": "^0.95.1",
     "@hookform/resolvers": "^3.9.1",
     "@notionhq/client": "^2.3.0",
+    "@sentry/cloudflare": "^10.53.1",
     "browser-image-compression": "^2.0.2",
     "heic2any": "^0.0.4",
     "next": "^15.5.18",
