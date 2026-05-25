@@ -93,7 +93,7 @@ export default async function PaymentPage({
               <Row label="Setup fee (one-off)" value={`£${prospect.setupFeeCalculated}`} />
               <Row label="Monthly subscription" value={`£${prospect.monthlyFeeCalculated}/month`} />
               {prospect.foundingMember && (
-                <Row label="Status" value="Founding Member rate locked for life" tone="ember" />
+                <Row label="Status" value="Founding Member rate locked for 5 years" tone="ember" />
               )}
             </dl>
 

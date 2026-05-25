@@ -6,10 +6,13 @@
 import { describe, expect, test } from "vitest";
 import type { ProspectRecord } from "@/lib/notion-prospects";
 import {
+  calculateModuleDelta,
   canChangePostLaunch,
+  modulesToSelection,
   nextBillingDate,
   proratedRefundPounds,
 } from "@/lib/billing/module-policy";
+import { calculateFees } from "@/lib/fees";
 
 const liveProspect: ProspectRecord = {
   pageId: "p",
@@ -120,5 +123,99 @@ describe("proratedRefundPounds", () => {
         now,
       }),
     ).toBe(25.3); // 33/30 * 23 unused = 25.30
+  });
+});
+
+// Phase A pricing-lock 2026-05-25 — these tests pin the post-lock
+// numbers so an accidental constant change is caught immediately.
+
+describe("calculateFees — locked 2026-05-25 prices", () => {
+  test("base only (no modules, no founding) = 299 setup, 29 monthly", () => {
+    const fees = calculateFees(modulesToSelection([]));
+    expect(fees.setup).toBe(299);
+    expect(fees.monthly).toBe(29);
+    expect(fees.founding).toBe(false);
+  });
+
+  test("founding base = 99 setup, 15 monthly", () => {
+    const fees = calculateFees(modulesToSelection([]), true);
+    expect(fees.setup).toBe(99);
+    expect(fees.monthly).toBe(15);
+    expect(fees.founding).toBe(true);
+  });
+
+  test("every module ticked (Standard) = 424 setup, 82 monthly", () => {
+    // base 299 + booking 19 + enquiry 19 + newsletter 49 + offers 19 + GBP 59 = 464 setup
+    // base 29 + booking 6 + enquiry 6 + newsletter 9 + offers 6 + GBP 3 = 59 monthly
+    const allModules = [
+      "Online Booking",
+      "Enquiry Form",
+      "Newsletter",
+      "Offers",
+      "Google Business Profile Setup/Audit",
+    ];
+    const fees = calculateFees(modulesToSelection(allModules));
+    expect(fees.setup).toBe(464);
+    expect(fees.monthly).toBe(59);
+  });
+
+  test("multi-location adds 15 per extra, no monthly", () => {
+    const zero = calculateFees(modulesToSelection([], 0));
+    const three = calculateFees(modulesToSelection(["Multi-location"], 3));
+    expect(three.setup - zero.setup).toBe(45);
+    expect(three.monthly).toBe(zero.monthly);
+  });
+
+  test("multi-location flag present, counter 0 → coerces to 1 extra (£15)", () => {
+    const noCounter = calculateFees(modulesToSelection(["Multi-location"], 0));
+    expect(noCounter.setup).toBe(299 + 15);
+  });
+});
+
+describe("calculateModuleDelta — multi-location counter", () => {
+  test("bumping extraLocations 1 → 3 with flag already present is a non-noop", () => {
+    const d = calculateModuleDelta({
+      fromModules: ["Multi-location"],
+      toModules: ["Multi-location"],
+      foundingMember: false,
+      fromExtraLocations: 1,
+      toExtraLocations: 3,
+    });
+    expect(d.isNoOp).toBe(false);
+    expect(d.setupDelta).toBe(30); // 2 extra × £15
+    expect(d.monthlyDelta).toBe(0);
+  });
+
+  test("adding the Multi-location flag with counter 2 = +£30 setup", () => {
+    const d = calculateModuleDelta({
+      fromModules: [],
+      toModules: ["Multi-location"],
+      foundingMember: false,
+      fromExtraLocations: 0,
+      toExtraLocations: 2,
+    });
+    expect(d.added).toEqual(["Multi-location"]);
+    expect(d.setupDelta).toBe(30);
+  });
+
+  test("identical selections = no-op even with counters provided", () => {
+    const d = calculateModuleDelta({
+      fromModules: ["Online Booking"],
+      toModules: ["Online Booking"],
+      foundingMember: false,
+      fromExtraLocations: 0,
+      toExtraLocations: 0,
+    });
+    expect(d.isNoOp).toBe(true);
+  });
+
+  test("adding Newsletter post-launch = +£49 setup, +£9 monthly (locked-25-05 prices)", () => {
+    const d = calculateModuleDelta({
+      fromModules: [],
+      toModules: ["Newsletter"],
+      foundingMember: false,
+    });
+    expect(d.setupDelta).toBe(49);
+    expect(d.monthlyDelta).toBe(9);
   });
 });

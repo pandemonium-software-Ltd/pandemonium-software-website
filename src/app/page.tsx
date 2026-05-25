@@ -158,74 +158,41 @@ export default function HomePage() {
       {/* Trust */}
       <section className="section bg-white">
         <div className="container-content">
-          <div className="grid gap-14 lg:grid-cols-[1.1fr_1fr] lg:items-center">
-            <div>
-              <span className="eyebrow">Why work with me</span>
-              <h2 className="heading-2">
-                Small, local and honest — on purpose.
-              </h2>
-              <p className="prose-body mt-5">
-                I&apos;m a one-person business building websites for UK
-                trades and small businesses, with an AI assistant handling
-                the routine ops. I do the building and the human review;
-                AI drafts the replies, runs the checks, and tracks
-                progress. You get fast turnaround and personal attention —
-                without me being buried in inbox triage.
-              </p>
-              <ul className="mt-8 space-y-4 text-lg text-navy-800">
-                <TrustItem>
-                  <strong>Oxfordshire-based, serving the UK.</strong> My
-                  home is Oxfordshire, but I work with businesses anywhere
-                  in the UK.
-                </TrustItem>
-                <TrustItem>
-                  <strong>Built by hand, run with AI.</strong> I write the
-                  code and review every client message. AI does the
-                  triage, drafting and reminders so replies never sit in
-                  my inbox for days.
-                </TrustItem>
-                <TrustItem>
-                  <strong>You own everything.</strong> No hostage hosting, no
-                  hidden handover fees. Ever.
-                </TrustItem>
-                <TrustItem>
-                  <strong>No lead fees.</strong> Unlike Checkatrade or
-                  MyBuilder, I don&apos;t take a cut of your work. You pay a
-                  fair flat fee. That&apos;s it.
-                </TrustItem>
-              </ul>
-            </div>
-
-            <div className="card relative overflow-hidden bg-navy-950 text-white ring-0">
-              <div
-                aria-hidden="true"
-                className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-ember-500/20 blur-3xl"
-              />
-              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-ember-300">
-                A word from a happy tradesman
-              </p>
-              <blockquote className="mt-6 font-serif text-2xl leading-snug text-cream-50 md:text-[1.7rem]">
-                <span className="text-ember-400">&ldquo;</span>
-                A placeholder for the first testimonial I&apos;ll proudly
-                add here — from the first real Oxfordshire tradesman whose
-                site I launch.
-                <span className="text-ember-400">&rdquo;</span>
-              </blockquote>
-              <div className="mt-8 flex items-center gap-4">
-                <div
-                  aria-hidden="true"
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-ember-500/90 font-semibold text-white"
-                >
-                  ?
-                </div>
-                <div>
-                  <p className="font-semibold text-white">Your name here</p>
-                  <p className="text-sm text-cream-300/80">
-                    Oxfordshire tradesman
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div className="mx-auto max-w-3xl">
+            <span className="eyebrow">Why work with me</span>
+            <h2 className="heading-2">
+              Small, local and honest — on purpose.
+            </h2>
+            <p className="prose-body mt-5">
+              I&apos;m a one-person business building websites for UK
+              trades and small businesses, with an AI assistant handling
+              the routine ops. I do the building and the human review;
+              AI drafts the replies, runs the checks, and tracks
+              progress. You get fast turnaround and personal attention —
+              without me being buried in inbox triage.
+            </p>
+            <ul className="mt-8 space-y-4 text-lg text-navy-800">
+              <TrustItem>
+                <strong>Oxfordshire-based, serving the UK.</strong> My
+                home is Oxfordshire, but I work with businesses anywhere
+                in the UK.
+              </TrustItem>
+              <TrustItem>
+                <strong>Built by hand, run with AI.</strong> I write the
+                code and review every client message. AI does the
+                triage, drafting and reminders so replies never sit in
+                my inbox for days.
+              </TrustItem>
+              <TrustItem>
+                <strong>You own everything.</strong> No hostage hosting, no
+                hidden handover fees. Ever.
+              </TrustItem>
+              <TrustItem>
+                <strong>No lead fees.</strong> Unlike Checkatrade or
+                MyBuilder, I don&apos;t take a cut of your work. You pay a
+                fair flat fee. That&apos;s it.
+              </TrustItem>
+            </ul>
           </div>
         </div>
       </section>

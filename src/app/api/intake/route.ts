@@ -200,6 +200,7 @@ export async function POST(request: Request) {
       moduleNewsletter: phase3.modules.moduleNewsletter,
       moduleOffers: phase3.modules.moduleOffers,
       gbpAddon: phase3.modules.gbpAddon,
+      extraLocations: phase3.modules.extraLocations,
     },
     prospect.foundingMember,
   );
@@ -241,6 +242,7 @@ export async function POST(request: Request) {
     moduleNewsletter: phase3.modules.moduleNewsletter,
     moduleOffers: phase3.modules.moduleOffers,
     gbpAddon: phase3.modules.gbpAddon,
+    extraLocations: phase3.modules.extraLocations,
   };
   const moduleList = buildModuleListMarkdown(moduleSelection);
 

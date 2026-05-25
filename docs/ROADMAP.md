@@ -23,6 +23,7 @@
 | GDPR retention automation (30d personal / 7y financial) | 2026-05-25 |
 | CCRs-compliant terms rewrite + Companies House disclosures | 2026-05-25 |
 | Refund/cancellation policy unified across /terms /pricing /payment /intake | 2026-05-25 |
+| **Pricing-live cutover** — Founding £99/£15, Standard £299/£29, new module prices, Multi-location module, "5 years" not "for life", split Newsletter / Offers, placeholder testimonial removed | 2026-05-25 |
 
 ---
 
@@ -63,9 +64,19 @@ Notes:
 - **Y1 capacity**: 10 hr/week (up from 2). 5-year base-case forecast: ~£300k ARR, ~£135k take-home (~5× the prior 2hr/wk plan).
 - **Cancellation/refund/GDPR/Companies House compliance**: shipped in code, awaiting `npm run deploy`.
 
-### Implementation queue (next session)
+### Implementation status
 
-Phases A → F. ROADMAP entry below tracks each phase.
+Pricing cutover **shipped 2026-05-25** in commits during the session
+that landed phases A–E. Deploy (Phase F) still pending: `npm run deploy`
++ `npm run deploy:ops`.
+
+One follow-up deferred: **customer-self-serve Multi-location counter
+in the dashboard** (#new-72 below). Intake captures the count fine
+today, and the `/api/admin/grant-module` admin endpoint can add the
+flag out-of-band — the dashboard counter UI was deferred because it
+requires new API + Notion + ProspectRecord plumbing for what is
+currently a zero-customer use case. Pick up when the first customer
+asks for a second location.
 
 ---
 
@@ -73,8 +84,7 @@ Phases A → F. ROADMAP entry below tracks each phase.
 
 | # | Item | Complexity | Duration | Monthly cost | Status |
 |---|------|------------|----------|--------------|--------|
-| 0 | **Pricing-live cutover** — update fees.ts + pricing page + intake + dashboard + tests to the 2026-05-25 locked pricing (above). Adds Multi-location module (counter, not boolean). Removes placeholder testimonial. Ships today's compliance work in the same deploy. See [`PLAYBOOK.md` § Implementation queue: pricing-live cutover](./PLAYBOOK.md#implementation-queue--pricing-live-cutover) for the file-by-file plan. | Medium | 5-7 hrs | £0 | Certain — NEXT SESSION |
-| 1 | **Stripe real integration** — Checkout, webhooks, real subscription updates for module changes + refunds. Unblocks every "pending-stripe" state from today's billing work | Medium | 2 days | 1.4% + 20p per txn | Certain |
+| 1 | **Stripe real integration** — Checkout, webhooks, real subscription updates for module changes + refunds. Unblocks every "pending-stripe" state from today's billing work | Medium | 2 days | 1.4% + 20p per txn | Certain — NEXT SESSION |
 | 2 | **Express-request checkbox at payment** — bakes into the Stripe Checkout flow (notice already on page) | Low | Bundled with #1 | £0 | Certain |
 | 3 | **Solicitor T&C review** — UK SaaS specialist signs off the new terms before public launch | Low (1h call) | 1 week elapsed | £200-400 one-off | Certain |
 | 4 | **R2 brand-asset deletion in GDPR scrub cron** — currently logs intent only; needs R2 binding wired into ops worker | Low | 2-3 h | £0 | Certain |
@@ -100,6 +110,7 @@ Phases A → F. ROADMAP entry below tracks each phase.
 | 17 | **ASO/SEO pass** — metadata, OG cards, sitemap, JSON-LD, public FAQ expansion | Medium | 1-2 days | £0 | Recommended |
 | 18 | **Performance + accessibility audit** — CWV pass, WCAG 2.2 AA spot-check, bundle size | Medium | 1 day | £0 | Recommended |
 | 19 | **Customer support workflow (Cowork email triage)** — inbox → classify → draft from templates. Needed once volume hits | High | 2-3 days | £0 | Optional |
+| 19a | **Multi-location dashboard counter** — customer-self-serve +/- buttons in ModulesEditor. Needs new `/api/account/multilocation` endpoint, ProspectRecord.extraLocations field, Notion column. Intake captures the count today; admin endpoint can grant out-of-band — UI deferred until first 2nd-location request | Medium | 4-6 h | £0 | Trigger-based (first 2nd-location request) |
 
 ---
 

@@ -70,6 +70,7 @@ import {
   MODULE_OFFERS_MONTHLY_GBP,
   GBP_ADDON_ONE_OFF_GBP,
   GBP_ADDON_MONTHLY_GBP,
+  MODULE_MULTILOCATION_SETUP_GBP,
   calculateFees,
 } from "@/lib/fees";
 import { site } from "@/lib/site";
@@ -158,6 +159,7 @@ type IntakeDefaults = {
     moduleNewsletter?: boolean;
     moduleOffers?: boolean;
     gbpAddon?: boolean;
+    extraLocations?: number;
   };
 };
 
@@ -196,6 +198,7 @@ function buildDefaultValues(
       moduleNewsletter: saved.modules?.moduleNewsletter ?? seed.modules?.moduleNewsletter ?? false,
       moduleOffers: saved.modules?.moduleOffers ?? seed.modules?.moduleOffers ?? false,
       gbpAddon: saved.modules?.gbpAddon ?? seed.modules?.gbpAddon ?? false,
+      extraLocations: saved.modules?.extraLocations ?? seed.modules?.extraLocations ?? 0,
     },
     // The legal block is intentionally cast: the schema types
     // isDataController + acceptsTerms + acceptsRefundCancellation as
@@ -1040,17 +1043,14 @@ function ModulesSection({
   const moduleOffers = watch("modules.moduleOffers");
   const gbpAddon = watch("modules.gbpAddon");
 
-  // Newsletter + Offers were combined into a single intake choice
-  // 2026-05-14 — they're both "promotional outbound" from the
-  // customer's POV and pricing was double-counting cognitively.
-  // The two backend modules still exist (separate billing, separate
-  // dashboard surfaces, separate Notion select options) so toggling
-  // the combined row flips BOTH flags atomically via setValue.
-  const newsletterOffersChecked = !!moduleNewsletter || !!moduleOffers;
-  const newsletterOffersSetup =
-    MODULE_NEWSLETTER_SETUP_GBP + MODULE_OFFERS_SETUP_GBP;
-  const newsletterOffersMonthly =
-    MODULE_NEWSLETTER_MONTHLY_GBP + MODULE_OFFERS_MONTHLY_GBP;
+  // Newsletter and Offers are TWO SEPARATE modules (split 2026-05-25
+  // per Ben's lock — they were previously combined into a single
+  // intake row but the strategic decision is to bill / surface them
+  // independently because customers do choose one without the other).
+  const extraLocationsRaw = watch("modules.extraLocations");
+  const extraLocations = Number.isFinite(extraLocationsRaw)
+    ? Math.max(0, Math.floor(extraLocationsRaw as number))
+    : 0;
 
   const fees = calculateFees({
     moduleBooking: !!moduleBooking,
@@ -1058,6 +1058,7 @@ function ModulesSection({
     moduleNewsletter: !!moduleNewsletter,
     moduleOffers: !!moduleOffers,
     gbpAddon: !!gbpAddon,
+    extraLocations,
   });
 
   return (
@@ -1093,45 +1094,65 @@ function ModulesSection({
           register={register("modules.moduleEnquiry")}
         />
         <ModuleRow
-          label="Newsletter + Offers"
-          tagline="A monthly newsletter sent from name@yourdomain, AND a promotional strip on your homepage (headline, dates, CTA) you control from your dashboard. We moderate each offer before it goes live."
-          setup={`+£${newsletterOffersSetup}`}
-          monthly={`+£${newsletterOffersMonthly}/mo`}
-          controlled={{
-            checked: newsletterOffersChecked,
-            onChange: (next) => {
-              // One UI toggle, two backend flags — keep them in
-              // lockstep so the rest of the system (billing, ops,
-              // admin) keeps seeing the modules it expects.
-              //
-              // NB no <input type="hidden" register=...> companion
-              // for these fields — that pattern was a 2026-05-14
-              // bug that string-coerced the booleans on submit
-              // (RHF reads .value off type="hidden", which is a
-              // string, breaking z.boolean() validation server-
-              // side and showing as "Couldn't save your modules"
-              // to the customer). Both fields are in
-              // buildDefaultValues, which is enough for RHF to
-              // track them; setValue here keeps internal state
-              // in sync.
-              setValue("modules.moduleNewsletter", next, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-              setValue("modules.moduleOffers", next, {
-                shouldDirty: true,
-                shouldValidate: true,
-              });
-            },
-          }}
+          label="Newsletter"
+          tagline="A monthly newsletter sent from name@yourdomain — auto-drafted in your voice (reviewed by me) so there's no writer's block, just check and send."
+          setup={`+£${MODULE_NEWSLETTER_SETUP_GBP}`}
+          monthly={`+£${MODULE_NEWSLETTER_MONTHLY_GBP}/mo`}
+          register={register("modules.moduleNewsletter")}
+        />
+        <ModuleRow
+          label="Offers"
+          tagline="A promotional strip on your homepage — headline, dates, CTA — you control from your dashboard. I moderate each offer before it goes live to keep claims honest."
+          setup={`+£${MODULE_OFFERS_SETUP_GBP}`}
+          monthly={`+£${MODULE_OFFERS_MONTHLY_GBP}/mo`}
+          register={register("modules.moduleOffers")}
         />
         <ModuleRow
           label="Google Business Profile + live reviews"
           tagline="One-off setup or audit, plus your top Google reviews refreshed on your site automatically (powered by the Google Places API)."
-          setup={`£${GBP_ADDON_ONE_OFF_GBP}`}
+          setup={`+£${GBP_ADDON_ONE_OFF_GBP}`}
           monthly={`+£${GBP_ADDON_MONTHLY_GBP}/mo`}
           register={register("modules.gbpAddon")}
         />
+
+        {/* Multi-location — counter input, one-off only, no monthly.
+            Defaults to 0; £15 per extra location.  */}
+        <div className="rounded-2xl border-2 border-navy-200 bg-white p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-serif text-lg font-semibold text-navy-900">
+                Multi-location
+              </p>
+              <p className="mt-1 text-sm text-navy-700">
+                Each extra location gets its own contact / map / opening-hours
+                block on the site. First location is in your base — only count
+                the extras here.
+              </p>
+            </div>
+            <div className="flex-none text-right">
+              <p className="font-serif text-sm font-semibold text-navy-900">
+                +£{MODULE_MULTILOCATION_SETUP_GBP} setup
+              </p>
+              <p className="text-[11px] uppercase tracking-wider text-navy-500">
+                per extra location
+              </p>
+              <p className="mt-1 text-[11px] text-navy-500">
+                no monthly
+              </p>
+            </div>
+          </div>
+          <label className="mt-3 flex items-center gap-3 text-sm">
+            <span className="text-navy-700">Extra locations:</span>
+            <input
+              type="number"
+              min={0}
+              max={50}
+              step={1}
+              className="w-20 rounded-md border border-navy-300 px-2 py-1 text-navy-900"
+              {...register("modules.extraLocations", { valueAsNumber: true })}
+            />
+          </label>
+        </div>
       </div>
 
       <div className="rounded-2xl border-2 border-navy-900 bg-cream-50 p-5">

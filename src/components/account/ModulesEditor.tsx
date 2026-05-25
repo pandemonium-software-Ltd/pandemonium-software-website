@@ -25,6 +25,18 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isModuleSetupComplete, type ToolsSlice } from "@/lib/module-setup-status";
+import {
+  MODULE_BOOKING_SETUP_GBP,
+  MODULE_BOOKING_MONTHLY_GBP,
+  MODULE_ENQUIRY_SETUP_GBP,
+  MODULE_ENQUIRY_MONTHLY_GBP,
+  MODULE_NEWSLETTER_SETUP_GBP,
+  MODULE_NEWSLETTER_MONTHLY_GBP,
+  MODULE_OFFERS_SETUP_GBP,
+  MODULE_OFFERS_MONTHLY_GBP,
+  GBP_ADDON_ONE_OFF_GBP,
+  GBP_ADDON_MONTHLY_GBP,
+} from "@/lib/fees";
 
 type ModuleMeta = {
   name: string;
@@ -41,33 +53,33 @@ const ALL_MODULES: readonly ModuleMeta[] = [
   {
     name: "Online Booking",
     blurb: "Cal.com booking widget on your site",
-    setup: 39,
-    monthly: 4,
+    setup: MODULE_BOOKING_SETUP_GBP,
+    monthly: MODULE_BOOKING_MONTHLY_GBP,
   },
   {
     name: "Enquiry Form",
     blurb: "Lead-capture form that emails you each enquiry",
-    setup: 39,
-    monthly: 4,
+    setup: MODULE_ENQUIRY_SETUP_GBP,
+    monthly: MODULE_ENQUIRY_MONTHLY_GBP,
   },
   {
     name: "Newsletter",
     blurb: "Monthly send to your subscribers + signup widget",
-    setup: 39,
-    monthly: 6,
+    setup: MODULE_NEWSLETTER_SETUP_GBP,
+    monthly: MODULE_NEWSLETTER_MONTHLY_GBP,
   },
   {
     name: "Offers",
     blurb: "Promo strip + offer composer in your dashboard",
-    setup: 29,
-    monthly: 4,
+    setup: MODULE_OFFERS_SETUP_GBP,
+    monthly: MODULE_OFFERS_MONTHLY_GBP,
   },
   {
     name: "Google Business Profile Setup/Audit",
     blurb:
       "I claim/audit your listing + your top Google reviews appear on your site",
-    setup: 29,
-    monthly: 2,
+    setup: GBP_ADDON_ONE_OFF_GBP,
+    monthly: GBP_ADDON_MONTHLY_GBP,
     shortName: "Google Reviews",
   },
 ];

@@ -1,14 +1,14 @@
 {
-  "description": "Phase 3 receipt — all 4 modules selected, no founding member",
+  "description": "Phase 3 receipt — all 5 modules selected (Booking, Enquiry, Newsletter, Offers, GBP), no founding member (locked 2026-05-25 prices)",
   "template": "phase3-thanks-fees-and-payment-coming",
   "values": {
     "customerName": "Sam",
-    "setupFee": 275,
-    "monthlyFee": 35,
-    "moduleList": "  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)"
+    "setupFee": 464,
+    "monthlyFee": 59,
+    "moduleList": "  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Offers (a promotional strip on your homepage — set a headline, dates and CTA from your dashboard)\n  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)"
   },
   "expected": {
     "subject": "Got your details — here's your quote",
-    "body": "Hi Sam,\n\nThanks for filling that in. Here's a quick summary.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)\n\nThe cost:\n  Setup (one-off):  £275\n  Monthly:          £35/mo\n\nWhat happens next: in a minute you'll get a second email with\na link to your onboarding hub. That's where we'll work through\na short checklist (~30 minutes total) — your web address, your\nphotos, your launch date.\n\nWe'll handle all the behind-the-scenes work (hosting, secure\nconnection, your custom email setup, building the site\nitself). You'll get an email at every step so you always\nknow what's happening.\n\n— ModuForge"
+    "body": "Hi Sam,\n\nThanks for filling that in. Here's a quick summary.\n\nWhat you'll get:\n  • Site + hosting\n  • Online booking (Cal.com integration with your branding)\n  • Enquiry form (emails hit your inbox without exposing your address)\n  • Newsletter (send up to 1000 emails/month from name@yourdomain)\n  • Offers (a promotional strip on your homepage — set a headline, dates and CTA from your dashboard)\n  • Google Business Profile setup + live reviews on your site (I'll claim your listing, embed it, and refresh your top reviews automatically)\n\nThe cost:\n  Setup (one-off):  £464\n  Monthly:          £59/mo\n\nWhat happens next: in a minute you'll get a second email with\na link to your onboarding hub. That's where we'll work through\na short checklist (~30 minutes total) — your web address, your\nphotos, your launch date.\n\nWe'll handle all the behind-the-scenes work (hosting, secure\nconnection, your custom email setup, building the site\nitself). You'll get an email at every step so you always\nknow what's happening.\n\n— ModuForge"
   }
 }

@@ -3,6 +3,21 @@
 import Link from "next/link";
 import { useState } from "react";
 import { site } from "@/lib/site";
+import {
+  BASE_SETUP_GBP,
+  BASE_MONTHLY_GBP,
+  MODULE_BOOKING_SETUP_GBP,
+  MODULE_BOOKING_MONTHLY_GBP,
+  MODULE_ENQUIRY_SETUP_GBP,
+  MODULE_ENQUIRY_MONTHLY_GBP,
+  MODULE_NEWSLETTER_SETUP_GBP,
+  MODULE_NEWSLETTER_MONTHLY_GBP,
+  MODULE_OFFERS_SETUP_GBP,
+  MODULE_OFFERS_MONTHLY_GBP,
+  GBP_ADDON_ONE_OFF_GBP,
+  GBP_ADDON_MONTHLY_GBP,
+  MODULE_MULTILOCATION_SETUP_GBP,
+} from "@/lib/fees";
 
 type Module = {
   id: string;
@@ -18,8 +33,8 @@ const MODULES: Module[] = [
   {
     id: "base",
     name: "Base website",
-    setup: 129,
-    monthly: 19,
+    setup: BASE_SETUP_GBP,
+    monthly: BASE_MONTHLY_GBP,
     blurb:
       "Everything you need to look professional online. Mobile-optimised, hosted properly, and looked after for you.",
     mandatory: true,
@@ -36,28 +51,49 @@ const MODULES: Module[] = [
   {
     id: "booking",
     name: "Online Booking",
-    setup: 39,
-    monthly: 4,
+    setup: MODULE_BOOKING_SETUP_GBP,
+    monthly: MODULE_BOOKING_MONTHLY_GBP,
     blurb:
       "Let customers book jobs directly from your website. Syncs with your calendar, sends automatic confirmations and reminders, cuts phone tag.",
   },
   {
     id: "enquiry",
-    name: "Enquiry System",
-    setup: 39,
-    monthly: 4,
+    name: "Enquiry Form",
+    setup: MODULE_ENQUIRY_SETUP_GBP,
+    monthly: MODULE_ENQUIRY_MONTHLY_GBP,
     blurb:
       "A branded contact form on your site with spam protection. Enquiries land straight in your inbox — never miss a lead.",
   },
   {
     id: "newsletter",
-    name: "Newsletter & Offers",
-    setup: 39,
-    monthly: 6,
+    name: "Newsletter",
+    setup: MODULE_NEWSLETTER_SETUP_GBP,
+    monthly: MODULE_NEWSLETTER_MONTHLY_GBP,
     blurb:
-      "Collect customer emails and send monthly offers or seasonal reminders. Each campaign is auto-drafted in your voice (reviewed by me first) — no writer's block, just check and send.",
+      "Collect customer emails and send a monthly newsletter from name@yourdomain. Each campaign is auto-drafted in your voice (reviewed by me first) — no writer's block, just check and send.",
+  },
+  {
+    id: "offers",
+    name: "Offers",
+    setup: MODULE_OFFERS_SETUP_GBP,
+    monthly: MODULE_OFFERS_MONTHLY_GBP,
+    blurb:
+      "A promotional strip on your homepage (headline, dates, CTA) you control from your dashboard. Cowork moderates each offer before it goes live to keep claims honest.",
+  },
+  {
+    id: "gbp",
+    name: "Google Business Profile + reviews",
+    setup: GBP_ADDON_ONE_OFF_GBP,
+    monthly: GBP_ADDON_MONTHLY_GBP,
+    blurb:
+      "I'll set up or audit your Google Business Profile AND automate a daily refresh of your top Google reviews onto your site (powered by Google's own Places API). Star ratings show up in search too.",
   },
 ];
+
+// Multi-location is a counter, not a boolean. Modelled as a separate
+// stepper row under the module list. £15 setup per extra location, no
+// monthly contribution.
+const MULTILOCATION_SETUP = MODULE_MULTILOCATION_SETUP_GBP;
 
 function formatGBP(n: number) {
   const hasPence = Math.round(n * 100) % 100 !== 0;
@@ -75,7 +111,10 @@ export default function PricingCalculator() {
     booking: false,
     enquiry: false,
     newsletter: false,
+    offers: false,
+    gbp: false,
   });
+  const [extraLocations, setExtraLocations] = useState<number>(0);
 
   const toggle = (id: string) => {
     const mod = MODULES.find((m) => m.id === id);
@@ -83,7 +122,7 @@ export default function PricingCalculator() {
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const totals = MODULES.reduce(
+  const moduleTotals = MODULES.reduce(
     (acc, m) => {
       if (selected[m.id]) {
         acc.setup += m.setup;
@@ -94,8 +133,14 @@ export default function PricingCalculator() {
     { setup: 0, monthly: 0 },
   );
 
+  const totals = {
+    setup: moduleTotals.setup + extraLocations * MULTILOCATION_SETUP,
+    monthly: moduleTotals.monthly,
+  };
+
   const firstYear = totals.setup + totals.monthly * 12;
-  const anyExtras = MODULES.some((m) => !m.mandatory && selected[m.id]);
+  const anyExtras =
+    MODULES.some((m) => !m.mandatory && selected[m.id]) || extraLocations > 0;
 
   return (
     <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-start">
@@ -190,6 +235,78 @@ export default function PricingCalculator() {
               </li>
             );
           })}
+
+          {/* Multi-location — counter, not a checkbox. £15 setup
+              per extra location, no monthly. */}
+          <li>
+            <div className="group relative flex w-full flex-col gap-3 rounded-2xl bg-white p-6 text-left shadow-card ring-1 ring-inset ring-navy-100">
+              <div className="flex items-start justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="mt-1 h-6 w-6 flex-none rounded-md bg-navy-100" aria-hidden="true" />
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-serif text-xl font-semibold text-navy-900">
+                        Multi-location
+                      </h3>
+                      <span className="rounded-full bg-navy-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-navy-700">
+                        One-off
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[0.95rem] leading-relaxed text-navy-700">
+                      Each extra location gets its own contact / map / opening-hours
+                      block on the site. £15 setup per extra location — no extra
+                      monthly. The first location is included in your base.
+                    </p>
+
+                    <div className="mt-4 inline-flex items-center gap-3 rounded-lg border border-navy-200 bg-cream-50 px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExtraLocations((n) => Math.max(0, n - 1))
+                        }
+                        disabled={extraLocations === 0}
+                        aria-label="Remove one extra location"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-navy-900 text-white disabled:bg-navy-300"
+                      >
+                        −
+                      </button>
+                      <span
+                        className="min-w-[2.5rem] text-center font-serif text-lg font-semibold text-navy-900"
+                        aria-live="polite"
+                      >
+                        {extraLocations}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExtraLocations((n) => Math.min(50, n + 1))
+                        }
+                        aria-label="Add one extra location"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-navy-900 text-white"
+                      >
+                        +
+                      </button>
+                      <span className="text-xs text-navy-600">
+                        extra location{extraLocations === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-none text-right">
+                  <p className="font-serif text-lg font-semibold text-navy-900">
+                    +£{MULTILOCATION_SETUP}
+                  </p>
+                  <p className="text-xs uppercase tracking-wider text-navy-500">
+                    per extra location
+                  </p>
+                  <p className="mt-2 text-[0.85rem] text-navy-500">
+                    no extra monthly
+                  </p>
+                </div>
+              </div>
+            </div>
+          </li>
         </ul>
       </div>
 
@@ -243,8 +360,8 @@ export default function PricingCalculator() {
 
           <p className="mt-6 text-[13px] leading-snug text-cream-300/75">
             Your setup fee and first monthly payment come out together on day
-            one. After that, you&apos;re on a simple monthly plan with 30
-            days&apos; notice to cancel.
+            one. After that, you&apos;re on a simple monthly plan you can
+            cancel any time from your dashboard.
           </p>
 
           <Link

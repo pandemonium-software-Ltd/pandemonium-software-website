@@ -81,6 +81,7 @@ async function main() {
       moduleNewsletter: target.toModules.includes("Newsletter"),
       moduleOffers: target.toModules.includes("Offers"),
       gbpAddon: target.toModules.includes("Google Business Profile Setup/Audit"),
+      extraLocations: target.toModules.includes("Multi-location") ? 1 : 0,
     },
     prospect.foundingMember,
   );

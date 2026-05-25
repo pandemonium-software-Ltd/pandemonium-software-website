@@ -1,17 +1,17 @@
 {
-  "description": "Module change confirmed — adding Newsletter; £39 charged",
+  "description": "Module change confirmed — adding Newsletter; £49 charged (locked 2026-05-25 prices)",
   "template": "module-change-confirmed",
   "values": {
     "customerName": "Alex",
     "addedSummary": "Newsletter",
     "removedSummary": "(none)",
-    "paymentLine": "Your card was charged £39 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.",
-    "newSetupTotal": 246,
-    "newMonthlyTotal": 31,
+    "paymentLine": "Your card was charged £49 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.",
+    "newSetupTotal": 348,
+    "newMonthlyTotal": 38,
     "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
   },
   "expected": {
     "subject": "Module change done ✓",
-    "body": "Hi Alex,\n\nYour module change is sorted.\n\nWhat changed:\n  • Added: Newsletter\n  • Removed: (none)\n\nPayment:\n  • Your card was charged £39 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.\n\nYour new totals:\n  • Setup fee: £246\n  • Monthly: £31/month\n\nAny new modules are now showing on your hub — open it from\nthe button below and finish setting them up. Anything you\nremoved is hidden but your data is safe in case you change\nyour mind.\n\nHeads-up: that was your one pre-launch module swap. After\nlaunch you can still change modules — just reply and we'll\nquote it.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nYour module change is sorted.\n\nWhat changed:\n  • Added: Newsletter\n  • Removed: (none)\n\nPayment:\n  • Your card was charged £49 for the Newsletter setup fee. You'll see it on your statement as MODUFORGE.\n\nYour new totals:\n  • Setup fee: £348\n  • Monthly: £38/month\n\nAny new modules are now showing on your hub — open it from\nthe button below and finish setting them up. Anything you\nremoved is hidden but your data is safe in case you change\nyour mind.\n\nHeads-up: that was your one pre-launch module swap. After\nlaunch you can still change modules — just reply and we'll\nquote it.\n\n— ModuForge"
   }
 }

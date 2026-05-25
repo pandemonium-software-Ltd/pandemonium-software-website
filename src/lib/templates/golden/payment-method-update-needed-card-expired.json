@@ -3,12 +3,12 @@
   "template": "payment-method-update-needed",
   "values": {
     "customerName": "Alex",
-    "failedActionDescription": "charge £39 for the Newsletter module you wanted to add",
+    "failedActionDescription": "charge £49 for the Newsletter module you wanted to add",
     "removedModulesSummary": "Newsletter",
     "accountUrl": "https://modu-forge.co.uk/account/abc123-def456"
   },
   "expected": {
     "subject": "Quick fix needed: your card",
-    "body": "Hi Alex,\n\nQuick heads-up — we tried to charge £39 for the Newsletter module you wanted to add but the\npayment didn't go through. Usually that means a card that's\nexpired or been replaced (happens to everyone).\n\nWhat we've done:\n  • Held off on the change you were trying to make\n    (Newsletter), so you're not paying for\n    anything you haven't approved.\n  • Stopped trying to charge you for now.\n\nWhat we need from you:\n  Just reply to this email. We'll send you a secure link to\n  pop in a new card — takes about 30 seconds. Once that's\n  done we'll re-run the change and confirm.\n\nYour existing subscription continues as normal — this only\naffects the new thing we were trying to add.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nQuick heads-up — we tried to charge £49 for the Newsletter module you wanted to add but the\npayment didn't go through. Usually that means a card that's\nexpired or been replaced (happens to everyone).\n\nWhat we've done:\n  • Held off on the change you were trying to make\n    (Newsletter), so you're not paying for\n    anything you haven't approved.\n  • Stopped trying to charge you for now.\n\nWhat we need from you:\n  Just reply to this email. We'll send you a secure link to\n  pop in a new card — takes about 30 seconds. Once that's\n  done we'll re-run the change and confirm.\n\nYour existing subscription continues as normal — this only\naffects the new thing we were trying to add.\n\n— ModuForge"
   }
 }

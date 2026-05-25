@@ -32,7 +32,7 @@ export default function FoundingMemberStrip() {
         <p className="text-[1rem] leading-relaxed text-cream-100 md:text-[1.05rem]">
           My first three clients get everything included for a special
           founding-member rate:{" "}
-          <span className="font-semibold text-white">£99 setup and £15/month, locked in for life</span>
+          <span className="font-semibold text-white">£99 setup and £15/month, locked in for 5 years</span>
           , in exchange for a testimonial and a short case study.{" "}
           <span className="inline-flex items-center gap-1.5 rounded-full bg-ember-500/15 px-2.5 py-0.5 text-sm font-semibold text-ember-200">
             <span

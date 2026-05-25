@@ -39,7 +39,7 @@ The cost:
   Monthly:          £{{monthlyFee}}/mo{{#if foundingMember}}
 
 You qualified for our Founding Member rate — flat £99 setup
-plus £15/month, locked in for as long as you stay subscribed.{{/if}}
+plus £15/month, locked in for 5 years.{{/if}}
 
 What happens next: in a minute you'll get a second email with
 a link to your onboarding hub. That's where we'll work through

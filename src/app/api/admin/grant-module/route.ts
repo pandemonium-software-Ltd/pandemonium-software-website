@@ -86,6 +86,10 @@ export async function POST(request: Request) {
   // overrides the per-module pricing exactly the same way it does
   // at intake — we honour the existing flag rather than letting
   // operator actions accidentally flip pricing tier.
+  // extraLocations: this admin endpoint doesn't currently support
+  // adjusting the counter — operator just adds/removes module flags.
+  // If "Multi-location" is in the new module list, default to 1
+  // (handled by modulesToSelection's coerce-to-1 behaviour).
   const fees = calculateFees(
     {
       moduleBooking: current.has("Online Booking"),
@@ -93,6 +97,7 @@ export async function POST(request: Request) {
       moduleNewsletter: current.has("Newsletter"),
       moduleOffers: current.has("Offers"),
       gbpAddon: current.has("Google Business Profile Setup/Audit"),
+      extraLocations: current.has("Multi-location") ? 1 : 0,
     },
     prospect.foundingMember,
   );

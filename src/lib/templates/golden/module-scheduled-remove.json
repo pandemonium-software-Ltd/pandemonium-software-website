@@ -1,5 +1,5 @@
 {
-  "description": "Module remove scheduled — customer removed Offers from the dashboard; full access until effective date, monthly drops, no setup refund",
+  "description": "Module remove scheduled — Priya has base + Newsletter + Offers; removing Offers, monthly drops £6, no setup refund (locked 2026-05-25 prices)",
   "template": "module-scheduled",
   "values": {
     "customerName": "Priya",
@@ -7,12 +7,12 @@
     "effectiveDate": "2026-06-01",
     "accountUrl": "https://modu-forge.co.uk/account/xyz789",
     "removed": true,
-    "paidSetupSoFar": 197,
-    "currentMonthly": 29,
-    "newMonthly": 25
+    "paidSetupSoFar": 367,
+    "currentMonthly": 44,
+    "newMonthly": 38
   },
   "expected": {
     "subject": "Got it — Offers scheduled for 2026-06-01",
-    "body": "Hi Priya,\n\nQuick confirmation — your module change is queued.\n\nYou are REMOVING: Offers\n\nEffective from: 2026-06-01\n\nWhere you stand on money:\n\n  • Setup paid to date:      £197 (non-refundable)\n  • Current monthly:         £29/mo\n  • New monthly from 2026-06-01: £25/mo\n\nWhat happens between now and then:\n  • Nothing changes on your bill THIS month — you keep\n    full access to Offers until 2026-06-01\n    since you have already paid.\n  • From 2026-06-01: your monthly drops to the new\n    figure above and Offers is gone.\n  • No refund for the rest of this month — you are using\n    the service through to the end of it.\n\nThe setup figure above is what you have already paid to\nbuild the site. It is not refunded under any module change\nor cancellation — that work has been delivered.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
+    "body": "Hi Priya,\n\nQuick confirmation — your module change is queued.\n\nYou are REMOVING: Offers\n\nEffective from: 2026-06-01\n\nWhere you stand on money:\n\n  • Setup paid to date:      £367 (non-refundable)\n  • Current monthly:         £44/mo\n  • New monthly from 2026-06-01: £38/mo\n\nWhat happens between now and then:\n  • Nothing changes on your bill THIS month — you keep\n    full access to Offers until 2026-06-01\n    since you have already paid.\n  • From 2026-06-01: your monthly drops to the new\n    figure above and Offers is gone.\n  • No refund for the rest of this month — you are using\n    the service through to the end of it.\n\nThe setup figure above is what you have already paid to\nbuild the site. It is not refunded under any module change\nor cancellation — that work has been delivered.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
   }
 }

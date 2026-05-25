@@ -98,6 +98,7 @@ export const MODULE_OPTIONS = [
   "Newsletter",
   "Offers",
   "Google Business Profile Setup/Audit",
+  "Multi-location",
 ] as const;
 
 /** Style axis — typography + corner radii + heading weight.
@@ -275,6 +276,14 @@ const moduleSelectionSchema = z.object({
   moduleNewsletter: z.boolean().default(false),
   moduleOffers: z.boolean().default(false),
   gbpAddon: z.boolean().default(false),
+  // Multi-location is a counter (extra locations beyond the
+  // included one), £15 setup each, no monthly. Defaults to 0.
+  extraLocations: z
+    .number()
+    .int()
+    .min(0, "Extra locations can't be negative.")
+    .max(50, "That's a lot of locations — get in touch directly.")
+    .default(0),
 });
 
 // socialProofSchema + testimonialSchema removed 2026-05-14: customer

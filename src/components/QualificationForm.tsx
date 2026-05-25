@@ -33,31 +33,37 @@ const MODULE_DETAILS: Record<
   { setup: string; monthly: string; tagline: string }
 > = {
   "Online Booking": {
-    setup: "+£39 setup",
-    monthly: "+£4/mo",
+    setup: "+£19 setup",
+    monthly: "+£6/mo",
     tagline: "Customers pick a slot themselves via Cal.com.",
   },
   "Enquiry Form": {
-    setup: "+£39 setup",
-    monthly: "+£4/mo",
+    setup: "+£19 setup",
+    monthly: "+£6/mo",
     tagline: "Get enquiries to your inbox without exposing your email.",
   },
   Newsletter: {
-    setup: "+£39 setup",
-    monthly: "+£6/mo",
+    setup: "+£49 setup",
+    monthly: "+£9/mo",
     tagline: "Email your customers monthly. I send it for you.",
   },
   Offers: {
-    setup: "+£29 setup",
-    monthly: "+£4/mo",
+    setup: "+£19 setup",
+    monthly: "+£6/mo",
     tagline:
       "Promo strip on your homepage you control from your dashboard.",
   },
   "Google Business Profile Setup/Audit": {
-    setup: "£29 one-off",
-    monthly: "+£2/mo",
+    setup: "£59 one-off",
+    monthly: "+£3/mo",
     tagline:
       "We sort your Google listing AND your top reviews refresh on your site automatically.",
+  },
+  "Multi-location": {
+    setup: "+£15 per extra location",
+    monthly: "no extra monthly",
+    tagline:
+      "Extra contact / map / hours block per additional location. Tell me how many at intake.",
   },
 };
 

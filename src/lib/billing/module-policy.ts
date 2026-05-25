@@ -34,26 +34,47 @@ import type { ProspectRecord } from "../notion-prospects";
 // Centralised here so policy + UI + Notion writers all agree on the
 // vocabulary. If you add a new module, add it here AND in fees.ts AND
 // in lib/onboarding.ts deriveStepList() AND schemas.ts MODULE_OPTIONS.
+//
+// "Multi-location" is special: presence in the array signals the
+// customer has at least 1 extra location. The actual count lives
+// separately (intake `extraLocations` field / prospect-level counter).
+// Multi-select is a boolean by nature, so the counter is layered on
+// top via the extraLocations argument to modulesToSelection.
 export const MODULE_OPTIONS = [
   "Online Booking",
   "Enquiry Form",
   "Newsletter",
   "Offers",
   "Google Business Profile Setup/Audit",
+  "Multi-location",
 ] as const;
 
 export type ModuleOption = (typeof MODULE_OPTIONS)[number];
 
 /** Normalise a module-string array into the strict ModuleSelection
  *  shape that fees.ts wants. Unknown strings are silently dropped
- *  (tolerates Notion drift). */
-export function modulesToSelection(modules: string[]): ModuleSelection {
+ *  (tolerates Notion drift).
+ *
+ *  `extraLocations` is the counter that lives alongside the multi-
+ *  select "Multi-location" flag. Defaults to 0; if the flag is
+ *  present in `modules` but extraLocations is 0, we coerce to 1
+ *  (the flag's presence is the source of truth that there's at
+ *  least one extra location). */
+export function modulesToSelection(
+  modules: string[],
+  extraLocations = 0,
+): ModuleSelection {
+  const hasMultiLocation = modules.includes("Multi-location");
+  const effectiveExtra = hasMultiLocation
+    ? Math.max(1, extraLocations)
+    : 0;
   return {
     moduleBooking: modules.includes("Online Booking"),
     moduleEnquiry: modules.includes("Enquiry Form"),
     moduleNewsletter: modules.includes("Newsletter"),
     moduleOffers: modules.includes("Offers"),
     gbpAddon: modules.includes("Google Business Profile Setup/Audit"),
+    extraLocations: effectiveExtra,
   };
 }
 
@@ -180,6 +201,12 @@ export function calculateModuleDelta(args: {
   fromModules: string[];
   toModules: string[];
   foundingMember: boolean;
+  /** Multi-location counter on the old side. Default 0.
+   *  If `fromModules` includes "Multi-location" but this is 0,
+   *  it coerces to 1 inside modulesToSelection. */
+  fromExtraLocations?: number;
+  /** Multi-location counter on the new side. Default 0. */
+  toExtraLocations?: number;
 }): ModuleDelta {
   const fromSet = new Set(args.fromModules);
   const toSet = new Set(args.toModules);
@@ -187,13 +214,21 @@ export function calculateModuleDelta(args: {
   const removed = [...fromSet].filter((m) => !toSet.has(m)).sort();
 
   const fromFees = calculateFees(
-    modulesToSelection(args.fromModules),
+    modulesToSelection(args.fromModules, args.fromExtraLocations ?? 0),
     args.foundingMember,
   );
   const toFees = calculateFees(
-    modulesToSelection(args.toModules),
+    modulesToSelection(args.toModules, args.toExtraLocations ?? 0),
     args.foundingMember,
   );
+
+  // Counter-only changes (extra location bumped from 1 → 2 with
+  // Multi-location flag already set on both sides) wouldn't show
+  // up in added/removed, so we treat a counter delta as a non-no-op
+  // too. Otherwise the customer-facing "add a location" UX would
+  // bounce off the isNoOp guard.
+  const countersChanged =
+    (args.fromExtraLocations ?? 0) !== (args.toExtraLocations ?? 0);
 
   return {
     fromModules: [...args.fromModules].sort(),
@@ -204,7 +239,7 @@ export function calculateModuleDelta(args: {
     toFees,
     setupDelta: toFees.setup - fromFees.setup,
     monthlyDelta: toFees.monthly - fromFees.monthly,
-    isNoOp: added.length === 0 && removed.length === 0,
+    isNoOp: added.length === 0 && removed.length === 0 && !countersChanged,
   };
 }
 
