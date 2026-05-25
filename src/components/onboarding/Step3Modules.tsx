@@ -305,7 +305,11 @@ export default function Step3Modules({
   // local state flips to "complete" → section re-locks → Update
   // button disappears → save is impossible. Latch behaviour:
   // once unlocked for a session, stays unlocked until reload.
-  const calcomInitiallyComplete = isValidCalcomUrl(initialCalcomUrl);
+  // "Complete enough to not need unlock" — a non-empty URL is
+  // sufficient. Full Cal.com URL validation happens in calcomStatus
+  // (live state). If invalid, customer will see the in-progress
+  // badge and can still save.
+  const calcomInitiallyComplete = !!initialCalcomUrl.trim();
   const resendInitiallyComplete =
     !!initialResendEmail.trim() && initialResendInvited === true;
   const gbpInitiallyComplete =
