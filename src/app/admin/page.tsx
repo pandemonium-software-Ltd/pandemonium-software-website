@@ -11,11 +11,18 @@
 // component runs, they're already authenticated.
 
 import type { Metadata } from "next";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { listAllProspects, type ProspectRecord } from "@/lib/notion-prospects";
 import { verifyNotionDatabases } from "@/lib/notion";
 import { isStripeConfigured } from "@/lib/stripe";
 import AdminProspectList from "@/components/admin/AdminProspectList";
 import AnalyticsCard from "@/components/AnalyticsCard";
+import SentryAlertsPanel from "@/components/admin/SentryAlertsPanel";
+import {
+  listSentryAlerts,
+  type SentryAlertRow,
+} from "@/lib/d1-sentry";
+import type { D1Database } from "@/lib/d1-analytics";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -34,6 +41,24 @@ export default async function AdminPage() {
     prospects = await listAllProspects();
   } catch (e) {
     loadError = e instanceof Error ? e.message : String(e);
+  }
+
+  // Sentry alerts inbox — top 20 open alerts. D1 read on every
+  // page load (fine: tiny query, fast). Empty array when the
+  // binding is missing or no alerts have ever fired.
+  let sentryAlerts: SentryAlertRow[] = [];
+  try {
+    const cfCtx = getCloudflareContext();
+    const cfEnv = (cfCtx?.env ?? {}) as {
+      pandemonium_analytics?: D1Database;
+    };
+    const d1 = cfEnv.pandemonium_analytics;
+    if (d1) {
+      sentryAlerts = await listSentryAlerts(d1, { status: "open", limit: 20 });
+    }
+  } catch {
+    // D1 unavailable — render the panel empty rather than fail
+    // the whole admin page.
   }
 
   // Health checks for the connected services. If verifyNotionDatabases
@@ -124,6 +149,14 @@ export default async function AdminPage() {
         {loadError && (
           <div className="mb-6 rounded-xl border-2 border-ember-500 bg-white p-4 text-sm text-ember-700">
             <strong>Couldn&apos;t load prospects:</strong> {loadError}
+          </div>
+        )}
+
+        {/* Sentry alerts inbox — top of the page so they're impossible
+            to miss. Hidden entirely when the queue is empty. */}
+        {sentryAlerts.length > 0 && (
+          <div className="mb-8">
+            <SentryAlertsPanel alerts={sentryAlerts} />
           </div>
         )}
 

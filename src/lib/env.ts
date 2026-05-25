@@ -98,6 +98,10 @@ const serverEnvSchema = z.object({
    *  wrangler.toml deploy injection locally. Falls back to
    *  "unknown" when missing. */
   SENTRY_RELEASE: z.string().optional(),
+  /** Internal Integration clientSecret — HMAC-signs every webhook
+   *  Sentry sends to /api/webhooks/sentry. Verified in the
+   *  receiver before any D1 write. Set via wrangler secret put. */
+  SENTRY_WEBHOOK_SECRET: z.string().optional(),
 
   // Stage 2C C5.4 — customer-site build pipeline.
   //
