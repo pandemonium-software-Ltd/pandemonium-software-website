@@ -176,23 +176,28 @@ export async function createCheckoutSession(
       unit_amount: baseSetupPence,
       product_data: {
         name: selection.foundingMember
-          ? "ModuForge — Site setup (Founding Member)"
-          : "ModuForge — Site setup",
+          ? "Site + hosting — setup fee (Founding Member)"
+          : "Site + hosting — setup fee",
       },
     },
     quantity: 1,
   });
 
-  // 2. Per-module setup fees (one-time) — itemised so customer
-  //    sees exactly what each module is costing on Checkout.
+  // 2. Per-module setup fees (one-time). Names align with the
+  //    Stripe product names used for recurring lines — customer
+  //    sees "Newsletter — setup fee" alongside "Newsletter" later.
   for (const moduleName of selection.modules) {
     const setupPence = MODULE_SETUP_PENCE[moduleName];
     if (!setupPence) continue;
+    const friendlyName =
+      moduleName === "Google Business Profile Setup/Audit"
+        ? "Google Business Profile + reviews"
+        : moduleName;
     lineItems.push({
       price_data: {
         currency: "gbp",
         unit_amount: setupPence,
-        product_data: { name: `${moduleName} — setup` },
+        product_data: { name: `${friendlyName} — setup fee` },
       },
       quantity: 1,
     });
@@ -206,7 +211,7 @@ export async function createCheckoutSession(
         currency: "gbp",
         unit_amount: MODULE_MULTILOCATION_SETUP_GBP * 100,
         product_data: {
-          name: `Multi-location setup (extra location${selection.extraLocations === 1 ? "" : "s"})`,
+          name: "Multi-location — setup fee (per extra location)",
         },
       },
       quantity: selection.extraLocations,
