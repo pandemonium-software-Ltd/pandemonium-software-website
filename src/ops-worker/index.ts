@@ -137,7 +137,21 @@ const handler = {
     ctx.waitUntil(runOpsTick(env, {}, { d1: db }));
   },
 
-  async fetch(_request: Request): Promise<Response> {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+    // /test-sentry → emit a synthetic event so we can verify the
+    // Sentry wiring end-to-end. Safe to leave in production —
+    // anyone hitting this URL just spends one Sentry event from
+    // the free-tier 5k/month quota.
+    if (url.pathname === "/test-sentry") {
+      Sentry.captureMessage("Test event from ops worker — smoke check", {
+        level: "info",
+      });
+      return new Response("Sent test event to Sentry.\n", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" },
+      });
+    }
     return new Response("Cowork Ops Worker — ok", {
       status: 200,
       headers: { "Content-Type": "text/plain" },
