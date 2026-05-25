@@ -51,6 +51,13 @@
   //     personal-data Notion props with placeholders. Money
   //     fields kept 7 years for HMRC. Pure D1 + Notion writes
   //     so no external API stack.
+  //   - "0 4 * * *"   daily at 04:00 UTC — Stripe applier
+  //     fallback. Scans every prospect for pending-stripe
+  //     module-change entries whose effectiveDate <= today and
+  //     applies them via the shared applyPendingChange helper
+  //     (Stripe update + Notion resolveModuleChange). Belt-and-
+  //     braces for cases the invoice.paid webhook missed
+  //     (annual billing, mid-period cancels, etc).
   //   - "0 8 1 * *"   1st of each month at 08:00 UTC — sends
   //     ModuForge-branded "your monthly results" email to every
   //     Live customer. 08:00 UTC ≈ 09:00 UK summer time, 08:00
@@ -63,6 +70,7 @@
       "0 2 * * *",
       "30 2 * * *",
       "0 3 * * *",
+      "0 4 * * *",
       "0 8 1 * *"
     ]
   },

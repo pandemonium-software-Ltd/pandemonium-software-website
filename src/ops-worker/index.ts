@@ -23,6 +23,7 @@ import { runAnalyticsTick } from "./analytics-tick";
 import { runMonthlyDigestTick } from "./monthly-digest-tick";
 import { runGbpReviewsTick } from "./gbp-reviews-tick";
 import { runGdprScrubTick } from "./gdpr-scrub-tick";
+import { runStripeApplierTick } from "./stripe-applier-tick";
 import type { D1Database } from "../lib/d1-analytics";
 
 // Minimal Cloudflare Worker types (we don't pull in @cloudflare/workers-types
@@ -49,6 +50,7 @@ type CfEnvBindings = {
 const ANALYTICS_CRON = "0 2 * * *";
 const GBP_REVIEWS_CRON = "30 2 * * *";
 const GDPR_SCRUB_CRON = "0 3 * * *";
+const STRIPE_APPLIER_CRON = "0 4 * * *";
 const MONTHLY_DIGEST_CRON = "0 8 1 * *";
 
 const handler = {
@@ -89,6 +91,12 @@ const handler = {
         return;
       }
       ctx.waitUntil(runGdprScrubTick({ db }));
+      return;
+    }
+    if (event.cron === STRIPE_APPLIER_CRON) {
+      // No D1 binding needed — pure Notion + Stripe calls. Pure
+      // fallback for cases the invoice.paid webhook missed.
+      ctx.waitUntil(runStripeApplierTick({}));
       return;
     }
     if (event.cron === MONTHLY_DIGEST_CRON) {

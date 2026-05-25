@@ -13,6 +13,7 @@ import type { Metadata } from "next";
 import { getProspectByToken } from "@/lib/notion-prospects";
 import { isStripeConfigured } from "@/lib/stripe";
 import { site } from "@/lib/site";
+import CheckoutButton from "@/components/CheckoutButton";
 
 export const metadata: Metadata = {
   title: "Payment",
@@ -183,21 +184,13 @@ export default async function PaymentPage({
                   Payment received. No action needed from you right now.
                 </div>
               ) : isStripeConfigured() ? (
-                // TODO(Stage 2A Part 2): wire this up
-                //   1. POST /api/stripe/checkout-session  { token }
-                //   2. server creates Stripe Checkout session with
-                //      setup + recurring price_data
-                //   3. redirect to session.url
-                //   4. on success, /api/stripe/webhook flips Status to "Paid"
-                //   5. /payment/[token] re-renders the alreadyPaid branch
-                <button
-                  type="button"
-                  disabled
-                  className="btn-primary w-full opacity-60"
-                  title="Stripe integration arrives in Stage 2A Part 2"
-                >
-                  Pay £{(prospect.setupFeeCalculated ?? 0) + (prospect.monthlyFeeCalculated ?? 0)} (coming soon)
-                </button>
+                <CheckoutButton
+                  token={token}
+                  totalToday={
+                    (prospect.setupFeeCalculated ?? 0) +
+                    (prospect.monthlyFeeCalculated ?? 0)
+                  }
+                />
               ) : (
                 <div className="rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm text-navy-700">
                   <p className="font-semibold text-navy-900">

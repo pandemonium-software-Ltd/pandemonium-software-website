@@ -101,6 +101,17 @@ export type ProspectRecord = {
   monthlyFeeCalculated?: number;
   foundingMember: boolean;
   notes?: string;
+  // --- Stripe integration (Stage 2A Part 2 — 2026-05-25) ---
+  /** Stripe Customer ID — `cus_*`. Set on first successful
+   *  Checkout. Persists across subscriptions / cancellations so
+   *  re-onboarding customers keep history. */
+  stripeCustomerId?: string;
+  /** Active Subscription ID — `sub_*`. Set on first successful
+   *  Checkout. Cleared on `customer.subscription.deleted`. */
+  stripeSubscriptionId?: string;
+  /** ISO-8601 of the FIRST successful Checkout (the setup-paid
+   *  event). Doubles as the "Paid" status timestamp. */
+  stripePaidAt?: string;
   // --- Onboarding Hub (Stage 2B) ---
   onboardingStep1Done: boolean;
   onboardingStep2Done: boolean;
@@ -1008,6 +1019,10 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     monthlyFeeCalculated: readNumber(p["Monthly Fee Calculated"]),
     foundingMember: readCheckbox(p["Founding Member"]),
     notes: readRichText(p["Notes"]) || undefined,
+    stripeCustomerId: readRichText(p["Stripe Customer Id"]) || undefined,
+    stripeSubscriptionId:
+      readRichText(p["Stripe Subscription Id"]) || undefined,
+    stripePaidAt: readDate(p["Stripe Paid At"]),
     onboardingStep1Done: readCheckbox(p["Onboarding Step 1 Done"]),
     onboardingStep2Done: readCheckbox(p["Onboarding Step 2 Done"]),
     onboardingStep3Done: readCheckbox(p["Onboarding Step 3 Done"]),
@@ -1386,6 +1401,90 @@ export async function markProspectAsPaid(pageId: string): Promise<void> {
         Status: selectProp("Paid"),
       },
     },
+  });
+}
+
+/**
+ * Stamp Stripe ids + Paid status atomically after a successful
+ * checkout.session.completed webhook. Idempotent — re-running with
+ * the same args is a no-op write (Notion accepts duplicate writes).
+ */
+export async function markProspectPaidViaStripe(
+  pageId: string,
+  args: {
+    stripeCustomerId: string;
+    stripeSubscriptionId: string;
+    paidAt?: string;
+  },
+): Promise<void> {
+  const paidAt = args.paidAt ?? new Date().toISOString();
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        Status: selectProp("Paid"),
+        "Stripe Customer Id": rt(args.stripeCustomerId),
+        "Stripe Subscription Id": rt(args.stripeSubscriptionId),
+        "Stripe Paid At": { date: { start: paidAt } },
+      },
+    },
+  });
+}
+
+/**
+ * Clear the Stripe Subscription Id (subscription deleted by
+ * cancellation). Doesn't flip Status — that's done by
+ * markCancelled which also stamps the GDPR retention dates.
+ * Idempotent.
+ */
+export async function clearProspectStripeSubscription(
+  pageId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Stripe Subscription Id": rt(""),
+      },
+    },
+  });
+}
+
+/**
+ * Persist a Stripe Customer ID on a prospect early (after first
+ * Customer create, before they finish Checkout). Lets a retry on
+ * an abandoned Checkout reuse the same Customer rather than
+ * duplicating.
+ */
+export async function setProspectStripeCustomerId(
+  pageId: string,
+  customerId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Stripe Customer Id": rt(customerId),
+      },
+    },
+  });
+}
+
+/**
+ * Append a free-text line to the Notes column. Used to audit
+ * customer-side consent decisions (CCRs Reg 36 express-request
+ * tick). Best-effort — failures log but don't abort the
+ * surrounding business action.
+ */
+export async function appendProspectNote(
+  pageId: string,
+  existingNotes: string | undefined,
+  line: string,
+): Promise<void> {
+  const next = existingNotes ? `${existingNotes}\n${line}` : line;
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: { properties: { Notes: rt(next) } },
   });
 }
 
