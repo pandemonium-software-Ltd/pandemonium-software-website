@@ -293,6 +293,22 @@ export default function Step3Modules({
 
   const disabled = readOnly;
 
+  // Per-module unlock: when the step is read-only but a paid-for
+  // module hasn't finished its customer-side setup (Cal.com URL,
+  // Resend invite, GBP URL+invite), we unlock JUST that module's
+  // card so the customer can complete it. Triggered by the
+  // dashboard's "Set up →" button for post-launch module adds.
+  const calcomDisabled = disabled && calcomStatus === "complete";
+  const resendDisabled = disabled && resendStatus === "complete";
+  const gbpDisabled = disabled && gbpStatus === "complete";
+  // True when at least one module's setup is unlocked — drives
+  // the post-Done "Update saved data" button so the customer
+  // can save the newly-filled setup back to Notion.
+  const hasUnlockedModule =
+    (hasCalcom && !calcomDisabled) ||
+    (hasResend && !resendDisabled) ||
+    (hasGbp && !gbpDisabled);
+
   // ---------- Header copy ----------
 
   const moduleCount =
@@ -368,7 +384,7 @@ export default function Step3Modules({
                   <ModuleCalcom
                     url={calcomUrl}
                     onUrlChange={setCalcomUrl}
-                    disabled={disabled}
+                    disabled={calcomDisabled}
                   />
                 </ModuleCard>
               )}
@@ -387,7 +403,7 @@ export default function Step3Modules({
                     onEmailChange={setResendEmail}
                     onInvitedChange={setResendInvited}
                     benEmail={benEmail}
-                    disabled={disabled}
+                    disabled={resendDisabled}
                   />
                 </ModuleCard>
               )}
@@ -406,7 +422,7 @@ export default function Step3Modules({
                     onUrlChange={setGbpUrl}
                     onInvitedChange={setGbpInvited}
                     benEmail={benEmail}
-                    disabled={disabled}
+                    disabled={gbpDisabled}
                   />
                 </ModuleCard>
               )}
@@ -520,7 +536,7 @@ export default function Step3Modules({
               <strong>Done.</strong> Edit above and click Update if
               anything changes.
             </p>
-            {!readOnly && (
+            {(!readOnly || hasUnlockedModule) && (
               <button
                 type="button"
                 onClick={handleUpdate}
