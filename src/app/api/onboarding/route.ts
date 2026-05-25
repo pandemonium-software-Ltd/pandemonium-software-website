@@ -190,7 +190,19 @@ export async function POST(request: Request) {
   //     rebuild via Cowork's `rebuildOnly` classification path.
   const currentDoneFlags = getDoneFlags(prospect);
   const STEP_LOCK_EXEMPT: ReadonlySet<StepId> = new Set(["review", "assets"]);
-  if (currentDoneFlags[stepId] && !STEP_LOCK_EXEMPT.has(stepId)) {
+  // Post-launch module-add unlock: Live customers can still save
+  // into tools/content even when the step is marked done. The
+  // customer-side per-module unlock UI (Step3Modules.tsx +
+  // Step4Content.tsx) decides which sections are editable; here
+  // we trust that gate. Same exception pattern as the hub-mutable
+  // check above. Other steps stay locked for Live.
+  const livePostLaunchEditable =
+    prospect.status === "Live" && isPostLaunchSetupStep;
+  if (
+    currentDoneFlags[stepId] &&
+    !STEP_LOCK_EXEMPT.has(stepId) &&
+    !livePostLaunchEditable
+  ) {
     return NextResponse.json(
       {
         error:
