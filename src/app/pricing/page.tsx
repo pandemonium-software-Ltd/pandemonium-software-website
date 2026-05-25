@@ -109,10 +109,15 @@ export default function PricingPage() {
                   q: "Is there a contract?",
                   a: (
                     <p>
-                      No contract, no minimum term. You&apos;re on a simple
-                      monthly plan — cancel any time with 30 days&apos; notice
-                      and you keep everything I built. I&apos;m not in the
-                      business of trapping people.
+                      No contract, no minimum term, no notice period.
+                      You&apos;re on a simple monthly plan — cancel any
+                      time from your dashboard. Choose either &ldquo;at
+                      end of month&rdquo; (free, keep access till the
+                      1st) or &ldquo;cancel now with prorated
+                      refund&rdquo; (offline today, refund of unused
+                      monthly subscription). You keep everything I
+                      built either way. I&apos;m not in the business of
+                      trapping people.
                     </p>
                   ),
                 },
@@ -174,10 +179,13 @@ export default function PricingPage() {
                   q: "Can I remove a module?",
                   a: (
                     <p>
-                      Yes. You can cancel any individual module with 30
-                      days&apos; notice and your monthly price drops
-                      accordingly. You keep the rest of your site running as
-                      normal.
+                      Yes. Open your dashboard, hit Remove on the
+                      module. The change takes effect on your next
+                      billing date (1st of the following month) — you
+                      keep using it until then since you&apos;ve
+                      already paid for the month, then your monthly
+                      price drops accordingly. The rest of your site
+                      carries on as normal.
                     </p>
                   ),
                 },
@@ -244,9 +252,15 @@ export default function PricingPage() {
                   a: (
                     <>
                       <p>
-                        Yes — 30 days&apos; written notice, by email, and
-                        you&apos;re out. No exit fees, no &quot;but
-                        wait&quot; calls.
+                        Yes — cancel from your dashboard&apos;s Billing
+                        section any time. No notice period, no exit fees,
+                        no &quot;but wait&quot; calls. Two options:
+                        cancel at end of month (free, keep access until
+                        the 1st) or cancel now with a prorated refund
+                        of this month&apos;s monthly subscription. The
+                        one-off setup fee isn&apos;t refunded either
+                        way — that covered building the site, which
+                        has already been delivered.
                       </p>
                       <p className="mt-3">
                         <strong>What you keep:</strong> your website (still

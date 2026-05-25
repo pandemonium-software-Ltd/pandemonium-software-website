@@ -119,8 +119,10 @@ export default async function PaymentPage({
                 that&apos;s the setup fee + your first month.
               </p>
               <p className="mt-2 text-xs text-navy-500">
-                30-day cancellation notice. 48-hour refund window on the
-                setup fee. You own everything.
+                Cancel any time from your dashboard, no notice
+                period. Monthly subscription prorated on
+                immediate-cancel; setup fee non-refundable once
+                site delivered. You own everything either way.
               </p>
             </div>
 

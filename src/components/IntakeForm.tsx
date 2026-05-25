@@ -1064,7 +1064,8 @@ function ModulesSection({
     <div className="space-y-5">
       <p className="text-sm text-navy-700">
         Tick whichever modules you want. Each can be added or removed later
-        with 30 days&apos; notice. Live pricing updates as you tick.
+        from your dashboard — takes effect on your next billing date.
+        Live pricing updates as you tick.
       </p>
 
       <div className="space-y-3">
@@ -1148,8 +1149,8 @@ function ModulesSection({
           </p>
         </div>
         <p className="mt-2 text-xs text-navy-600">
-          Setup + first month charged together at payment. Cancel any time
-          with 30 days&apos; notice.
+          Setup + first month charged together at payment. Cancel any
+          time from your dashboard — no notice period.
         </p>
       </div>
 
@@ -1279,17 +1280,19 @@ function LegalSection({
         label="I accept the refund and cancellation terms"
         body={
           <>
-            <strong>Refunds:</strong> 48-hour refund window on the setup
-            fee from payment time — full refund, no questions asked.
-            After 48 hours, the setup fee is non-refundable as we&apos;ll
-            have started work. Monthly subscription fees aren&apos;t refunded
-            for partial months.
+            <strong>Refunds:</strong> the one-off setup fee is
+            non-refundable once your site is delivered (preview built
+            or pushed live) — it covers work performed at your
+            request. The monthly subscription is prorated only on
+            immediate cancellation (refund for unused days of the
+            current month, credited within 5-10 working days).
             <br />
             <br />
-            <strong>Cancellation:</strong> 30 days&apos; notice to cancel
-            your monthly subscription at any time. Your site stays live
-            through the notice period. After cancellation, we transfer
-            the domain to you and hand over your assets — you own
+            <strong>Cancellation:</strong> cancel any time from your
+            dashboard, no notice period. Two options: free
+            end-of-month cancel (full access until the 1st) or
+            cancel-now with prorated monthly refund. After
+            cancellation, we hand over your assets — you own
             everything we built. Full terms at{" "}
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="link">
               {site.url}/terms
