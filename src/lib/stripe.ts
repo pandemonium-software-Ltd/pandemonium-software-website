@@ -169,23 +169,24 @@ export async function createCheckoutSession(
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
-  // 1. Base setup fee (one-time)
+  // 1. Base setup fee (one-time). The "Setup:" prefix is the
+  //    visual cue separating one-off lines from recurring lines
+  //    on Stripe Checkout — Stripe doesn't expose section headers
+  //    so the prefix is the cleanest way to make the split obvious.
   lineItems.push({
     price_data: {
       currency: "gbp",
       unit_amount: baseSetupPence,
       product_data: {
         name: selection.foundingMember
-          ? "Site + hosting — setup fee (Founding Member)"
-          : "Site + hosting — setup fee",
+          ? "Setup: Site + hosting (Founding Member)"
+          : "Setup: Site + hosting",
       },
     },
     quantity: 1,
   });
 
-  // 2. Per-module setup fees (one-time). Names align with the
-  //    Stripe product names used for recurring lines — customer
-  //    sees "Newsletter — setup fee" alongside "Newsletter" later.
+  // 2. Per-module setup fees (one-time). Same "Setup:" prefix.
   for (const moduleName of selection.modules) {
     const setupPence = MODULE_SETUP_PENCE[moduleName];
     if (!setupPence) continue;
@@ -197,7 +198,7 @@ export async function createCheckoutSession(
       price_data: {
         currency: "gbp",
         unit_amount: setupPence,
-        product_data: { name: `${friendlyName} — setup fee` },
+        product_data: { name: `Setup: ${friendlyName}` },
       },
       quantity: 1,
     });
@@ -211,7 +212,7 @@ export async function createCheckoutSession(
         currency: "gbp",
         unit_amount: MODULE_MULTILOCATION_SETUP_GBP * 100,
         product_data: {
-          name: "Multi-location — setup fee (per extra location)",
+          name: "Setup: Multi-location (per extra location)",
         },
       },
       quantity: selection.extraLocations,
@@ -239,6 +240,16 @@ export async function createCheckoutSession(
       cancel_url: selection.cancelUrl,
       subscription_data: {
         metadata: { prospect_token: selection.token },
+      },
+      // Small note under the submit button for extra clarity on
+      // top of the "Setup:" line prefixes — Stripe Checkout
+      // doesn't allow section headers between line items, so we
+      // belt-and-brace with this paragraph.
+      custom_text: {
+        submit: {
+          message:
+            "Lines prefixed 'Setup:' are charged once today. The rest are billed monthly until you cancel from your dashboard.",
+        },
       },
     },
     {
