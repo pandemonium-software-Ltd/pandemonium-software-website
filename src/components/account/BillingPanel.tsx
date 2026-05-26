@@ -99,6 +99,14 @@ export default function BillingPanel({
         </dd>
       </dl>
 
+      {/* Stripe Customer Portal — opens Stripe-hosted self-service
+       *  UI in a new tab so the customer can update their card,
+       *  view past invoices, see upcoming charges. Cancellation is
+       *  intentionally NOT in the portal (we own that flow below). */}
+      <div className="mt-4">
+        <BillingPortalButton token={token} />
+      </div>
+
       {/* Pending changes summary — gives the customer a single
        *  source of truth for what will happen on their next bill. */}
       {pendingChanges.length > 0 && (
@@ -384,6 +392,56 @@ function ConfirmCancel({
               : "Cancel now + refund"}
         </button>
       </div>
+    </>
+  );
+}
+
+function BillingPortalButton({ token }: { token: string }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function open() {
+    setError(null);
+    startTransition(async () => {
+      const res = await fetch("/api/account/billing-portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        setError(body.error ?? "Couldn't open the portal. Try again.");
+        return;
+      }
+      const body = (await res.json().catch(() => ({}))) as { url?: string };
+      if (body.url) {
+        // Same-window navigation — Stripe's portal expects to OWN the
+        // tab. The portal's "Return to ModuForge" button uses the
+        // returnUrl we passed, which brings the customer right back
+        // here. Opening in a new tab would orphan the parent dashboard
+        // and break the round-trip UX.
+        window.location.href = body.url;
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        disabled={pending}
+        className="rounded-lg border border-navy-300 px-3 py-1.5 text-xs font-semibold text-navy-700 hover:bg-cream-100 disabled:opacity-60"
+      >
+        {pending ? "Opening…" : "Update card / view invoices →"}
+      </button>
+      {error && (
+        <p className="mt-1.5 text-xs text-ember-700" role="alert">
+          {error}
+        </p>
+      )}
     </>
   );
 }

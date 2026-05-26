@@ -38,7 +38,6 @@ import {
 import {
   getProspectByToken,
   updateProspectPhase3,
-  markProspectAsPaid,
 } from "@/lib/notion-prospects";
 import { calculateFees, buildModuleListMarkdown } from "@/lib/fees";
 import {
@@ -274,41 +273,18 @@ export async function POST(request: Request) {
     );
   }
 
-  // ---------- Stripe placeholder: auto-flip to Paid + send phase4 ----------
-  // TODO(Stage 2A Part 2): remove this block once /api/stripe/webhook
-  // is wired up. The Stripe webhook handler will own the Paid flip
-  // and the phase4 onboarding email. Until then, /api/intake fakes
-  // payment so the customer can complete the end-to-end onboarding
-  // flow in testing.
-
-  try {
-    await markProspectAsPaid(prospect.pageId);
-  } catch (e) {
-    console.warn(
-      `[api/intake] markProspectAsPaid failed (status flip): ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
-
-  try {
-    await sendCustomerEmail(
-      getServerEnv(),
-      prospect.email,
-      "phase4-onboarding-hub-ready",
-      {
-        customerName: firstName(prospect.name),
-        onboardingUrl: `${baseUrl}/onboarding/${token}`,
-      },
-    );
-  } catch (e) {
-    console.warn(
-      `[api/intake] Customer onboarding-hub email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
-    );
-  }
+  // ---------- Hand-off to payment ----------
+  // After intake completes the customer is in "Phase 3 Complete"
+  // status — fees calculated, modules locked, ready to pay. The
+  // payment page reads the prospect record and opens Stripe
+  // Checkout. The webhook handler (/api/webhooks/stripe) owns the
+  // Paid status flip and the phase4 onboarding-hub-ready email
+  // when checkout.session.completed fires.
 
   return NextResponse.json({
     success: true,
     isFinal: true,
-    redirect: `/onboarding/${token}`,
+    redirect: `/payment/${token}`,
   });
 }
 

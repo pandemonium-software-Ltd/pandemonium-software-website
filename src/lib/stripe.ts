@@ -411,6 +411,39 @@ export async function cancelSubscription(args: {
 }
 
 /**
+ * Create a Stripe Billing Portal session for an existing Customer.
+ *
+ * The portal is Stripe-hosted: card updates, invoice history,
+ * upcoming charges, address changes — all in one self-service UI.
+ * We mint a one-shot URL here and redirect the browser; the
+ * portal session has a short TTL and is single-use per click.
+ *
+ * Portal configuration (what features are enabled — sub cancel,
+ * sub update, etc.) is set ONCE in the Stripe Dashboard at
+ * Billing → Customer Portal. We don't pass configuration here;
+ * the default config wins. Cancellation is intentionally NOT
+ * enabled in the portal — we own that flow in our own UI so the
+ * confirm modal + email + Notion log all match.
+ *
+ * `returnUrl` is where Stripe sends the customer when they close
+ * the portal — typically back to /account/<token>.
+ */
+export async function createCustomerPortalSession(args: {
+  customerId: string;
+  returnUrl: string;
+}): Promise<{ url: string }> {
+  const stripe = getStripe();
+  if (!stripe) {
+    throw new Error("Stripe not configured — set STRIPE_SECRET_KEY.");
+  }
+  const session = await stripe.billingPortal.sessions.create({
+    customer: args.customerId,
+    return_url: args.returnUrl,
+  });
+  return { url: session.url };
+}
+
+/**
  * Refund part or all of the most recent payment for a subscription.
  * Used by the "cancel now with prorated refund" flow — amount is
  * computed by proratedRefundPounds() on the dashboard and passed

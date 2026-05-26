@@ -9,32 +9,26 @@
 //   - newModules differs from current selection (no-op rejected — we
 //     don't burn the round on accidental no-op confirms)
 //
-// Side effects on success (immediate-apply, 2026-05-14 — Stripe
-// placeholder mode):
-//   - Append an `applied` row to Module Change Log (atomically
-//     stamping resolvedAt = submittedAt, since there's no operator
-//     gap)
-//   - Stamp Module Change Round Used At (locks the round)
-//   - IMMEDIATELY flip Module Selections + Setup Fee + Monthly Fee
-//     to the new totals (same Notion PATCH as the log write — see
-//     submitModuleChange's applyImmediately option)
-//   - Log a Stripe placeholder line for each money movement that
-//     would happen if Stripe were wired (charge for added modules,
-//     refund for removed). The placeholder is a console.warn line
-//     visible in `wrangler tail` so the operator can manually
-//     reconcile until Stripe lands.
-//   - Email Ben with the diff + reconciliation reminder
-//   - Email customer "applied — here's what's new" via the
-//     module-change-applied template
+// Side effects on success (immediate-apply via Stripe — 2026-05-26):
+//   1. STRIPE: for every added module, add a recurring sub item +
+//      one-off setup invoice item. For every removed module, drop
+//      the sub item (no refund — policy). Idempotency keys derived
+//      from entry.id so retries are safe.
+//   2. NOTION: submitModuleChange writes the log entry (status=
+//      applied) AND flips Module Selections + Setup Fee + Monthly
+//      Fee atomically.
+//   3. EMAIL: Ben (diff + reconciliation reminder) + customer
+//      ("applied — here's what's new" via module-change-applied).
 //
-// FUTURE — when Stripe Phase 2 lands (see docs/STRIPE-PHASE-2.md):
-// revert this back to the operator-driven pending-stripe → applied
-// two-step flow. The atomic-apply path is a temporary shortcut that
-// trades reconciliation safety for customer immediacy.
+// If Stripe fails (network blip, sub already cancelled, etc.) we
+// 502 BEFORE the Notion write so the customer can retry. Half-
+// applied state is the worst outcome — guard against it by failing
+// loud rather than letting Notion drift from Stripe.
 //
-// On failure: returns 400/403/404 with a customer-friendly reason.
-// Email failures are logged but don't fail the response — the row
-// is in Notion either way and Ben can re-trigger emails manually.
+// On failure: returns 400/403/404/502 with a customer-friendly
+// reason. Email failures are logged but don't fail the response —
+// the row is in Notion either way and Ben can re-trigger emails
+// manually.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -57,6 +51,33 @@ import { sendCustomerEmail } from "@/ops-worker/notify";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
 import { requireCustomerSession } from "@/lib/auth/require-customer-session";
+import {
+  addModuleToSubscription,
+  addOneOffInvoiceItem,
+  isStripeConfigured,
+  removeModuleFromSubscription,
+} from "@/lib/stripe";
+import { STRIPE_MODULE_PRICE_IDS } from "@/lib/stripe-products";
+import {
+  MODULE_BOOKING_SETUP_GBP,
+  MODULE_ENQUIRY_SETUP_GBP,
+  MODULE_NEWSLETTER_SETUP_GBP,
+  MODULE_OFFERS_SETUP_GBP,
+  GBP_ADDON_ONE_OFF_GBP,
+} from "@/lib/fees";
+import { reportError } from "@/lib/sentry";
+
+// Per-module setup-fee map (pence). Duplicated against the same map
+// in apply-pending.ts — both flows charge the same setup fee, the
+// dedup is on the cleanup list but not blocking. Multi-location is
+// excluded (it's not selectable from the Hub Step 3 re-selector).
+const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
+  "Online Booking": MODULE_BOOKING_SETUP_GBP * 100,
+  "Enquiry Form": MODULE_ENQUIRY_SETUP_GBP * 100,
+  Newsletter: MODULE_NEWSLETTER_SETUP_GBP * 100,
+  Offers: MODULE_OFFERS_SETUP_GBP * 100,
+  "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
+};
 
 export const runtime = "nodejs";
 
@@ -137,10 +158,10 @@ export async function POST(request: Request) {
 
   // Build the change log entry. Use crypto.randomUUID so the id is
   // also useful as a Stripe idempotency key suffix.
-  // 2026-05-14: status starts as "applied" (not "pending-stripe")
-  // because the immediate-apply shortcut writes Module Selections
-  // + fees in the same Notion PATCH. resolvedAt = submittedAt
-  // since there's no operator gap.
+  // status starts as "applied" + resolvedAt = submittedAt because
+  // we run Stripe + Notion synchronously inside this request. By
+  // the time the response returns, the change is fully landed
+  // (Stripe + Notion + emails).
   const submittedAt = new Date().toISOString();
   const entry: ModuleChangeLogEntry = {
     id: crypto.randomUUID(),
@@ -152,37 +173,96 @@ export async function POST(request: Request) {
     newSetupTotal: delta.toFees.setup,
     newMonthlyTotal: delta.toFees.monthly,
     status: "applied",
-    resolutionNote: "Auto-applied (Stripe Phase 1 placeholder mode)",
+    kind: "modules-pre-launch",
+    resolutionNote: "Auto-applied via Stripe (one-shot re-selector)",
     resolvedAt: submittedAt,
   };
 
   // ============================================================
-  // STRIPE PLACEHOLDER (2026-05-14)
+  // STRIPE — real money movements (2026-05-26)
   // ============================================================
-  // When Stripe Phase 2 lands (see docs/STRIPE-PHASE-2.md), replace
-  // this block with the actual charge/refund/sub-update operations.
-  // For now: we emit a structured log line that the operator can
-  // grep out of `wrangler tail` to manually reconcile each money
-  // movement until Stripe is wired.
+  // Run BEFORE the Notion write so a Stripe failure doesn't leave
+  // us with Notion drifting from Stripe. Idempotency keys are
+  // derived from entry.id so a retried request (same entry.id)
+  // no-ops on every Stripe call.
   //
-  // Three money movements possible per change:
-  //   1. setupDelta > 0  → ONE-OFF charge for added module setup fees
-  //   2. setupDelta < 0  → ONE-OFF refund for removed module setup fees
-  //   3. monthlyDelta != 0 → SUBSCRIPTION update (proration handled by
-  //                          Stripe automatically when sub items change)
+  // Three movements possible per change:
+  //   1. Added modules     → sub item add + one-off setup invoice item
+  //   2. Removed modules   → sub item remove (NO refund — policy:
+  //                          setup paid for site build, monthly is
+  //                          the next-cycle drop)
+  //   3. Net monthly delta → handled automatically by Stripe when
+  //                          sub items change (next renewal picks
+  //                          up the new total)
   // ============================================================
-  if (delta.setupDelta > 0) {
-    console.warn(
-      `[STRIPE-TODO] charge customer=${prospect.email} amount=£${delta.setupDelta} reason="module-add setup fee" idempotencyKey=mc-${entry.id}-setup`,
-    );
-  } else if (delta.setupDelta < 0) {
-    console.warn(
-      `[STRIPE-TODO] refund customer=${prospect.email} amount=£${Math.abs(delta.setupDelta)} reason="module-remove setup-fee refund" idempotencyKey=mc-${entry.id}-refund`,
+  if (!isStripeConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "Payments aren't configured on this deployment. Email Ben directly to make this change.",
+      },
+      { status: 503 },
     );
   }
-  if (delta.monthlyDelta !== 0) {
-    console.warn(
-      `[STRIPE-TODO] subscription-update customer=${prospect.email} new-monthly=£${delta.toFees.monthly} delta=£${delta.monthlyDelta > 0 ? "+" : ""}${delta.monthlyDelta} reason="module-change proration" idempotencyKey=mc-${entry.id}-sub`,
+  if (!prospect.stripeCustomerId || !prospect.stripeSubscriptionId) {
+    return NextResponse.json(
+      {
+        error:
+          "We can't find your Stripe subscription on file — that usually means your first payment hasn't synced. Email Ben and he'll sort it.",
+      },
+      { status: 409 },
+    );
+  }
+  try {
+    // Add recurring price for each added module
+    for (const m of delta.added) {
+      const priceId = STRIPE_MODULE_PRICE_IDS[m];
+      if (!priceId) continue;
+      await addModuleToSubscription({
+        subscriptionId: prospect.stripeSubscriptionId,
+        priceId,
+        idempotencyKey: `mc-${entry.id}-add:${m}`,
+      });
+    }
+    // Drop recurring price for each removed module
+    for (const m of delta.removed) {
+      const priceId = STRIPE_MODULE_PRICE_IDS[m];
+      if (!priceId) continue;
+      await removeModuleFromSubscription({
+        subscriptionId: prospect.stripeSubscriptionId,
+        priceId,
+        idempotencyKey: `mc-${entry.id}-rm:${m}`,
+      });
+    }
+    // One-off setup-fee invoice items for each added module. Lands
+    // on the customer's next invoice (their first renewal, since
+    // they just paid Checkout to get into Paid/Onboarding status).
+    for (const m of delta.added) {
+      const pence = MODULE_SETUP_PENCE[m];
+      if (!pence) continue;
+      await addOneOffInvoiceItem({
+        customerId: prospect.stripeCustomerId,
+        subscriptionId: prospect.stripeSubscriptionId,
+        amountPence: pence,
+        description: `${m} module setup`,
+        idempotencyKey: `mc-${entry.id}-setup:${m}`,
+      });
+    }
+    // Removals: no refund. Policy alignment — setup fee paid for
+    // site build (delivered work); monthly drop kicks in at the
+    // next billing cycle automatically when the sub item is gone.
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    reportError("api/onboarding/module-change:stripe", e);
+    console.error(
+      `[api/onboarding/module-change] Stripe failure for ${prospect.email}: ${msg}`,
+    );
+    return NextResponse.json(
+      {
+        error:
+          "Couldn't update your payment plan just now. Try again in a minute, and if it keeps failing email Ben.",
+      },
+      { status: 502 },
     );
   }
 

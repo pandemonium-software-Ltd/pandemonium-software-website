@@ -44,6 +44,9 @@ import { verifyStripeWebhook } from "@/lib/stripe";
 import type Stripe from "stripe";
 import { applyPendingChange } from "@/lib/billing/apply-pending";
 import { reportError } from "@/lib/sentry";
+import { sendCustomerEmail } from "@/ops-worker/notify";
+import { getServerEnv } from "@/lib/env";
+import { site } from "@/lib/site";
 
 export const runtime = "nodejs";
 
@@ -132,6 +135,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     );
     return;
   }
+  // Don't re-fire the phase4 email if we've already marked them
+  // Paid (e.g. Stripe retried this webhook). Status check before
+  // the PATCH keeps the email exactly-once even though the PATCH
+  // itself is idempotent.
+  const alreadyPaid = prospect.status === "Paid";
   await markProspectPaidViaStripe(prospect.pageId, {
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
@@ -139,6 +147,35 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   console.log(
     `[webhooks/stripe] ${prospect.name} (${prospect.email}) paid + subscription ${subscriptionId} stored`,
   );
+
+  // Phase 4 email — "your onboarding hub is ready". Fires once,
+  // on the first Paid flip. Fail-soft (logged, doesn't error the
+  // webhook — Stripe would retry and we'd send a duplicate email
+  // to the customer for what is now a Notion-only blip).
+  if (!alreadyPaid) {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "phase4-onboarding-hub-ready",
+        {
+          customerName: firstName(prospect.name),
+          onboardingUrl: `${baseUrl}/onboarding/${token}`,
+        },
+      );
+    } catch (e) {
+      console.warn(
+        `[webhooks/stripe] phase4 email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+}
+
+function firstName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "there";
+  return trimmed.split(/\s+/)[0];
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice) {
