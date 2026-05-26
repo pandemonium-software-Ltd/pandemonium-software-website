@@ -178,7 +178,15 @@ export async function POST(request: Request) {
       paidSetupSoFar: prospect.setupFeeCalculated ?? 0,
       currentMonthly: delta.fromFees.monthly,
       newMonthly: delta.toFees.monthly,
-      extraSetupCharge: isAdding ? delta.setupDelta : 0,
+      // Multi-location has no monthly contribution (£15 one-off
+      // per extra location). For an add, moduleSetupFee is the
+      // total new setup landing on the invoice; for a remove,
+      // both are 0 (no refund, no monthly drop). monthlyDelta-
+      // Signed always reads "no change" because the monthly never
+      // moves on a multilocation change.
+      moduleSetupFee: isAdding ? delta.setupDelta : 0,
+      moduleMonthlyFee: 0,
+      monthlyDeltaSigned: "no change",
     });
   } catch (e) {
     console.error(

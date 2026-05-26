@@ -152,13 +152,12 @@ export default async function AdminPage() {
           </div>
         )}
 
-        {/* Sentry alerts inbox — top of the page so they're impossible
-            to miss. Hidden entirely when the queue is empty. */}
-        {sentryAlerts.length > 0 && (
-          <div className="mb-8">
-            <SentryAlertsPanel alerts={sentryAlerts} />
-          </div>
-        )}
+        {/* Sentry alerts inbox — always rendered so the "all quiet"
+            empty state confirms the integration is live, not just
+            silently hidden. */}
+        <div className="mb-8">
+          <SentryAlertsPanel alerts={sentryAlerts} />
+        </div>
 
         {prospects.length === 0 && !loadError ? (
           <div className="card bg-cream-50 text-center">

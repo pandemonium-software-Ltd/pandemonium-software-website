@@ -1,22 +1,30 @@
 import type { Template } from "../types";
 
-// Sent when the operator applies a `modules-post-launch` add
-// (i.e. the customer added a module from their dashboard and the
-// operator has now actioned the Stripe op). Confirms activation
-// AND points the customer at the focused Hub Step 3 setup page
-// for any module that needs customer-side setup (Cal.com URL
-// paste, Newsletter sender invite, GBP Manager invite).
+// Sent when the operator (or the Stripe webhook) APPLIES a
+// `modules-post-launch` add. The Stripe charge + sub update have
+// just landed — this email is the customer's receipt + nudge to
+// finish setup for any module that needs customer-side input.
 //
-// `setupUrl` always points at the focused Hub page — even for
-// no-setup-required modules (Enquiry Form, Offers), so the
+// Money panel shows three lines so the customer can match it
+// against their Stripe receipt:
+//   1. One-off setup just charged for THIS module
+//   2. Old monthly → new monthly with the signed delta
+//   3. Implicit setup history left out (already paid historically)
+//
+// `setupUrl` always points at the focused Hub Step 3 page — even
+// for no-setup-required modules (Enquiry Form, Offers), so the
 // customer has a single canonical place to land. The body
-// branches on `setupRequired` to vary the wording.
+// branches on `setupRequired` / `noSetupRequired` to vary the
+// wording.
 export const moduleAddApplied: Template = {
   id: "module-add-applied",
   riskTier: "low",
   required: [
     "customerName",
     "moduleName",
+    "moduleSetupFee",
+    "moduleMonthlyFee",
+    "previousMonthly",
     "newMonthly",
     "accountUrl",
     "setupUrl",
@@ -29,9 +37,14 @@ export const moduleAddApplied: Template = {
 
 Good news — {{moduleName}} is now active on your account.
 
-  • New monthly: £{{newMonthly}}/mo (from today)
-  • One-off setup for {{moduleName}}: already added to the
-    invoice you just paid
+What just landed on your bill:
+  • One-off setup for {{moduleName}}: £{{moduleSetupFee}}
+    (already added to the invoice you just paid)
+  • Module subscription: +£{{moduleMonthlyFee}}/month
+
+Your subscription:
+  • Before: £{{previousMonthly}}/month
+  • Now:    £{{newMonthly}}/month (+£{{moduleMonthlyFee}})
 
 {{#if setupRequired}}One small thing — {{moduleName}} needs a quick set-up step
 from you before it lights up on the live site. Click the

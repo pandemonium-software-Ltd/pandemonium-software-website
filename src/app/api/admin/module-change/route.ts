@@ -176,9 +176,20 @@ export async function PATCH(request: Request) {
       ) {
         templateId = "module-add-applied";
         const setup = setupInfoFor(singleAdded);
+        // Per-module breakout — derive the unit prices from the
+        // entry's stored deltas. entry.setupDelta is the one-off
+        // setup that just landed on the invoice; entry.monthlyDelta
+        // is the bump to the subscription. previousMonthly is the
+        // new monthly minus that bump, so the customer sees the
+        // before / after / +delta triple matching their Stripe
+        // receipt.
+        const previousMonthly = newFees.monthly - entry.monthlyDelta;
         emailValues = {
           customerName: firstName(prospect.name),
           moduleName: singleAdded,
+          moduleSetupFee: entry.setupDelta,
+          moduleMonthlyFee: entry.monthlyDelta,
+          previousMonthly,
           newMonthly: newFees.monthly,
           accountUrl,
           setupUrl: `${baseUrl}/onboarding/${token}?step=tools&focus=${encodeURIComponent(singleAdded)}`,

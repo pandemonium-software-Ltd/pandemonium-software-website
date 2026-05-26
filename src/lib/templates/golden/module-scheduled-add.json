@@ -1,5 +1,5 @@
 {
-  "description": "Module add scheduled — customer added Newsletter from the dashboard, effective next billing date; quotes paid-setup-so-far, current monthly, new monthly, and the extra setup charge that lands on the effective-date invoice (locked 2026-05-25 prices)",
+  "description": "Module add scheduled — customer added Newsletter from the dashboard, effective next billing date; shows per-module line (£49 setup + £9/mo) plus old/new subscription totals (locked 2026-05-25 prices)",
   "template": "module-scheduled",
   "values": {
     "customerName": "Alex",
@@ -10,10 +10,12 @@
     "paidSetupSoFar": 299,
     "currentMonthly": 29,
     "newMonthly": 38,
-    "extraSetupCharge": 49
+    "moduleSetupFee": 49,
+    "moduleMonthlyFee": 9,
+    "monthlyDeltaSigned": "+£9"
   },
   "expected": {
     "subject": "Got it — Newsletter scheduled for 2026-06-01",
-    "body": "Hi Alex,\n\nQuick confirmation — your module change is queued.\n\nYou are ADDING: Newsletter\n\nEffective from: 2026-06-01\n\nWhere you stand on money:\n\n  • Setup paid to date:      £299 (non-refundable)\n  • Current monthly:         £29/mo\n  • New monthly from 2026-06-01: £38/mo\n  • Extra one-off setup on\n    2026-06-01 invoice:  +£49\n\nWhat happens between now and then:\n  • Your subscription stays the same until 2026-06-01.\n  • On 2026-06-01: your next invoice picks up the\n    extra one-off setup (above) PLUS the new monthly rate.\n  • Newsletter activates the same day so you can start\n    using it straight away.\n\nThe setup figure above is what you have already paid to\nbuild the site. It is not refunded under any module change\nor cancellation — that work has been delivered.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nQuick confirmation — your module change is queued.\n\nYou are ADDING: Newsletter\n  • One-off setup for this module: +£49\n    (lands on your 2026-06-01 invoice)\n  • Module subscription: +£9/month\n    (starts 2026-06-01)\n\nYour subscription:\n  • Today:                  £29/month\n  • From 2026-06-01: £38/month (+£9)\n\nSetup paid historically: £299 (non-refundable\nunder any module change or cancellation — covers the site\nbuild, already delivered).\n\nWhat happens between now and then:\n  • Your subscription stays the same until 2026-06-01.\n  • On 2026-06-01: your invoice picks up the one-off\n    setup above PLUS the new monthly rate.\n  • Newsletter activates the same day so you can start\n    using it straight away.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
   }
 }

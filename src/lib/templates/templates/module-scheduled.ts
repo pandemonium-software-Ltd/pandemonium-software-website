@@ -10,6 +10,17 @@ import type { Template } from "../types";
 // `{{#if removed}}` blocks — the structural difference is small
 // and a shared template keeps copy maintenance lower.
 //
+// Money panel has THREE sections so the customer can audit the
+// arithmetic at a glance:
+//   1. THIS MODULE LINE — what this specific module costs in
+//      isolation (one-off setup + monthly contribution).
+//   2. SUBSCRIPTION DIFF — old monthly → new monthly with the
+//      signed delta, so the customer sees the actual figure
+//      that will land on their card from the effective date.
+//   3. HISTORICAL SETUP — what was paid to build the site,
+//      flagged as non-refundable so there's no confusion about
+//      whether the £299 comes back when modules are removed.
+//
 // Low risk tier. No latch — the customer can submit multiple
 // changes and each fires its own confirmation. They cannot
 // duplicate the SAME pending change (the endpoint 409s on dupes),
@@ -25,8 +36,11 @@ export const moduleScheduled: Template = {
     "paidSetupSoFar",
     "currentMonthly",
     "newMonthly",
+    "moduleSetupFee",
+    "moduleMonthlyFee",
+    "monthlyDeltaSigned",
   ],
-  optional: ["added", "removed", "extraSetupCharge"],
+  optional: ["added", "removed"],
   cta: { urlKey: "accountUrl", label: "View your account" },
   subject:
     "Got it — {{moduleName}} scheduled for {{effectiveDate}}",
@@ -35,22 +49,28 @@ export const moduleScheduled: Template = {
 Quick confirmation — your module change is queued.
 
 {{#if added}}You are ADDING: {{moduleName}}
+  • One-off setup for this module: +£{{moduleSetupFee}}
+    (lands on your {{effectiveDate}} invoice)
+  • Module subscription: +£{{moduleMonthlyFee}}/month
+    (starts {{effectiveDate}})
 {{/if}}{{#if removed}}You are REMOVING: {{moduleName}}
+  • Module subscription: −£{{moduleMonthlyFee}}/month
+    (from {{effectiveDate}})
+  • No setup refund — setup was paid historically to build
+    your site, which is already delivered.
 {{/if}}
-Effective from: {{effectiveDate}}
+Your subscription:
+  • Today:                  £{{currentMonthly}}/month
+  • From {{effectiveDate}}: £{{newMonthly}}/month ({{monthlyDeltaSigned}})
 
-Where you stand on money:
+Setup paid historically: £{{paidSetupSoFar}} (non-refundable
+under any module change or cancellation — covers the site
+build, already delivered).
 
-  • Setup paid to date:      £{{paidSetupSoFar}} (non-refundable)
-  • Current monthly:         £{{currentMonthly}}/mo
-  • New monthly from {{effectiveDate}}: £{{newMonthly}}/mo
-{{#if added}}  • Extra one-off setup on
-    {{effectiveDate}} invoice:  +£{{extraSetupCharge}}
-{{/if}}
 What happens between now and then:
 {{#if added}}  • Your subscription stays the same until {{effectiveDate}}.
-  • On {{effectiveDate}}: your next invoice picks up the
-    extra one-off setup (above) PLUS the new monthly rate.
+  • On {{effectiveDate}}: your invoice picks up the one-off
+    setup above PLUS the new monthly rate.
   • {{moduleName}} activates the same day so you can start
     using it straight away.
 {{/if}}{{#if removed}}  • Nothing changes on your bill THIS month — you keep
@@ -61,10 +81,6 @@ What happens between now and then:
   • No refund for the rest of this month — you are using
     the service through to the end of it.
 {{/if}}
-The setup figure above is what you have already paid to
-build the site. It is not refunded under any module change
-or cancellation — that work has been delivered.
-
 Changed your mind? Just open your dashboard and remove the
 pending change. Anything done by you before the effective
 date is reversible from there.

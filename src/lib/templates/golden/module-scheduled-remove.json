@@ -9,10 +9,13 @@
     "removed": true,
     "paidSetupSoFar": 367,
     "currentMonthly": 44,
-    "newMonthly": 38
+    "newMonthly": 38,
+    "moduleSetupFee": 0,
+    "moduleMonthlyFee": 6,
+    "monthlyDeltaSigned": "−£6"
   },
   "expected": {
     "subject": "Got it — Offers scheduled for 2026-06-01",
-    "body": "Hi Priya,\n\nQuick confirmation — your module change is queued.\n\nYou are REMOVING: Offers\n\nEffective from: 2026-06-01\n\nWhere you stand on money:\n\n  • Setup paid to date:      £367 (non-refundable)\n  • Current monthly:         £44/mo\n  • New monthly from 2026-06-01: £38/mo\n\nWhat happens between now and then:\n  • Nothing changes on your bill THIS month — you keep\n    full access to Offers until 2026-06-01\n    since you have already paid.\n  • From 2026-06-01: your monthly drops to the new\n    figure above and Offers is gone.\n  • No refund for the rest of this month — you are using\n    the service through to the end of it.\n\nThe setup figure above is what you have already paid to\nbuild the site. It is not refunded under any module change\nor cancellation — that work has been delivered.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
+    "body": "Hi Priya,\n\nQuick confirmation — your module change is queued.\n\nYou are REMOVING: Offers\n  • Module subscription: −£6/month\n    (from 2026-06-01)\n  • No setup refund — setup was paid historically to build\n    your site, which is already delivered.\n\nYour subscription:\n  • Today:                  £44/month\n  • From 2026-06-01: £38/month (−£6)\n\nSetup paid historically: £367 (non-refundable\nunder any module change or cancellation — covers the site\nbuild, already delivered).\n\nWhat happens between now and then:\n  • Nothing changes on your bill THIS month — you keep\n    full access to Offers until 2026-06-01\n    since you have already paid.\n  • From 2026-06-01: your monthly drops to the new\n    figure above and Offers is gone.\n  • No refund for the rest of this month — you are using\n    the service through to the end of it.\n\nChanged your mind? Just open your dashboard and remove the\npending change. Anything done by you before the effective\ndate is reversible from there.\n\n— ModuForge"
   }
 }

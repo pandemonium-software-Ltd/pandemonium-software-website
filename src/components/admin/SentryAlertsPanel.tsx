@@ -21,7 +21,33 @@ export default function SentryAlertsPanel({ alerts }: Props) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const visible = alerts.filter((a) => !hidden.has(a.sentry_issue_id));
 
-  if (visible.length === 0) return null;
+  // Empty state — render a quiet "all good" panel rather than
+  // hiding entirely, so the operator has visual confirmation that
+  // the Sentry → admin pipeline is wired and listening. Repeat the
+  // "Open in Sentry" link so they can still poke around.
+  if (visible.length === 0) {
+    return (
+      <div className="rounded-2xl border border-green-200 bg-green-50 p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="font-serif text-lg font-semibold text-navy-900">
+            ✅ Sentry — all quiet
+          </h2>
+          <a
+            href="https://sentry.io/organizations/pandemonium-software-ltd/issues/?statsPeriod=7d&query=is%3Aunresolved"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-semibold text-navy-700 underline hover:text-navy-900"
+          >
+            Open in Sentry →
+          </a>
+        </div>
+        <p className="mt-2 text-sm text-navy-700">
+          No open alerts. The integration is live — any new Sentry
+          alerts will land here automatically.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-ember-200 bg-ember-50 p-5">

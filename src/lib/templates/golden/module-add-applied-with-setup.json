@@ -1,9 +1,12 @@
 {
-  "description": "Module add applied — Newsletter, which needs customer-side setup (Resend sender email + Manager invite)",
+  "description": "Module add applied — Newsletter, which needs customer-side setup (Resend sender email + Manager invite); £49 setup + £9/mo, sub went from £16 → £25",
   "template": "module-add-applied",
   "values": {
     "customerName": "Alex",
     "moduleName": "Newsletter",
+    "moduleSetupFee": 49,
+    "moduleMonthlyFee": 9,
+    "previousMonthly": 16,
     "newMonthly": 25,
     "accountUrl": "https://modu-forge.co.uk/account/abc123",
     "setupUrl": "https://modu-forge.co.uk/onboarding/abc123?step=tools&focus=Newsletter",
@@ -12,6 +15,6 @@
   },
   "expected": {
     "subject": "Newsletter is live on your account",
-    "body": "Hi Alex,\n\nGood news — Newsletter is now active on your account.\n\n  • New monthly: £25/mo (from today)\n  • One-off setup for Newsletter: already added to the\n    invoice you just paid\n\nOne small thing — Newsletter needs a quick set-up step\nfrom you before it lights up on the live site. Click the\nbutton below and you'll land straight on the set-up page for\nthis module (it's the same page you used during onboarding,\nfocused on just Newsletter).\n\n  • Confirm the sender email address (looks like news@yourdomain)\n  • Invite our ops email as a Resend team member so we can\n    publish your sends on your behalf\n\nYou can come back to it any time from your dashboard — there\nwill be a \"Set up →\" button next to Newsletter until the\nset-up is complete.\n\nAny questions, hit reply.\n\n— ModuForge"
+    "body": "Hi Alex,\n\nGood news — Newsletter is now active on your account.\n\nWhat just landed on your bill:\n  • One-off setup for Newsletter: £49\n    (already added to the invoice you just paid)\n  • Module subscription: +£9/month\n\nYour subscription:\n  • Before: £16/month\n  • Now:    £25/month (+£9)\n\nOne small thing — Newsletter needs a quick set-up step\nfrom you before it lights up on the live site. Click the\nbutton below and you'll land straight on the set-up page for\nthis module (it's the same page you used during onboarding,\nfocused on just Newsletter).\n\n  • Confirm the sender email address (looks like news@yourdomain)\n  • Invite our ops email as a Resend team member so we can\n    publish your sends on your behalf\n\nYou can come back to it any time from your dashboard — there\nwill be a \"Set up →\" button next to Newsletter until the\nset-up is complete.\n\nAny questions, hit reply.\n\n— ModuForge"
   }
 }

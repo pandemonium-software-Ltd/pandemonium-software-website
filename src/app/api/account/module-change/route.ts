@@ -180,7 +180,17 @@ export async function POST(request: Request) {
       paidSetupSoFar: prospect.setupFeeCalculated ?? 0,
       currentMonthly: delta.fromFees.monthly,
       newMonthly: delta.toFees.monthly,
-      extraSetupCharge: action === "add" ? delta.setupDelta : 0,
+      // Per-module breakout — the unit price for THIS specific
+      // module so the customer sees the line item rather than
+      // having to derive it from the totals. For an add, both
+      // are the magnitude of the change (delta is positive). For
+      // a remove, setup=0 (nothing refunded) and monthly is the
+      // magnitude of the monthly drop (delta is negative; we
+      // show it as a positive "−£X/month" line in the template).
+      moduleSetupFee: action === "add" ? delta.setupDelta : 0,
+      moduleMonthlyFee:
+        action === "add" ? delta.monthlyDelta : Math.abs(delta.monthlyDelta),
+      monthlyDeltaSigned: signedDeltaLabel(delta.monthlyDelta),
     });
   } catch (e) {
     console.error(
@@ -195,4 +205,15 @@ function arrayEquals(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+// Customer-facing signed-delta label for the subscription diff
+// row. Returns "+£N", "−£N" (Unicode minus to match the template
+// elsewhere), or "no change". Used in the "From <date>: £X/month
+// (…)" line so the sign sits next to the new figure rather than
+// the customer having to subtract two numbers in their head.
+function signedDeltaLabel(delta: number): string {
+  if (delta > 0) return `+£${delta}`;
+  if (delta < 0) return `−£${Math.abs(delta)}`;
+  return "no change";
 }
