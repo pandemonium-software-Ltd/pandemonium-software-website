@@ -152,33 +152,43 @@ export async function generateAuditPdf(
 
   // ── Score badge ──
   const scoreStr = `${input.score}/10`;
-  const badgeW = 90;
-  const badgeH = 50;
+  const badgeW = 100;
+  const badgeH = 55;
   const badgeX = PAGE_W - MARGIN - badgeW;
   const badgeY = y - badgeH;
   const sc = scoreColor(input.score);
 
+  // Outer border for definition
+  page.drawRectangle({
+    x: badgeX - 1,
+    y: badgeY - 1,
+    width: badgeW + 2,
+    height: badgeH + 2,
+    color: rgb(0.85, 0.85, 0.85),
+  });
+  // Solid colour fill
   page.drawRectangle({
     x: badgeX,
     y: badgeY,
     width: badgeW,
     height: badgeH,
     color: sc,
-    borderColor: sc,
-    borderWidth: 0,
   });
-  // Round corners aren't supported in pdf-lib; the solid rect is fine.
+  // Score number — vertically centred
+  const scoreTextW = helveticaBold.widthOfTextAtSize(scoreStr, 26);
   page.drawText(scoreStr, {
-    x: badgeX + (badgeW - helveticaBold.widthOfTextAtSize(scoreStr, 24)) / 2,
-    y: badgeY + 18,
-    size: 24,
+    x: badgeX + (badgeW - scoreTextW) / 2,
+    y: badgeY + 22,
+    size: 26,
     font: helveticaBold,
     color: WHITE,
   });
+  // Label underneath
+  const labelW = helvetica.widthOfTextAtSize("HEALTH SCORE", 8);
   page.drawText("HEALTH SCORE", {
-    x: badgeX + (badgeW - helvetica.widthOfTextAtSize("HEALTH SCORE", 7)) / 2,
-    y: badgeY + 7,
-    size: 7,
+    x: badgeX + (badgeW - labelW) / 2,
+    y: badgeY + 8,
+    size: 8,
     font: helvetica,
     color: WHITE,
   });
@@ -203,7 +213,7 @@ export async function generateAuditPdf(
     [
       "Rating",
       snap.rating != null
-        ? `${snap.rating.toFixed(1)} ★ (${snap.totalReviews ?? 0} reviews)`
+        ? `${snap.rating.toFixed(1)} stars (${snap.totalReviews ?? 0} reviews)`
         : "No rating yet",
     ],
     ["Photos", `${snap.photoCount} uploaded`],
@@ -292,7 +302,7 @@ export async function generateAuditPdf(
 
       for (let i = 0; i < lines.length; i++) {
         if (i === 0) {
-          page.drawText("•", {
+          page.drawText("-", {
             x: MARGIN + 4,
             y,
             size: 9,
@@ -353,7 +363,7 @@ export async function generateAuditPdf(
   // ── Consistency notes ──
   if (input.consistencyNotes) {
     ensureSpace(50);
-    page.drawText("GBP ↔ Website Consistency", {
+    page.drawText("GBP vs Website Consistency", {
       x: MARGIN,
       y,
       size: 12,
@@ -406,7 +416,7 @@ export async function generateAuditPdf(
     y -= 14;
 
     for (const review of snap.topReviews) {
-      const stars = "★".repeat(review.rating) + "☆".repeat(5 - review.rating);
+      const stars = "*".repeat(review.rating) + "-".repeat(5 - review.rating);
       const header = `${stars}  ${review.authorName} — ${review.relativeTimeDescription}`;
       ensureSpace(30);
 
@@ -504,9 +514,9 @@ export function parseAuditMarkdown(markdown: string): {
       target: "reviews",
     },
     {
-      pattern: /###\s*GBP\s*↔|###\s*Consistency[^\n]*/i,
+      pattern: /###\s*GBP\s*(?:↔|vs)|###\s*Consistency[^\n]*/i,
       level: "amber",
-      title: "GBP ↔ Website Consistency",
+      title: "GBP vs Website Consistency",
       target: "consistency",
     },
   ];
