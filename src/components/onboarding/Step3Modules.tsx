@@ -92,6 +92,31 @@ const GBP_HOME_URL = "https://business.google.com";
 const GBP_MANAGER_HELP_URL =
   "https://support.google.com/business/answer/3403100";
 
+const GBP_URL_HOSTS = [
+  "maps.app.goo.gl",
+  "goo.gl",
+  "g.page",
+  "google.com",
+  "google.co.uk",
+  "www.google.com",
+  "www.google.co.uk",
+  "search.google.com",
+  "business.google.com",
+];
+
+function isGbpUrl(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) return true;
+  try {
+    const host = new URL(trimmed).hostname;
+    return GBP_URL_HOSTS.some(
+      (h) => host === h || host.endsWith(`.${h}`),
+    );
+  } catch {
+    return false;
+  }
+}
+
 type ModuleStatus = "not-started" | "in-progress" | "complete";
 
 export default function Step3Modules({
@@ -207,7 +232,7 @@ export default function Step3Modules({
 
   const gbpStatus: ModuleStatus = !gbpUrl && !gbpInvited
     ? "not-started"
-    : gbpUrl.trim() && gbpInvited
+    : gbpUrl.trim() && isGbpUrl(gbpUrl) && gbpInvited
       ? "complete"
       : "in-progress";
 
@@ -248,7 +273,9 @@ export default function Step3Modules({
     }
     if (hasGbp && gbpStatus !== "complete") {
       if (!gbpUrl.trim())
-        return "Please complete the Google Business Profile module — paste your GBP URL.";
+        return "Please complete the Google Business Profile module — paste your Google Maps link.";
+      if (!isGbpUrl(gbpUrl))
+        return "That doesn't look like a Google Maps or Business Profile link. Search for your business on Google Maps, click Share → Copy link, and paste it here.";
       if (!gbpInvited)
         return "Please tick the box once you've added me as a Manager on your GBP listing.";
     }
@@ -1282,21 +1309,43 @@ function ModuleGbp({
       </div>
       <label className="mt-5 block">
         <span className="block text-sm font-semibold text-navy-900">
-          Your Google Business Profile URL
+          Your Google Business Profile link
         </span>
+        <p className="mt-1.5 text-[0.85rem] leading-relaxed text-navy-600">
+          The easiest way: search for your business on{" "}
+          <a
+            href="https://www.google.com/maps"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link"
+          >
+            Google Maps
+          </a>
+          , click your listing, then hit the <strong>Share</strong>{" "}
+          button and <strong>Copy link</strong>. Paste it below.
+        </p>
         <input
           type="url"
           value={url}
           disabled={disabled}
           onChange={(e) => onUrlChange(e.target.value)}
-          placeholder="https://g.page/your-business"
+          placeholder="https://maps.app.goo.gl/abc123 or https://goo.gl/maps/..."
           autoComplete="url"
           className="mt-2 w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 font-mono text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
         />
-        <span className="mt-1.5 block text-xs text-navy-500">
-          Either your short g.page link or the full Google Maps URL
-          for your business — whichever you have.
-        </span>
+        {url.trim() !== "" && !isGbpUrl(url) && (
+          <span className="mt-1.5 block text-xs font-medium text-red-600">
+            That doesn&apos;t look like a Google Maps or Business Profile
+            link. Please paste the link you get from the Share button on
+            your Google Maps listing.
+          </span>
+        )}
+        {(url.trim() === "" || isGbpUrl(url)) && (
+          <span className="mt-1.5 block text-xs text-navy-500">
+            Accepted formats: maps.app.goo.gl/…, google.com/maps/…,
+            g.page/…, or search.google.com/local/… share links.
+          </span>
+        )}
       </label>
       <label className="mt-4 flex items-start gap-3">
         <input

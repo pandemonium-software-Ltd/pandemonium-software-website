@@ -159,6 +159,53 @@ describe("step3Tools.shouldRun", () => {
     expect(step3Tools.shouldRun(baseProspect)).toBe(true);
   });
 
+  test("false when pending but not yet confirmed (waiting on customer)", () => {
+    expect(
+      step3Tools.shouldRun({
+        ...baseProspect,
+        onboardingData: {
+          ...baseOnboarding,
+          tools: {
+            ...baseOnboarding.tools,
+            gbpPlaceIdPending: "ChIJpending",
+            gbpResolvedName: "Alex's Bakery",
+          },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  test("true when pending AND confirmed (needs promotion)", () => {
+    expect(
+      step3Tools.shouldRun({
+        ...baseProspect,
+        onboardingData: {
+          ...baseOnboarding,
+          tools: {
+            ...baseOnboarding.tools,
+            gbpPlaceIdPending: "ChIJpending",
+            gbpListingConfirmed: true,
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("true when latched but email not yet sent", () => {
+    expect(
+      step3Tools.shouldRun({
+        ...baseProspect,
+        onboardingData: {
+          ...baseOnboarding,
+          tools: {
+            ...baseOnboarding.tools,
+            gbpPlaceId: "ChIJexisting",
+          },
+        },
+      }),
+    ).toBe(true);
+  });
+
   test("false once both latches are set", () => {
     expect(
       step3Tools.shouldRun({
@@ -196,45 +243,58 @@ describe("step3Tools.run — skip paths", () => {
   });
 });
 
-describe("step3Tools.run — first-tick happy path", () => {
-  test("URL with explicit place_id skips text-search + seeds + emails", async () => {
+describe("step3Tools.run — tick 1: resolve → pending", () => {
+  test("URL with explicit place_id skips text-search, writes pending state", async () => {
     vi.mocked(parseMapsUrl).mockReturnValue({ placeId: "ChIJfromUrl" });
 
     const result = await step3Tools.run(baseProspect, env, { d1: db });
 
     expect(findPlaceByQuery).not.toHaveBeenCalled();
+    // fetchPlaceDetails called for preview (name + address)
     expect(fetchPlaceDetails).toHaveBeenCalledWith("ChIJfromUrl", "test-places-key");
-    expect(upsertSnapshot).toHaveBeenCalledWith(db, {
-      token: "tok_test",
-      placeId: "ChIJfromUrl",
-      snapshot: sampleSnapshot,
-    });
-    expect(sendCustomerEmail).toHaveBeenCalledWith(
-      env,
-      baseProspect.email,
-      "gbp-module-ready",
+    // NOT yet seeded or emailed — waiting for customer confirmation
+    expect(upsertSnapshot).not.toHaveBeenCalled();
+    expect(sendCustomerEmail).not.toHaveBeenCalled();
+    // One write: pending place_id + resolved name/address
+    expect(updateProspectOnboarding).toHaveBeenCalledTimes(1);
+    expect(updateProspectOnboarding).toHaveBeenCalledWith(
+      "page_test",
       expect.objectContaining({
-        customerName: "Alex's Bakery",
-        domain: "alexsbakery.co.uk",
+        data: expect.objectContaining({
+          tools: expect.objectContaining({
+            gbpPlaceIdPending: "ChIJfromUrl",
+            gbpResolvedName: "Alex's Bakery",
+            gbpResolvedAddress: "12 High St, Oxford OX1 4AB",
+          }),
+        }),
       }),
     );
-    // Two onboarding writes: one for the place_id, one for the
-    // email-sent latch.
-    expect(updateProspectOnboarding).toHaveBeenCalledTimes(2);
     expect(result.status).toBe("ok");
   });
 
-  test("URL without place_id falls back to text-search with business name + location", async () => {
+  test("URL without place_id falls back to text-search, writes pending state", async () => {
     const result = await step3Tools.run(baseProspect, env, { d1: db });
 
-    // No URL hints -> fallback business name + Hub location, no
-    // location bias.
     expect(findPlaceByQuery).toHaveBeenCalledWith(
       "Alex's Bakery, Oxford",
       "test-places-key",
       undefined,
     );
+    // Preview fetch for the resolved ID
     expect(fetchPlaceDetails).toHaveBeenCalledWith("ChIJfallback", "test-places-key");
+    // Pending, not latched
+    expect(upsertSnapshot).not.toHaveBeenCalled();
+    expect(sendCustomerEmail).not.toHaveBeenCalled();
+    expect(updateProspectOnboarding).toHaveBeenCalledWith(
+      "page_test",
+      expect.objectContaining({
+        data: expect.objectContaining({
+          tools: expect.objectContaining({
+            gbpPlaceIdPending: "ChIJfallback",
+          }),
+        }),
+      }),
+    );
     expect(result.status).toBe("ok");
   });
 
@@ -252,6 +312,48 @@ describe("step3Tools.run — first-tick happy path", () => {
       "test-places-key",
       { lat: 51.7521, lng: -1.2577 },
     );
+    expect(result.status).toBe("ok");
+  });
+});
+
+describe("step3Tools.run — tick 2: confirmed → latch + seed + email", () => {
+  test("promotes pending to latched, seeds reviews, sends email", async () => {
+    const confirmedProspect = {
+      ...baseProspect,
+      onboardingData: {
+        ...baseOnboarding,
+        tools: {
+          ...baseOnboarding.tools,
+          gbpPlaceIdPending: "ChIJfromUrl",
+          gbpResolvedName: "Alex's Bakery",
+          gbpResolvedAddress: "12 High St, Oxford OX1 4AB",
+          gbpListingConfirmed: true,
+        },
+      },
+    };
+
+    const result = await step3Tools.run(confirmedProspect, env, { d1: db });
+
+    // Seeds reviews
+    expect(fetchPlaceDetails).toHaveBeenCalledWith("ChIJfromUrl", "test-places-key");
+    expect(upsertSnapshot).toHaveBeenCalledWith(db, {
+      token: "tok_test",
+      placeId: "ChIJfromUrl",
+      snapshot: sampleSnapshot,
+    });
+    // Sends confirmation email
+    expect(sendCustomerEmail).toHaveBeenCalledWith(
+      env,
+      baseProspect.email,
+      "gbp-module-ready",
+      expect.objectContaining({
+        customerName: "Alex's Bakery",
+        domain: "alexsbakery.co.uk",
+      }),
+    );
+    // Three writes: promote pending→latched, seed is D1 not Notion,
+    // then email-sent latch
+    expect(updateProspectOnboarding).toHaveBeenCalledTimes(2);
     expect(result.status).toBe("ok");
   });
 });
@@ -309,7 +411,6 @@ describe("step3Tools.run — failure paths", () => {
       step3Tools.run(baseProspect, env, { d1: db }),
     ).rejects.toThrow(/place_id resolution failed/);
 
-    // Failure was stamped to onboardingData so /admin surfaces why.
     expect(updateProspectOnboarding).toHaveBeenCalledWith(
       "page_test",
       expect.objectContaining({
@@ -320,16 +421,38 @@ describe("step3Tools.run — failure paths", () => {
         }),
       }),
     );
-    expect(fetchPlaceDetails).not.toHaveBeenCalled();
     expect(sendCustomerEmail).not.toHaveBeenCalled();
   });
 
-  test("reviews fetch failure throws (email latch not set)", async () => {
+  test("preview fetch failure during resolution throws (pending not set)", async () => {
     vi.mocked(parseMapsUrl).mockReturnValue({ placeId: "ChIJfromUrl" });
     vi.mocked(fetchPlaceDetails).mockRejectedValue(new Error("503"));
 
     await expect(
       step3Tools.run(baseProspect, env, { d1: db }),
+    ).rejects.toThrow(/place_id resolution failed/);
+
+    expect(sendCustomerEmail).not.toHaveBeenCalled();
+  });
+
+  test("reviews fetch failure on confirmed tick throws (email latch not set)", async () => {
+    const confirmedProspect = {
+      ...baseProspect,
+      onboardingData: {
+        ...baseOnboarding,
+        tools: {
+          ...baseOnboarding.tools,
+          gbpPlaceIdPending: "ChIJfromUrl",
+          gbpResolvedName: "Alex's Bakery",
+          gbpResolvedAddress: "12 High St, Oxford OX1 4AB",
+          gbpListingConfirmed: true,
+        },
+      },
+    };
+    vi.mocked(fetchPlaceDetails).mockRejectedValue(new Error("503"));
+
+    await expect(
+      step3Tools.run(confirmedProspect, env, { d1: db }),
     ).rejects.toThrow(/reviews fetch failed/);
 
     expect(sendCustomerEmail).not.toHaveBeenCalled();

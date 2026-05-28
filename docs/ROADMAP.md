@@ -5,7 +5,7 @@
 > back here. Update this file (not the others) when a priority lands
 > or a new one surfaces.
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-05-29
 
 ---
 
@@ -31,6 +31,7 @@
 | **Sentry error tracking** — ops worker full coverage via withSentry + structured-JSON path for marketing site + /admin inbox with HMAC-verified webhook receiver, D1 alerts table, resolve flow | 2026-05-25 |
 | **Per-module Hub unlock** — Step 3 + Step 4 sections unlock when a paid-for module's setup is incomplete (post-launch adds); server-side mutable + per-step-done gates exempt Live + tools/content; latched against stored state to avoid catch-22 | 2026-05-25 |
 | **Lucas GBP automation verified** — end-to-end Place ID resolution working live (after Google Cloud billing enabled on ModuForge project) | 2026-05-25 |
+| **GBP pending→confirmed→latched flow + tests** — 2-step confirmation prevents wrong-business latches; fixed bug where email fired prematurely with "(unknown)" listing details; 20 tests covering full lifecycle | 2026-05-29 |
 
 ---
 
@@ -92,7 +93,7 @@ asks for a second location.
 | # | Item | Complexity | Duration | Monthly cost | Status |
 |---|------|------------|----------|--------------|--------|
 | 1 | **Stripe LIVE-mode setup** — Stripe sandbox is fully wired (Checkout, webhook, auto-apply cron, line-item itemisation). Live setup = repeat S1 product/price creation in LIVE Stripe account, swap secrets to `sk_live_*`, register live webhook, switch `stripe-products.ts` IDs (env-flag). | Low-Medium | 1-2 h | 1.4% + 20p per txn | Certain — NEXT |
-| 2a | **Fix 2 step3-tools tests** — the GBP pending→confirmed→latched flow (2026-05-28) changed the resolution lifecycle. Two tests assert old immediate-latch behaviour and need updating to match. | Low | 30 min | £0 | Certain — NEXT |
+| ~~2a~~ | ~~Fix 2 step3-tools tests~~ — **SHIPPED 2026-05-29** (moved to ✅ Shipped) | — | — | — | Done |
 | 2b | **GBP audit cron ⭐** — weekly Claude-generated audit per GBP-module customer. Reads intake + current GBP via Places API → Claude analyses: description quality, category accuracy, missing services, photo gaps, GBP ↔ website mismatch (hours, address, phone, services listed) → structured recommendations email to Ben for manual application (Manager access already in place). Also ensures reviews flow through to site correctly. No GBP API / OAuth needed. Closes the "world-class GBP" gap from the £59 setup positioning. | Medium | 4-6 h | trivial (Anthropic + Places API < £0.05/customer/month) | Certain — NEXT |
 | 3 | **T&C limitation of liability clause update** — add/strengthen limitation of liability clause in /terms covering: indirect/consequential loss exclusion, cap on total liability (capped at fees paid in prior 12 months), no liability for third-party services (Google, Stripe, Resend), force majeure. Solicitor review recommended before going live. | Low-Medium | 2-3 h | £0 (solicitor review: £200-400 one-off) | Certain |
 | 3a | **Data Processing Agreement (DPA)** — GDPR Article 28 compliant DPA covering ModuForge as data processor for customer personal data. Two touchpoints: (1) marketing site `/dpa` page or downloadable PDF linked from /terms and /privacy, (2) checkbox + link at intake signup confirming the customer accepts the DPA. Must cover: data categories processed, processing purposes, sub-processors (Notion, Resend, Stripe, Cloudflare, Google), data retention periods (aligned with existing GDPR automation), data subject rights, breach notification obligations. | Medium | 3-4 h | £0 (solicitor review: £300-500 one-off) | Certain |
@@ -141,9 +142,9 @@ asks for a second location.
 
 ## 📋 Suggested next 3 moves
 
-1. **#2a (step3-tools tests)** — 30 min fix, unblocks the GBP pending flow already in code.
-2. **#1 (Stripe LIVE)** — biggest unblock; final test with Lucas then flip to live.
-3. **#2b (GBP audit cron) + #3 + #3a** — GBP audit gives the £59 setup its teeth; T&C liability cap + DPA close the legal gaps before real customers land.
+1. **#1 (Stripe LIVE)** — biggest unblock; final test with Lucas then flip to live.
+2. **#2b (GBP audit cron)** — GBP audit gives the £59 setup its teeth.
+3. **#3 + #3a** — T&C liability cap + DPA close the legal gaps before real customers land.
 
 After those, you're production-ready for first paying customer.
 

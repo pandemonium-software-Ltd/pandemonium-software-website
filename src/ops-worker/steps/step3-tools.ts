@@ -195,8 +195,10 @@ export const step3Tools: Step = {
     }
 
     // ---------- C. Confirmation email (latch: tools.gbpModuleReadyEmailSentAt) ----------
+    // Only fires once placeId is latched AND reviews are seeded —
+    // the email promises live data, so don't send until phase B ran.
     let emailSentThisTick = false;
-    if (!tools.gbpModuleReadyEmailSentAt) {
+    if (placeId && snapshot && !tools.gbpModuleReadyEmailSentAt) {
       const domain = readDomain(prospect.onboardingData) ?? "your site";
       await sendCustomerEmail(env, prospect.email, "gbp-module-ready", {
         customerName: prospect.name,
