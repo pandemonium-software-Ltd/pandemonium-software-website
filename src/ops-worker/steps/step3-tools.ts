@@ -33,12 +33,21 @@ import type { D1Database } from "../../lib/d1-analytics";
 /** Subset of onboardingData.tools we read + write. Everything else
  *  in `tools` (calcomUrl, resendEmail, etc.) is passed through
  *  untouched on save. */
-type ToolsSlice = {
+export type ToolsSlice = {
   gbpUrl?: string;
   gbpManagerInvited?: boolean;
   /** Set by phase A. Stable Google place_id — same shape we store
    *  in the D1 PK. Once set, phase A is skipped on every tick. */
   gbpPlaceId?: string;
+  /** Resolved but NOT yet confirmed by the customer. The Hub shows
+   *  the listing name/address and asks "is this your business?"
+   *  before we latch gbpPlaceId. Prevents wrong-business latches. */
+  gbpPlaceIdPending?: string;
+  gbpResolvedName?: string;
+  gbpResolvedAddress?: string;
+  /** true once the customer clicks "Yes, that's my business" in the
+   *  Hub. Triggers phase A to promote pending → confirmed. */
+  gbpListingConfirmed?: boolean;
   /** ISO-8601 — set by phase C after the confirmation email goes
    *  out. Once set, phase C is skipped on every tick. */
   gbpModuleReadyEmailSentAt?: string;
@@ -57,12 +66,14 @@ export const step3Tools: Step = {
       return false;
     }
     const tools = readToolsSlice(p.onboardingData);
-    // Customer hasn't completed the Hub-side actions yet — bail.
     if (!tools.gbpUrl) return false;
     if (!tools.gbpManagerInvited) return false;
-    // Either latch missing = still work to do.
-    if (!tools.gbpPlaceId) return true;
-    if (!tools.gbpModuleReadyEmailSentAt) return true;
+    // Need to resolve → pending (no pending yet)
+    if (!tools.gbpPlaceId && !tools.gbpPlaceIdPending) return true;
+    // Customer confirmed but not yet promoted to latched
+    if (tools.gbpPlaceIdPending && tools.gbpListingConfirmed && !tools.gbpPlaceId) return true;
+    // Latched but email not sent yet
+    if (tools.gbpPlaceId && !tools.gbpModuleReadyEmailSentAt) return true;
     return false;
   },
   async run(prospect, env, ctx) {
@@ -93,42 +104,60 @@ export const step3Tools: Step = {
 
     const events: string[] = [];
 
-    // ---------- A. Resolve place_id (latch: tools.gbpPlaceId) ----------
+    // ---------- A. Resolve place_id (pending → confirmed → latched) ----------
     let placeId = tools.gbpPlaceId;
     let resolvedThisTick = false;
-    if (!placeId) {
+
+    // A1. Promote pending → latched when customer confirmed
+    if (!placeId && tools.gbpPlaceIdPending && tools.gbpListingConfirmed) {
+      placeId = tools.gbpPlaceIdPending;
+      await writeToolsSlice(prospect.pageId, prospect.onboardingData, {
+        gbpPlaceId: placeId,
+        gbpPlaceIdPending: undefined,
+        gbpListingConfirmed: undefined,
+        gbpResolutionFailedAt: undefined,
+        gbpResolutionError: undefined,
+      });
+      resolvedThisTick = true;
+      events.push("promoted confirmed place_id to latched");
+    }
+
+    // A2. Resolve → pending (not yet confirmed by customer)
+    if (!placeId && !tools.gbpPlaceIdPending) {
       try {
-        // Resolve short URLs (maps.app.goo.gl/abc) to their canonical
-        // /maps/place/... form before parsing — the share-link
-        // format is the only one most customers know about.
         const expanded = await resolveMapsShortUrl(gbpUrl);
         const hints = parseMapsUrl(expanded);
+        let resolvedId: string;
 
         if (hints.placeId) {
-          placeId = hints.placeId;
+          resolvedId = hints.placeId;
           events.push("resolved place_id from URL (explicit)");
         } else {
-          // Text-search with locationBias when we have lat/lng from
-          // the URL — gives a deterministic correct match even for
-          // common business names. Falls back to the Hub-captured
-          // business location when the URL had no @lat,lng segment.
           const query =
-            hints.name ?? buildSearchQuery(prospect.name, prospect.onboardingData);
+            hints.name ?? buildSearchQuery(prospect.business ?? prospect.name, prospect.onboardingData);
           const bias =
             hints.lat !== undefined && hints.lng !== undefined
               ? { lat: hints.lat, lng: hints.lng }
               : undefined;
-          placeId = await findPlaceByQuery(query, apiKey, bias);
+          resolvedId = await findPlaceByQuery(query, apiKey, bias);
           events.push(
             `resolved place_id via text-search "${query}"${bias ? " biased to URL lat/lng" : ""}`,
           );
         }
+
+        // Fetch listing details so we can show name/address in the
+        // Hub for customer confirmation before latching.
+        const preview = await fetchPlaceDetails(resolvedId, apiKey);
         await writeToolsSlice(prospect.pageId, prospect.onboardingData, {
-          gbpPlaceId: placeId,
+          gbpPlaceIdPending: resolvedId,
+          gbpResolvedName: preview.displayName ?? undefined,
+          gbpResolvedAddress: preview.formattedAddress ?? undefined,
           gbpResolutionFailedAt: undefined,
           gbpResolutionError: undefined,
         });
-        resolvedThisTick = true;
+        events.push(
+          `pending confirmation: "${preview.displayName ?? "?"}" at ${preview.formattedAddress ?? "?"}`,
+        );
       } catch (e) {
         const msg = e instanceof PlacesApiError ? e.message : String(e);
         await writeToolsSlice(prospect.pageId, prospect.onboardingData, {

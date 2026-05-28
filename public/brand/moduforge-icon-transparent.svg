@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="ModuForge mark">
+  <!-- Bare ember M, fully transparent background (no tile). For
+       use on dark surfaces or where the container supplies its own
+       shape. -->
+  <path d="M70 392V120h82l104 158 104-158h82v272h-78V233l-78 120h-6l-78-120v159z" fill="#f97316"/>
+</svg>

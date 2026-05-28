@@ -32,24 +32,9 @@ import {
 import {
   BASE_SETUP_GBP,
   FOUNDING_MEMBER_SETUP_GBP,
-  MODULE_BOOKING_SETUP_GBP,
-  MODULE_ENQUIRY_SETUP_GBP,
-  MODULE_NEWSLETTER_SETUP_GBP,
-  MODULE_OFFERS_SETUP_GBP,
-  GBP_ADDON_ONE_OFF_GBP,
   MODULE_MULTILOCATION_SETUP_GBP,
+  MODULE_SETUP_PENCE,
 } from "./fees";
-
-/** Per-module setup-fee map (pence) — drives the itemised
- *  one-time line items on Checkout. Customer sees a separate
- *  line per module setup on the Stripe payment page. */
-const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
-  "Online Booking": MODULE_BOOKING_SETUP_GBP * 100,
-  "Enquiry Form": MODULE_ENQUIRY_SETUP_GBP * 100,
-  Newsletter: MODULE_NEWSLETTER_SETUP_GBP * 100,
-  Offers: MODULE_OFFERS_SETUP_GBP * 100,
-  "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
-};
 
 let cachedStripe: Stripe | null = null;
 

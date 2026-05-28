@@ -35,6 +35,8 @@
 
 import {
   calculateFees,
+  MODULE_MULTILOCATION_SETUP_GBP,
+  MODULE_SETUP_PENCE,
   type ModuleSelection,
 } from "@/lib/fees";
 import { modulesToSelection } from "@/lib/billing/module-policy";
@@ -56,25 +58,6 @@ import {
 import {
   STRIPE_MODULE_PRICE_IDS,
 } from "@/lib/stripe-products";
-import {
-  MODULE_BOOKING_SETUP_GBP,
-  MODULE_ENQUIRY_SETUP_GBP,
-  MODULE_NEWSLETTER_SETUP_GBP,
-  MODULE_OFFERS_SETUP_GBP,
-  GBP_ADDON_ONE_OFF_GBP,
-  MODULE_MULTILOCATION_SETUP_GBP,
-} from "@/lib/fees";
-
-/** Per-module setup-fee map (pence). Used when a customer adds a
- *  module post-launch — the setup fee for that module lands as a
- *  one-off invoice item on the next bill. */
-const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
-  "Online Booking": MODULE_BOOKING_SETUP_GBP * 100,
-  "Enquiry Form": MODULE_ENQUIRY_SETUP_GBP * 100,
-  Newsletter: MODULE_NEWSLETTER_SETUP_GBP * 100,
-  Offers: MODULE_OFFERS_SETUP_GBP * 100,
-  "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
-};
 
 /**
  * Apply a single pending-stripe entry: Stripe mutations + Notion

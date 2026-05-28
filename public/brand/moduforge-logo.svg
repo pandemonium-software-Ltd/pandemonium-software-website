@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220" width="900" height="220" role="img" aria-label="ModuForge">
+  <!-- Horizontal lockup: navy tile + ember M, then the ModuForge
+       wordmark. Transparent background. "Modu" navy, "Forge" ember. -->
+  <rect x="20" y="34" width="152" height="152" rx="34" fill="#0f1d30"/>
+  <path d="M118 360V152h62l76 118 76-118h62v208h-58V249l-58 90h-4l-58-90v111z"
+        fill="#f97316" transform="translate(20,34) scale(0.2969)"/>
+  <text x="205" y="142" font-family="Georgia, 'Times New Roman', serif" font-size="104" font-weight="600" letter-spacing="-2">
+    <tspan fill="#0f1d30">Modu</tspan><tspan fill="#f97316">Forge</tspan>
+  </text>
+</svg>

@@ -122,6 +122,10 @@ export default function Step3Modules({
     typeof data.calcomBookingUrl === "string" ? data.calcomBookingUrl : "";
   const initialGbpUrl = typeof data.gbpUrl === "string" ? data.gbpUrl : "";
   const initialGbpInvited = data.gbpManagerInvited === true;
+  const gbpPendingName = typeof data.gbpResolvedName === "string" ? data.gbpResolvedName : null;
+  const gbpPendingAddress = typeof data.gbpResolvedAddress === "string" ? data.gbpResolvedAddress : null;
+  const gbpHasPending = !!data.gbpPlaceIdPending && !data.gbpPlaceId;
+  const gbpIsConfirmed = !!data.gbpPlaceId;
   const initialNotes = typeof data.notes === "string" ? data.notes : "";
 
   const [resendEmail, setResendEmail] = useState(initialResendEmail);
@@ -435,6 +439,28 @@ export default function Step3Modules({
                   <ModuleGbp
                     url={gbpUrl}
                     invited={gbpInvited}
+                    pendingName={gbpPendingName}
+                    pendingAddress={gbpPendingAddress}
+                    hasPending={gbpHasPending}
+                    isConfirmed={gbpIsConfirmed}
+                    onConfirmListing={async () => {
+                      setPending("save");
+                      await savePartial({ gbpListingConfirmed: true });
+                      setPending("none");
+                    }}
+                    onRejectListing={async () => {
+                      setPending("save");
+                      await savePartial({
+                        gbpPlaceIdPending: null,
+                        gbpResolvedName: null,
+                        gbpResolvedAddress: null,
+                        gbpListingConfirmed: null,
+                        gbpUrl: "",
+                      });
+                      setGbpUrl("");
+                      setGbpInvited(false);
+                      setPending("none");
+                    }}
                     onUrlChange={setGbpUrl}
                     onInvitedChange={setGbpInvited}
                     benEmail={benEmail}
@@ -1132,6 +1158,12 @@ function ModuleGbp({
   onInvitedChange,
   benEmail,
   disabled,
+  pendingName,
+  pendingAddress,
+  hasPending,
+  isConfirmed,
+  onConfirmListing,
+  onRejectListing,
 }: {
   url: string;
   invited: boolean;
@@ -1139,6 +1171,12 @@ function ModuleGbp({
   onInvitedChange: (v: boolean) => void;
   benEmail: string;
   disabled: boolean;
+  pendingName: string | null;
+  pendingAddress: string | null;
+  hasPending: boolean;
+  isConfirmed: boolean;
+  onConfirmListing: () => void;
+  onRejectListing: () => void;
 }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -1274,6 +1312,52 @@ function ModuleGbp({
           </span>
         </span>
       </label>
+
+      {/* Listing confirmation card — shown after cron resolves the
+          place_id but before we latch it. Customer confirms this is
+          their business to prevent wrong-listing latches. */}
+      {hasPending && pendingName && (
+        <div className="mt-5 rounded-xl border-2 border-ember-300 bg-ember-50 p-4">
+          <p className="text-sm font-semibold text-navy-900">
+            We found this listing — is it yours?
+          </p>
+          <div className="mt-2 rounded-lg bg-white p-3 shadow-card">
+            <p className="text-base font-semibold text-navy-900">
+              {pendingName}
+            </p>
+            {pendingAddress && (
+              <p className="mt-0.5 text-sm text-navy-600">
+                {pendingAddress}
+              </p>
+            )}
+          </div>
+          <div className="mt-3 flex gap-3">
+            <button
+              type="button"
+              onClick={onConfirmListing}
+              className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-800"
+            >
+              Yes, that&apos;s my business
+            </button>
+            <button
+              type="button"
+              onClick={onRejectListing}
+              className="rounded-lg border-2 border-navy-300 bg-white px-4 py-2 text-sm font-semibold text-navy-700 hover:bg-cream-50"
+            >
+              Not mine — try again
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isConfirmed && (
+        <div className="mt-5 rounded-xl border-2 border-green-200 bg-green-50 p-4">
+          <p className="text-sm font-semibold text-green-800">
+            Listing confirmed — your Google reviews are being connected
+            to your site. You&apos;ll get a confirmation email shortly.
+          </p>
+        </div>
+      )}
     </>
   );
 }

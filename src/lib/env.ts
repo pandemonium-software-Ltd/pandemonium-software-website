@@ -79,12 +79,10 @@ const serverEnvSchema = z.object({
   // tiles when missing.
   R2_PUBLIC_URL_BASE: z.string().url().optional(),
 
-  // Stripe (Stage 2A Part 2 — placeholders accepted now)
+  // Stripe
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_PUBLIC_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
-  STRIPE_SETUP_PRICE_ID: z.string().optional(),
-  STRIPE_SUBSCRIPTION_PRICE_ID: z.string().optional(),
 
   // Sentry error tracking. Set per worker via wrangler secrets.
   // When SENTRY_DSN is missing, the SDK no-ops gracefully (still

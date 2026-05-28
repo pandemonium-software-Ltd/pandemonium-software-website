@@ -21,9 +21,14 @@
 //     Clear stripeSubscriptionId + stamp Cancelled + start GDPR
 //     retention countdown.
 //
-//   - invoice.payment_failed       → flip any pending-stripe entry
-//     that was waiting on this invoice to billing-failed; surface
-//     in /admin so operator can email customer.
+//   - invoice.payment_failed       → flip pending-stripe entries
+//     to billing-failed, revert their module selection, email the
+//     customer with CTA to update their card, and note on the
+//     prospect record for /admin visibility.
+//
+//   - charge.dispute.created        → note on prospect record +
+//     urgent internal email to Ben. Disputes need a response
+//     within 7-21 days.
 //
 // Anything else → returned 200 unhandled (Stripe expects 2xx to
 // stop retries). We log the type so adding more handlers later is
@@ -45,6 +50,7 @@ import type Stripe from "stripe";
 import { applyPendingChange } from "@/lib/billing/apply-pending";
 import { reportError } from "@/lib/sentry";
 import { sendCustomerEmail } from "@/ops-worker/notify";
+import { sendInternalNotification } from "@/lib/email";
 import { getServerEnv } from "@/lib/env";
 import { site } from "@/lib/site";
 
@@ -90,6 +96,9 @@ export async function POST(request: Request) {
         break;
       case "invoice.payment_failed":
         await handlePaymentFailed(event.data.object as Stripe.Invoice);
+        break;
+      case "charge.dispute.created":
+        await handleDisputeCreated(event.data.object as Stripe.Dispute);
         break;
       default:
         console.log(`[webhooks/stripe] unhandled event ${event.type}`);
@@ -255,12 +264,6 @@ async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {
-  // For now: log + append a note to the prospect's record so the
-  // operator notices in /admin. Auto-billing-failed flow for
-  // pending entries can be added later — most payment_failed
-  // events on existing subscriptions are card-expiry, which
-  // doesn't invalidate any pending changes immediately (Stripe
-  // retries the card 4 times over a week before final fail).
   const customerId =
     typeof invoice.customer === "string"
       ? invoice.customer
@@ -269,21 +272,108 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
   const all = await listAllProspects();
   const prospect = all.find((p) => p.stripeCustomerId === customerId);
   if (!prospect) return;
+
   const line = `[${new Date().toISOString()}] Stripe invoice payment_failed (invoice=${invoice.id}). Customer likely needs to update card.`;
   await appendProspectNote(prospect.pageId, prospect.notes, line);
-  console.warn(
-    `[webhooks/stripe] payment_failed for ${prospect.name} — noted on record`,
+
+  // Flip any pending-stripe entries to billing-failed and revert
+  // their module selection (customer shouldn't see features they
+  // haven't paid for). Same logic as the admin billing-failed flow.
+  const pending = prospect.moduleChangeLog.filter(
+    (e) => e.status === "pending-stripe",
   );
-  void _resolveModuleChangeRef; // keep import alive for future per-entry billing-failed flow
+  for (const entry of pending) {
+    try {
+      const addedModules = new Set(
+        entry.toModules.filter((m) => !entry.fromModules.includes(m)),
+      );
+      const reverted = entry.toModules.filter((m) => !addedModules.has(m));
+      await resolveModuleChange(prospect.pageId, entry.id, {
+        status: "billing-failed",
+        resolutionNote: `Auto billing-failed via invoice.payment_failed (invoice=${invoice.id}).`,
+        revertedSelection: reverted,
+      });
+    } catch (e) {
+      reportError(`webhooks/stripe:billing-failed:${entry.id}`, e);
+    }
+  }
+
+  // Email the customer — fail-soft (logged, doesn't error the webhook).
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
+  try {
+    await sendCustomerEmail(
+      getServerEnv(),
+      prospect.email,
+      "payment-method-update-needed",
+      {
+        customerName: firstName(prospect.name),
+        failedActionDescription: "process your latest payment",
+        removedModulesSummary:
+          pending.length > 0
+            ? pending
+                .flatMap((e) =>
+                  e.toModules.filter((m) => !e.fromModules.includes(m)),
+                )
+                .join(", ") || "(none)"
+            : "(none)",
+        accountUrl: `${baseUrl}/account/${prospect.token}`,
+      },
+    );
+  } catch (e) {
+    console.warn(
+      `[webhooks/stripe] payment-method-update-needed email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+
+  console.warn(
+    `[webhooks/stripe] payment_failed for ${prospect.name} — ${pending.length} entry(s) flipped to billing-failed, customer emailed`,
+  );
 }
 
-// Keep the import alive for a future enhancement: walking
-// pending-stripe entries on payment_failed and flipping them to
-// billing-failed in Notion. Not done today because most failures
-// are card-expiry not subscription-state changes.
-const _resolveModuleChangeRef = resolveModuleChange;
-// Reference dummy for unused-import lint. Won't fire at runtime.
-function _kindCheck(prospect: ProspectRecord): void {
-  void prospect.email;
+async function handleDisputeCreated(dispute: Stripe.Dispute) {
+  const chargeId =
+    typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+
+  // Extract customer ID from the expanded charge object (if Stripe
+  // sent it expanded) to match against our prospect records.
+  let customerId: string | undefined;
+  if (typeof dispute.charge !== "string" && dispute.charge?.customer) {
+    customerId =
+      typeof dispute.charge.customer === "string"
+        ? dispute.charge.customer
+        : dispute.charge.customer.id;
+  }
+
+  let prospect: ProspectRecord | undefined;
+  if (customerId) {
+    const all = await listAllProspects();
+    prospect = all.find((p) => p.stripeCustomerId === customerId);
+  }
+
+  if (prospect) {
+    const line = `[${new Date().toISOString()}] ⚠️ DISPUTE opened (dispute=${dispute.id}, charge=${chargeId ?? "unknown"}, reason=${dispute.reason}, amount=£${(dispute.amount / 100).toFixed(2)}). Respond in Stripe Dashboard within 7 days.`;
+    await appendProspectNote(prospect.pageId, prospect.notes, line);
+  }
+
+  const err = await sendInternalNotification({
+    subject: `⚠️ STRIPE DISPUTE — ${prospect?.name ?? "unknown customer"} (£${(dispute.amount / 100).toFixed(2)})`,
+    body: [
+      `Dispute ID: ${dispute.id}`,
+      `Charge: ${chargeId ?? "unknown"}`,
+      `Customer: ${prospect?.name ?? "unknown"} (${prospect?.email ?? customerId ?? "no ID"})`,
+      `Amount: £${(dispute.amount / 100).toFixed(2)}`,
+      `Reason: ${dispute.reason}`,
+      `Status: ${dispute.status}`,
+      "",
+      "Action required: respond in the Stripe Dashboard within 7 days.",
+      `https://dashboard.stripe.com/disputes/${dispute.id}`,
+    ].join("\n"),
+  });
+  if (err) {
+    console.error(`[webhooks/stripe] dispute notification email failed: ${err}`);
+  }
+
+  console.warn(
+    `[webhooks/stripe] charge.dispute.created — ${dispute.id} for ${prospect?.name ?? "unknown"}, £${(dispute.amount / 100).toFixed(2)}`,
+  );
 }
-void _kindCheck;

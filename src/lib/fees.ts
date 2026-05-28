@@ -48,6 +48,17 @@ export const GBP_ADDON_MONTHLY_GBP = 3;
 // time becomes a real bottleneck. See ROADMAP watch-items.
 export const MODULE_MULTILOCATION_SETUP_GBP = 15;
 
+/** Per-module setup-fee map in pence. Single source of truth —
+ *  used by Checkout (stripe.ts), apply-pending.ts, and the
+ *  onboarding module-change route. */
+export const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
+  "Online Booking": MODULE_BOOKING_SETUP_GBP * 100,
+  "Enquiry Form": MODULE_ENQUIRY_SETUP_GBP * 100,
+  Newsletter: MODULE_NEWSLETTER_SETUP_GBP * 100,
+  Offers: MODULE_OFFERS_SETUP_GBP * 100,
+  "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
+};
+
 export const FOUNDING_MEMBER_SETUP_GBP = 99;
 export const FOUNDING_MEMBER_MONTHLY_GBP = 15;
 

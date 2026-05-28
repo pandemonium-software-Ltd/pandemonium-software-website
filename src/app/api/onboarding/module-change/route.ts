@@ -58,26 +58,8 @@ import {
   removeModuleFromSubscription,
 } from "@/lib/stripe";
 import { STRIPE_MODULE_PRICE_IDS } from "@/lib/stripe-products";
-import {
-  MODULE_BOOKING_SETUP_GBP,
-  MODULE_ENQUIRY_SETUP_GBP,
-  MODULE_NEWSLETTER_SETUP_GBP,
-  MODULE_OFFERS_SETUP_GBP,
-  GBP_ADDON_ONE_OFF_GBP,
-} from "@/lib/fees";
+import { MODULE_SETUP_PENCE } from "@/lib/fees";
 import { reportError } from "@/lib/sentry";
-
-// Per-module setup-fee map (pence). Duplicated against the same map
-// in apply-pending.ts — both flows charge the same setup fee, the
-// dedup is on the cleanup list but not blocking. Multi-location is
-// excluded (it's not selectable from the Hub Step 3 re-selector).
-const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
-  "Online Booking": MODULE_BOOKING_SETUP_GBP * 100,
-  "Enquiry Form": MODULE_ENQUIRY_SETUP_GBP * 100,
-  Newsletter: MODULE_NEWSLETTER_SETUP_GBP * 100,
-  Offers: MODULE_OFFERS_SETUP_GBP * 100,
-  "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
-};
 
 export const runtime = "nodejs";
 
