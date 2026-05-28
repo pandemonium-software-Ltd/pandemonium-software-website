@@ -22,6 +22,7 @@ import { runOpsTick } from "./tick";
 import { runAnalyticsTick } from "./analytics-tick";
 import { runMonthlyDigestTick } from "./monthly-digest-tick";
 import { runGbpReviewsTick } from "./gbp-reviews-tick";
+import { runGbpAuditTick } from "./gbp-audit-tick";
 import { runGdprScrubTick } from "./gdpr-scrub-tick";
 import { runStripeApplierTick } from "./stripe-applier-tick";
 import type { D1Database } from "../lib/d1-analytics";
@@ -90,7 +91,15 @@ const handler = {
         );
         return;
       }
-      ctx.waitUntil(runGbpReviewsTick({ db }));
+      ctx.waitUntil(
+        (async () => {
+          await runGbpReviewsTick({ db });
+          // Weekly audit runs on Mondays only (day-of-week gate
+          // inside runGbpAuditTick). Sequenced after reviews so the
+          // D1 snapshot is fresh when the audit email references it.
+          await runGbpAuditTick();
+        })(),
+      );
       return;
     }
     if (event.cron === DAILY_SWEEP_CRON) {

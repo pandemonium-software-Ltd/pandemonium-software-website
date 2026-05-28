@@ -300,3 +300,107 @@ export async function fetchPlaceDetails(
         : null,
   };
 }
+
+/** Extended snapshot used by the weekly GBP audit. Pulls extra
+ *  fields (website, phone, hours, categories, photos, description)
+ *  so Claude can compare against intake data + the live site. */
+export type PlaceAuditSnapshot = PlaceDetailsSnapshot & {
+  websiteUri: string | null;
+  nationalPhoneNumber: string | null;
+  primaryType: string | null;
+  types: string[];
+  editorialSummary: string | null;
+  regularOpeningHours: string | null;
+  photoCount: number;
+  googleMapsUri: string | null;
+};
+
+export async function fetchPlaceDetailsForAudit(
+  placeId: string,
+  apiKey: string,
+): Promise<PlaceAuditSnapshot> {
+  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": [
+        "displayName",
+        "formattedAddress",
+        "rating",
+        "userRatingCount",
+        "reviews",
+        "websiteUri",
+        "nationalPhoneNumber",
+        "primaryType",
+        "types",
+        "editorialSummary",
+        "regularOpeningHours",
+        "photos",
+        "googleMapsUri",
+      ].join(","),
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "(no body)");
+    throw new PlacesApiError(
+      res.status,
+      `Places audit(${placeId}) ${res.status}: ${body.slice(0, 200)}`,
+    );
+  }
+  type Raw = {
+    displayName?: { text?: string };
+    formattedAddress?: string;
+    rating?: number;
+    userRatingCount?: number;
+    reviews?: Array<{
+      rating?: number;
+      text?: { text?: string };
+      relativePublishTimeDescription?: string;
+      authorAttribution?: { displayName?: string; photoUri?: string };
+    }>;
+    websiteUri?: string;
+    nationalPhoneNumber?: string;
+    primaryType?: string;
+    types?: string[];
+    editorialSummary?: { text?: string };
+    regularOpeningHours?: { weekdayDescriptions?: string[] };
+    photos?: unknown[];
+    googleMapsUri?: string;
+  };
+  const json = (await res.json()) as Raw;
+  const topReviews: StoredReview[] = (json.reviews ?? [])
+    .slice(0, 5)
+    .map((r) => ({
+      authorName: r.authorAttribution?.displayName ?? "Google reviewer",
+      rating: typeof r.rating === "number" ? r.rating : 5,
+      text: r.text?.text ?? "",
+      relativeTimeDescription: r.relativePublishTimeDescription ?? "",
+      profilePhotoUrl: r.authorAttribution?.photoUri,
+    }))
+    .filter((r) => r.text.length > 0);
+  return {
+    rating: typeof json.rating === "number" ? json.rating : null,
+    totalReviews:
+      typeof json.userRatingCount === "number" ? json.userRatingCount : null,
+    topReviews,
+    displayName:
+      typeof json.displayName?.text === "string" ? json.displayName.text : null,
+    formattedAddress:
+      typeof json.formattedAddress === "string" ? json.formattedAddress : null,
+    websiteUri: json.websiteUri ?? null,
+    nationalPhoneNumber: json.nationalPhoneNumber ?? null,
+    primaryType: json.primaryType ?? null,
+    types: json.types ?? [],
+    editorialSummary:
+      typeof json.editorialSummary?.text === "string"
+        ? json.editorialSummary.text
+        : null,
+    regularOpeningHours:
+      json.regularOpeningHours?.weekdayDescriptions
+        ? json.regularOpeningHours.weekdayDescriptions.join("; ")
+        : null,
+    photoCount: json.photos?.length ?? 0,
+    googleMapsUri: json.googleMapsUri ?? null,
+  };
+}
