@@ -54,5 +54,6 @@ export const site = {
     { label: "Start your enquiry", href: "/enquiry" },
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
+    { label: "DPA", href: "/dpa" },
   ],
 } as const;

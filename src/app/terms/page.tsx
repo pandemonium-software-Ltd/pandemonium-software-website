@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const lastUpdated = "25 May 2026";
+const lastUpdated = "28 May 2026";
 
 export default function TermsPage() {
   return (
@@ -379,7 +379,9 @@ export default function TermsPage() {
             contact details, business details, content you upload,
             subscriber lists (where applicable), and payment records.
             See the <a href="/privacy">privacy notice</a> for the full
-            list and lawful bases.
+            list and lawful bases, and
+            the <a href="/dpa">Data Processing Agreement</a> for the
+            formal processor terms under GDPR Article 28.
           </p>
           <p>
             <strong>When you cancel:</strong>
@@ -431,13 +433,60 @@ export default function TermsPage() {
             customers your site brings in, your ranking on Google, and so
             on). Those depend on too many things outside my control.
           </p>
+
+          <h3>Liability cap</h3>
           <p>
-            My total liability to you for any claim is limited to the
-            fees you&apos;ve paid me in the 12 months before the claim. I
-            can&apos;t be liable for indirect losses (like lost profits or
-            missed opportunities). Nothing in these terms limits anything
-            that can&apos;t legally be limited — such as liability for
-            fraud or death caused by negligence.
+            My total aggregate liability to you for any and all claims
+            arising under or in connection with these terms — whether in
+            contract, tort (including negligence), breach of statutory
+            duty, or otherwise — is limited to the total fees you have
+            actually paid me in the <strong>12 months immediately
+            before the event giving rise to the claim</strong>.
+          </p>
+
+          <h3>Indirect and consequential loss</h3>
+          <p>
+            I am not liable for any indirect, special or consequential
+            loss or damage, including but not limited to: loss of
+            profits, loss of revenue, loss of business, loss of
+            anticipated savings, loss of goodwill, loss of data (except
+            as covered by my data-protection obligations), or any third
+            party claims against you — however caused, even if I was
+            advised of the possibility.
+          </p>
+
+          <h3>Third-party services</h3>
+          <p>
+            Your site relies on third-party services that I configure
+            but do not control — including Google (Maps, Business
+            Profile, Search), Stripe (payments), Cloudflare (hosting),
+            Resend (email), Cal.com (booking), and Anthropic (AI
+            operations). I am not liable for any loss, downtime, data
+            breach, or service interruption caused by those providers.
+            I will use reasonable skill and care in configuring them
+            and will assist you in resolving issues, but each provider
+            is governed by its own terms of service and I cannot
+            guarantee their availability or performance.
+          </p>
+
+          <h3>Force majeure</h3>
+          <p>
+            Neither party is liable for delays or failures caused by
+            events beyond reasonable control — including natural
+            disasters, pandemics, strikes, government actions, power
+            failures, internet outages, cyber attacks, or acts of war.
+            If a force majeure event continues for more than 30
+            consecutive days, either party may terminate this agreement
+            by giving written notice to the other.
+          </p>
+
+          <h3>What is never limited</h3>
+          <p>
+            Nothing in these terms excludes or limits liability for:
+            fraud or fraudulent misrepresentation; death or personal
+            injury caused by negligence; or any other liability that
+            cannot be excluded or limited under the laws of England
+            and Wales.
           </p>
 
           <h2>13. Governing law and dispute resolution</h2>

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const lastUpdated = "11 April 2026";
+const lastUpdated = "28 May 2026";
 
 export default function PrivacyPage() {
   return (
@@ -126,7 +126,10 @@ export default function PrivacyPage() {
           <h2>4. Who I share it with (sub-processors)</h2>
           <p>
             I use a small number of trusted third parties to run the
-            business. I only share what they need to do their job:
+            business. I only share what they need to do their job.
+            For the full formal list, retention terms and processor
+            obligations, see the{" "}
+            <a href="/dpa">Data Processing Agreement</a>.
           </p>
           <ul>
             <li>

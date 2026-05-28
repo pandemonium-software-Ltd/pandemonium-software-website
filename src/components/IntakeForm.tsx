@@ -210,6 +210,7 @@ function buildDefaultValues(
       acceptsTerms: (saved.legal?.acceptsTerms ?? false) as true,
       acceptsRefundCancellation:
         (saved.legal?.acceptsRefundCancellation ?? false) as true,
+      acceptsDpa: (saved.legal?.acceptsDpa ?? false) as true,
       marketingConsent: saved.legal?.marketingConsent ?? false,
     },
   };
@@ -1268,7 +1269,7 @@ function LegalSection({
   return (
     <div className="space-y-6">
       <p className="text-sm text-navy-700">
-        Three boxes we need {prospectName.split(/\s+/)[0] ?? "you"} to tick
+        Four boxes we need {prospectName.split(/\s+/)[0] ?? "you"} to tick
         before we can build your site. Plain English; no fine print.
       </p>
 
@@ -1323,6 +1324,23 @@ function LegalSection({
         }
         register={register("legal.acceptsRefundCancellation")}
         error={e?.acceptsRefundCancellation?.message}
+      />
+
+      <CheckboxBlock
+        id="lg-acceptsDpa"
+        label="I accept the Data Processing Agreement"
+        body={
+          <>
+            Covers how I handle your data as your processor under GDPR.
+            Read it in full at{" "}
+            <a href="/dpa" target="_blank" rel="noopener noreferrer" className="link">
+              {site.url}/dpa
+            </a>
+            .
+          </>
+        }
+        register={register("legal.acceptsDpa")}
+        error={e?.acceptsDpa?.message}
       />
 
       <CheckboxBlock

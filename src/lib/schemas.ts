@@ -314,6 +314,12 @@ const legalComplianceSchema = z.object({
         "You need to accept the refund and cancellation terms to proceed.",
     }),
   }),
+  acceptsDpa: z.literal(true, {
+    errorMap: () => ({
+      message:
+        "You need to accept the Data Processing Agreement to proceed.",
+    }),
+  }),
   marketingConsent: z.boolean().default(false),
 });
 
