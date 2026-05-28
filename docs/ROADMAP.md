@@ -38,6 +38,7 @@
 | **T&C liability clause strengthened** — section 12 expanded to 5 subsections: 12-month liability cap, indirect/consequential loss exclusion, third-party services disclaimer (Google, Stripe, Cloudflare, Resend, Cal.com, Anthropic), force majeure (30-day termination), preserved carve-outs (fraud, negligence causing death/injury). | 2026-05-28 |
 | **Data Processing Agreement (DPA)** — GDPR Article 28 compliant `/dpa` page. 14 sections covering: definitions, scope, data categories table, processor/controller obligations, sub-processor register (Cloudflare, Notion, Resend, Stripe, Google, Anthropic, Sentry with locations), 24h breach notification, retention aligned with existing 30d/7y automation, data subject rights, audits, liability, governing law. `acceptsDpa` checkbox added to intake form. Cross-linked from /terms, /privacy, and footer. | 2026-05-28 |
 | **Professional indemnity insurance** — purchased and active. | 2026-05-28 |
+| **R2 brand-asset deletion in GDPR scrub cron** — `deleteR2Prefix()` lists + batch-deletes all objects under `assets/<token>/` during the daily 03:00 UTC scrub. R2 binding (`ASSETS_BUCKET`) added to ops worker. Handles pagination, graceful skip when binding missing. 3 new tests. | 2026-05-28 |
 
 ---
 
@@ -103,7 +104,7 @@ asks for a second location.
 | ~~2b~~ | ~~GBP audit cron~~ — **SHIPPED 2026-05-29** (moved to ✅ Shipped) | — | — | — | Done |
 | ~~3~~ | ~~T&C limitation of liability clause update~~ — **SHIPPED 2026-05-28** (moved to Shipped) | — | — | — | Done |
 | ~~3a~~ | ~~Data Processing Agreement (DPA)~~ — **SHIPPED 2026-05-28** (moved to Shipped) | — | — | — | Done |
-| 4 | **R2 brand-asset deletion in GDPR scrub cron** — currently logs intent only; needs R2 binding wired into ops worker | Low | 2-3 h | £0 | Certain |
+| ~~4~~ | ~~R2 brand-asset deletion in GDPR scrub cron~~ — **SHIPPED 2026-05-28** (moved to Shipped) | — | — | — | Done |
 | ~~7~~ | ~~Professional indemnity insurance~~ — **DONE 2026-05-28** (moved to Shipped) | — | — | — | Done |
 
 ---
@@ -148,11 +149,11 @@ asks for a second location.
 
 ## 📋 Suggested next 3 moves
 
-1. **#4 (R2 GDPR cleanup)** — wire R2 brand-asset deletion into the scrub cron.
-2. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
-3. **#11 (Privacy/cookie refresh)** or **#8 (Lead inbox)** — polish or build.
+1. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
+2. **#11 (Privacy/cookie refresh)** or **#17 (SEO pass)** — polish.
+3. **#8 (Lead inbox)** or **#9 (Review request automation)** — build.
 
-After those, you're production-ready for first paying customer.
+After #1, you're production-ready for first paying customer.
 
 ---
 

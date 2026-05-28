@@ -48,8 +48,18 @@ type CfExecutionContext = {
  *  matches wrangler-ops.jsonc's d1_databases[].binding. Also
  *  includes the Sentry secrets so withSentry can pick them up
  *  from the same env arg. */
+type R2Bucket = {
+  list(options?: { prefix?: string; cursor?: string }): Promise<{
+    objects: { key: string }[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
+  delete(keys: string | string[]): Promise<unknown>;
+};
+
 type CfEnvBindings = {
   pandemonium_analytics?: D1Database;
+  ASSETS_BUCKET?: R2Bucket;
   SENTRY_DSN?: string;
   SENTRY_ENVIRONMENT?: string;
   SENTRY_RELEASE?: string;
@@ -116,7 +126,7 @@ const handler = {
       // entries that just settled).
       ctx.waitUntil(
         (async () => {
-          await runGdprScrubTick({ db });
+          await runGdprScrubTick({ db, r2: envBindings.ASSETS_BUCKET });
           await runStripeApplierTick({});
         })(),
       );

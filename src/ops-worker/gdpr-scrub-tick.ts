@@ -23,10 +23,6 @@
 // latch only stamps after ALL writes succeed, so a failure leaves
 // the prospect re-scheduled for tomorrow's tick.
 //
-// R2 brand assets: TODO — when R2 client is wired into the ops
-// worker, delete every object under
-// `prospects/<token>/` prefix. For now we log the intent.
-
 import { getServerEnv } from "../lib/env";
 import {
   listAllProspects,
@@ -37,8 +33,18 @@ import {
 import { isDueForScrub } from "../lib/gdpr-retention";
 import type { D1Database } from "../lib/d1-analytics";
 
+type R2Bucket = {
+  list(options?: { prefix?: string; cursor?: string }): Promise<{
+    objects: { key: string }[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
+  delete(keys: string | string[]): Promise<unknown>;
+};
+
 export async function runGdprScrubTick(args: {
   db: D1Database;
+  r2?: R2Bucket;
 }): Promise<void> {
   const tickId = new Date().toISOString();
   console.log(`[gdpr-scrub:${tickId}] starting`);
@@ -94,12 +100,14 @@ export async function runGdprScrubTick(args: {
       // ---- Notion personal-data scrub ----
       await scrubPersonalDataFields(prospect.pageId);
 
+      // ---- R2 brand-asset deletion ----
+      const r2Deleted = await deleteR2Prefix(args.r2, `assets/${prospect.token}/`, tickId);
+
       // ---- Latch the scrub timestamp (ONLY after writes succeed) ----
       await markScrubbed(prospect.pageId);
 
-      // ---- R2 deletes (TODO when R2 binding is added) ----
       console.log(
-        `[gdpr-scrub:${tickId}] ${prospect.token} (${prospect.name}) — scrubbed Notion + D1. R2 brand-asset deletion still manual until R2 binding is wired into the ops worker.`,
+        `[gdpr-scrub:${tickId}] ${prospect.token} (${prospect.name}) — scrubbed Notion + D1 + R2 (${r2Deleted} objects deleted).`,
       );
       ok++;
     } catch (e) {
@@ -113,4 +121,32 @@ export async function runGdprScrubTick(args: {
   console.log(
     `[gdpr-scrub:${tickId}] complete — scrubbed=${ok}, failed=${failed}`,
   );
+}
+
+async function deleteR2Prefix(
+  r2: R2Bucket | undefined,
+  prefix: string,
+  tickId: string,
+): Promise<number> {
+  if (!r2) {
+    console.warn(`[gdpr-scrub:${tickId}] ASSETS_BUCKET R2 binding not available — skipping R2 cleanup for ${prefix}`);
+    return 0;
+  }
+
+  let deleted = 0;
+  let cursor: string | undefined;
+
+  do {
+    const result = await r2.list({ prefix, cursor });
+    const keys = result.objects.map((o) => o.key);
+
+    if (keys.length > 0) {
+      await r2.delete(keys);
+      deleted += keys.length;
+    }
+
+    cursor = result.truncated ? result.cursor : undefined;
+  } while (cursor);
+
+  return deleted;
 }

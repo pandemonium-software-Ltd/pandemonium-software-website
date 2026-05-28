@@ -94,5 +94,13 @@
       "database_name": "pandemonium-analytics",
       "database_id": "c996208f-8f7f-4040-92b4-7a65e5e364ae"
     }
+  ],
+  // R2 binding — same bucket as the main site Worker. Used by the
+  // GDPR scrub tick to delete brand assets under assets/<token>/.
+  "r2_buckets": [
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "moduforge-customer-assets"
+    }
   ]
 }

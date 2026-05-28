@@ -66,10 +66,15 @@ const db = {
   batch: vi.fn(),
 } as unknown as D1Database;
 
+const r2ListMock = vi.fn().mockResolvedValue({ objects: [], truncated: false });
+const r2DeleteMock = vi.fn().mockResolvedValue(undefined);
+const r2 = { list: r2ListMock, delete: r2DeleteMock };
+
 beforeEach(() => {
   vi.clearAllMocks();
   prepareMock.mockReturnValue({ bind: bindMock });
   bindMock.mockReturnValue({ run: runMock });
+  r2ListMock.mockResolvedValue({ objects: [], truncated: false });
 });
 
 describe("runGdprScrubTick", () => {
@@ -98,7 +103,7 @@ describe("runGdprScrubTick", () => {
       }),
     ]);
 
-    await runGdprScrubTick({ db });
+    await runGdprScrubTick({ db, r2 });
 
     // Only alex should have been scrubbed (3 D1 deletes + 1 Notion scrub + 1 latch)
     expect(scrubPersonalDataFields).toHaveBeenCalledTimes(1);
@@ -126,7 +131,7 @@ describe("runGdprScrubTick", () => {
       .mockRejectedValueOnce(new Error("notion 502"))
       .mockResolvedValueOnce(undefined);
 
-    await runGdprScrubTick({ db });
+    await runGdprScrubTick({ db, r2 });
 
     // markScrubbed only fires on success — alex skipped, sam done.
     expect(markScrubbed).toHaveBeenCalledTimes(1);
@@ -143,9 +148,77 @@ describe("runGdprScrubTick", () => {
     ]);
     runMock.mockRejectedValueOnce(new Error("d1 timeout"));
 
-    await runGdprScrubTick({ db });
+    await runGdprScrubTick({ db, r2 });
 
     expect(scrubPersonalDataFields).not.toHaveBeenCalled();
     expect(markScrubbed).not.toHaveBeenCalled();
+  });
+
+  test("deletes R2 brand assets under assets/<token>/ prefix", async () => {
+    vi.mocked(listAllProspects).mockResolvedValue([
+      prospect({
+        token: "tok-r2",
+        status: "Cancelled",
+        dataRetentionUntil: yesterday,
+      }),
+    ]);
+    r2ListMock.mockResolvedValueOnce({
+      objects: [
+        { key: "assets/tok-r2/logo/abc.png" },
+        { key: "assets/tok-r2/photos/def.jpg" },
+      ],
+      truncated: false,
+    });
+
+    await runGdprScrubTick({ db, r2 });
+
+    expect(r2ListMock).toHaveBeenCalledWith({ prefix: "assets/tok-r2/", cursor: undefined });
+    expect(r2DeleteMock).toHaveBeenCalledWith([
+      "assets/tok-r2/logo/abc.png",
+      "assets/tok-r2/photos/def.jpg",
+    ]);
+    expect(markScrubbed).toHaveBeenCalledTimes(1);
+  });
+
+  test("handles paginated R2 list (truncated results)", async () => {
+    vi.mocked(listAllProspects).mockResolvedValue([
+      prospect({
+        token: "tok-paged",
+        status: "Cancelled",
+        dataRetentionUntil: yesterday,
+      }),
+    ]);
+    r2ListMock
+      .mockResolvedValueOnce({
+        objects: [{ key: "assets/tok-paged/logo/a.png" }],
+        truncated: true,
+        cursor: "page2",
+      })
+      .mockResolvedValueOnce({
+        objects: [{ key: "assets/tok-paged/photos/b.jpg" }],
+        truncated: false,
+      });
+
+    await runGdprScrubTick({ db, r2 });
+
+    expect(r2ListMock).toHaveBeenCalledTimes(2);
+    expect(r2ListMock).toHaveBeenCalledWith({ prefix: "assets/tok-paged/", cursor: "page2" });
+    expect(r2DeleteMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("still scrubs successfully when R2 binding is missing", async () => {
+    vi.mocked(listAllProspects).mockResolvedValue([
+      prospect({
+        token: "tok-nor2",
+        status: "Cancelled",
+        dataRetentionUntil: yesterday,
+      }),
+    ]);
+
+    await runGdprScrubTick({ db });
+
+    expect(scrubPersonalDataFields).toHaveBeenCalledTimes(1);
+    expect(markScrubbed).toHaveBeenCalledTimes(1);
+    expect(r2DeleteMock).not.toHaveBeenCalled();
   });
 });
