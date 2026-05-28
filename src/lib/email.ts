@@ -48,9 +48,16 @@ export type NotificationKind =
   | "phase-2-qualification"
   | "phase-3-intake-complete";
 
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer | Uint8Array;
+  contentType?: string;
+};
+
 export type NotificationPayload = {
   subject: string;
-  body: string; // plain text, will become email body
+  body: string;
+  attachments?: EmailAttachment[];
 };
 
 /**
@@ -72,6 +79,15 @@ export async function sendInternalNotification(
       replyTo: OPS_EMAIL,
       subject: payload.subject,
       text: payload.body,
+      ...(payload.attachments?.length
+        ? {
+            attachments: payload.attachments.map((a) => ({
+              filename: a.filename,
+              content: Buffer.from(a.content),
+              contentType: a.contentType,
+            })),
+          }
+        : {}),
     });
     if (error) {
       console.error("[email] Resend error:", error);

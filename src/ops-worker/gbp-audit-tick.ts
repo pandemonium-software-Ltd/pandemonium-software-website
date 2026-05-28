@@ -23,8 +23,13 @@ import {
   type PlaceAuditSnapshot,
 } from "../lib/google-places";
 import type { ProspectRecord } from "../lib/notion-prospects";
-import { sendInternalNotification } from "../lib/email";
+import { sendInternalNotification, type EmailAttachment } from "../lib/email";
 import { callHaiku } from "../lib/haiku/client";
+import {
+  generateAuditPdf,
+  parseAuditMarkdown,
+  type AuditPdfInput,
+} from "../lib/gbp-audit-pdf";
 
 export async function runGbpAuditTick(): Promise<void> {
   const now = new Date();
@@ -66,10 +71,13 @@ export async function runGbpAuditTick(): Promise<void> {
   console.log(`[gbp-audit:${tickId}] auditing ${targets.length} customer(s)`);
 
   const reports: string[] = [];
+  const attachments: EmailAttachment[] = [];
   let ok = 0;
   let failed = 0;
+  const dateStr = now.toISOString().slice(0, 10);
 
   for (const { prospect, placeId } of targets) {
+    const biz = prospect.business ?? prospect.name;
     try {
       const snapshot = await fetchPlaceDetailsForAudit(
         placeId,
@@ -77,43 +85,76 @@ export async function runGbpAuditTick(): Promise<void> {
       );
       const intake = buildIntakeContext(prospect);
       const report = await generateAuditReport(prospect, snapshot, intake);
+
       if (report) {
         reports.push(report);
+
+        // Generate PDF
+        try {
+          const parsed = parseAuditMarkdown(report);
+          const pdfInput: AuditPdfInput = {
+            businessName: biz,
+            auditDate: dateStr,
+            score: parsed.score,
+            mapsUrl: snapshot.googleMapsUri,
+            snapshot,
+            sections: parsed.sections,
+            reviewsSummary: parsed.reviewsSummary,
+            consistencyNotes: parsed.consistencyNotes,
+          };
+          const pdfBytes = await generateAuditPdf(pdfInput);
+          const slug = biz.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
+          attachments.push({
+            filename: `gbp-audit-${slug}-${dateStr}.pdf`,
+            content: pdfBytes,
+            contentType: "application/pdf",
+          });
+        } catch (pdfErr) {
+          console.warn(
+            `[gbp-audit:${tickId}] PDF generation failed for ${biz}: ${pdfErr instanceof Error ? pdfErr.message : String(pdfErr)}`,
+          );
+        }
         ok++;
       } else {
         reports.push(
-          `## ${prospect.business ?? prospect.name}\n\n⚠️ Claude returned no audit — raw snapshot attached.\n\n${formatSnapshotFallback(snapshot)}`,
+          `## ${biz}\n\n⚠️ Claude returned no audit — raw snapshot below.\n\n${formatSnapshotFallback(snapshot)}`,
         );
         ok++;
       }
     } catch (e) {
       const msg = e instanceof PlacesApiError ? e.message : String(e);
       console.error(`[gbp-audit:${tickId}] ${prospect.name} — ${msg}`);
-      reports.push(
-        `## ${prospect.business ?? prospect.name}\n\n❌ Audit failed: ${msg}`,
-      );
+      reports.push(`## ${biz}\n\n❌ Audit failed: ${msg}`);
       failed++;
     }
   }
 
   const emailBody = [
-    `Weekly GBP Audit — ${now.toISOString().slice(0, 10)}`,
+    `Weekly GBP Audit — ${dateStr}`,
     `${targets.length} customer(s) audited, ${ok} ok, ${failed} failed.`,
+    attachments.length > 0
+      ? `${attachments.length} PDF report(s) attached.`
+      : "",
     "",
     "━".repeat(60),
     "",
     ...reports,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const err = await sendInternalNotification({
-    subject: `📋 Weekly GBP Audit — ${targets.length} customer(s) — ${now.toISOString().slice(0, 10)}`,
+    subject: `📋 Weekly GBP Audit — ${targets.length} customer(s) — ${dateStr}`,
     body: emailBody,
+    attachments: attachments.length > 0 ? attachments : undefined,
   });
   if (err) {
     console.error(`[gbp-audit:${tickId}] email failed: ${err}`);
   }
 
-  console.log(`[gbp-audit:${tickId}] complete — ok=${ok}, failed=${failed}`);
+  console.log(
+    `[gbp-audit:${tickId}] complete — ok=${ok}, failed=${failed}, pdfs=${attachments.length}`,
+  );
 }
 
 type IntakeContext = {
