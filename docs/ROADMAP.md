@@ -5,7 +5,7 @@
 > back here. Update this file (not the others) when a priority lands
 > or a new one surfaces.
 
-**Last updated:** 2026-05-29
+**Last updated:** 2026-05-28
 
 ---
 
@@ -35,6 +35,9 @@
 | **GBP weekly audit cron** — Claude-powered per-customer listing audit (description, categories, photos, hours, GBP↔website consistency, review health). Extended Places API fetch, structured report emailed to Ben every Monday. 9 tests. | 2026-05-29 |
 | **GBP audit PDF reports** — branded A4 PDF per customer with traffic-light scoring (red/amber/green sections), score badge, listing overview table, top reviews, consistency check. Attached to weekly audit email via Resend. Only fires for confirmed (latched) listings. | 2026-05-29 |
 | **GBP URL validation + clearer Hub instructions** — client-side isGbpUrl() blocks non-Google URLs, inline red error, "Done" gate. Hub instructions rewritten: "search on Google Maps → Share → Copy link". | 2026-05-29 |
+| **T&C liability clause strengthened** — section 12 expanded to 5 subsections: 12-month liability cap, indirect/consequential loss exclusion, third-party services disclaimer (Google, Stripe, Cloudflare, Resend, Cal.com, Anthropic), force majeure (30-day termination), preserved carve-outs (fraud, negligence causing death/injury). | 2026-05-28 |
+| **Data Processing Agreement (DPA)** — GDPR Article 28 compliant `/dpa` page. 14 sections covering: definitions, scope, data categories table, processor/controller obligations, sub-processor register (Cloudflare, Notion, Resend, Stripe, Google, Anthropic, Sentry with locations), 24h breach notification, retention aligned with existing 30d/7y automation, data subject rights, audits, liability, governing law. `acceptsDpa` checkbox added to intake form. Cross-linked from /terms, /privacy, and footer. | 2026-05-28 |
+| **Professional indemnity insurance** — purchased and active. | 2026-05-28 |
 
 ---
 
@@ -98,10 +101,10 @@ asks for a second location.
 | 1 | **Stripe LIVE-mode setup** — Stripe sandbox is fully wired (Checkout, webhook, auto-apply cron, line-item itemisation). Live setup = repeat S1 product/price creation in LIVE Stripe account, swap secrets to `sk_live_*`, register live webhook, switch `stripe-products.ts` IDs (env-flag). | Low-Medium | 1-2 h | 1.4% + 20p per txn | Certain — NEXT |
 | ~~2a~~ | ~~Fix 2 step3-tools tests~~ — **SHIPPED 2026-05-29** (moved to ✅ Shipped) | — | — | — | Done |
 | ~~2b~~ | ~~GBP audit cron~~ — **SHIPPED 2026-05-29** (moved to ✅ Shipped) | — | — | — | Done |
-| 3 | **T&C limitation of liability clause update** — add/strengthen limitation of liability clause in /terms covering: indirect/consequential loss exclusion, cap on total liability (capped at fees paid in prior 12 months), no liability for third-party services (Google, Stripe, Resend), force majeure. Solicitor review recommended before going live. | Low-Medium | 2-3 h | £0 (solicitor review: £200-400 one-off) | Certain |
-| 3a | **Data Processing Agreement (DPA)** — GDPR Article 28 compliant DPA covering ModuForge as data processor for customer personal data. Two touchpoints: (1) marketing site `/dpa` page or downloadable PDF linked from /terms and /privacy, (2) checkbox + link at intake signup confirming the customer accepts the DPA. Must cover: data categories processed, processing purposes, sub-processors (Notion, Resend, Stripe, Cloudflare, Google), data retention periods (aligned with existing GDPR automation), data subject rights, breach notification obligations. | Medium | 3-4 h | £0 (solicitor review: £300-500 one-off) | Certain |
+| ~~3~~ | ~~T&C limitation of liability clause update~~ — **SHIPPED 2026-05-28** (moved to Shipped) | — | — | — | Done |
+| ~~3a~~ | ~~Data Processing Agreement (DPA)~~ — **SHIPPED 2026-05-28** (moved to Shipped) | — | — | — | Done |
 | 4 | **R2 brand-asset deletion in GDPR scrub cron** — currently logs intent only; needs R2 binding wired into ops worker | Low | 2-3 h | £0 | Certain |
-| 7 | **Professional indemnity insurance** — protects you if a customer's site causes them loss | Low | 1 h | £15-25/mo (£150-300/yr) | Certain |
+| ~~7~~ | ~~Professional indemnity insurance~~ — **DONE 2026-05-28** (moved to Shipped) | — | — | — | Done |
 
 ---
 
@@ -145,9 +148,9 @@ asks for a second location.
 
 ## 📋 Suggested next 3 moves
 
-1. **#3 + #3a (T&C + DPA)** — close the legal gaps before real customers land.
-2. **#4 (R2 GDPR cleanup)** — wire R2 brand-asset deletion into the scrub cron.
-3. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
+1. **#4 (R2 GDPR cleanup)** — wire R2 brand-asset deletion into the scrub cron.
+2. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
+3. **#11 (Privacy/cookie refresh)** or **#8 (Lead inbox)** — polish or build.
 
 After those, you're production-ready for first paying customer.
 
