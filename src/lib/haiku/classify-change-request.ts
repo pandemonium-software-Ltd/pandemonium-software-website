@@ -470,7 +470,7 @@ async function patchPass(
     `5. newValue must be the FULL replacement, not a diff.\n` +
     `6. Phone number changes need TWO patches: business.phoneDisplay ` +
     `AND business.phoneTel.\n\n` +
-    `SITE STATE:\n${JSON.stringify(snapshot, null, 2)}\n\n` +
+    `SITE STATE:\n${JSON.stringify(slimSnapshot(snapshot), null, 2)}\n\n` +
     `REQUEST:\n${message}\n\n` +
     `CLASSIFICATION CONTEXT:\n${reasoning}`;
 
@@ -478,16 +478,21 @@ async function patchPass(
     system,
     prompt,
     maxTokens: 800,
-    temperature: 0.1,
+    temperature: 0.3,
   });
-  if (!out) return null;
+  if (!out) {
+    console.warn(`[classify-pass2] callHaiku returned null`);
+    return null;
+  }
+
+  console.log(`[classify-pass2] raw response (${out.length} chars): ${out.slice(0, 500)}`);
 
   const jsonText = stripCodeFences(out);
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    console.warn(`[classify-pass2] JSON parse failed: ${out.slice(0, 200)}`);
+    console.warn(`[classify-pass2] JSON parse failed: ${out.slice(0, 300)}`);
     return null;
   }
 
@@ -700,4 +705,19 @@ function stripCodeFences(out: string): string {
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```\s*$/i, "")
     .trim();
+}
+
+/** Strip non-patchable fields from the snapshot so Pass 2 sees only
+ *  what it needs: business, copy, services, faq, testimonials, trust,
+ *  branding. Removes assets, locations, newsletter, etc. */
+function slimSnapshot(s: SiteSnapshot): Record<string, unknown> {
+  return {
+    business: s.business,
+    copy: s.copy,
+    services: s.services,
+    faq: s.faq,
+    testimonials: s.testimonials,
+    trust: s.trust,
+    branding: s.branding,
+  };
 }
