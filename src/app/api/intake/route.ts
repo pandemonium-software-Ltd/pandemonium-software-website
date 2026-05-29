@@ -252,25 +252,28 @@ export async function POST(request: Request) {
   };
   const moduleList = buildModuleListMarkdown(moduleSelection);
 
-  // Customer-facing receipt with the calculated fees + module-by-
-  // module breakdown of what they're getting.
-  try {
-    await sendCustomerEmail(
-      getServerEnv(),
-      prospect.email,
-      "phase3-thanks-fees-and-payment-coming",
-      {
-        customerName: firstName(prospect.name),
-        setupFee: fees.setup,
-        monthlyFee: fees.monthly,
-        moduleList,
-        foundingMember: prospect.foundingMember,
-      },
-    );
-  } catch (e) {
-    console.warn(
-      `[api/intake] Customer fees email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
-    );
+  // Customer-facing receipt — only send on FIRST final submission.
+  // Re-submits (status already "Phase 3 Complete") skip the email
+  // to prevent duplicates.
+  if (!prospect.phase3SubmittedAt) {
+    try {
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "phase3-thanks-fees-and-payment-coming",
+        {
+          customerName: firstName(prospect.name),
+          setupFee: fees.setup,
+          monthlyFee: fees.monthly,
+          moduleList,
+          foundingMember: prospect.foundingMember,
+        },
+      );
+    } catch (e) {
+      console.warn(
+        `[api/intake] Customer fees email failed for ${prospect.email}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   // ---------- Hand-off to payment ----------

@@ -68,8 +68,13 @@ export const step3Tools: Step = {
     const tools = readToolsSlice(p.onboardingData);
     if (!tools.gbpUrl) return false;
     if (!tools.gbpManagerInvited) return false;
-    // Need to resolve → pending (no pending yet)
-    if (!tools.gbpPlaceId && !tools.gbpPlaceIdPending) return true;
+    // Need to resolve → pending (no pending yet). Stop retrying if
+    // resolution already failed — operator must fix the GBP URL or
+    // business name and clear the failure stamp to re-trigger.
+    if (!tools.gbpPlaceId && !tools.gbpPlaceIdPending) {
+      if (tools.gbpResolutionFailedAt) return false;
+      return true;
+    }
     // Customer confirmed but not yet promoted to latched
     if (tools.gbpPlaceIdPending && tools.gbpListingConfirmed && !tools.gbpPlaceId) return true;
     // Latched but email not sent yet

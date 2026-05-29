@@ -45,6 +45,8 @@ type Props = {
   done: boolean;
   readOnly: boolean;
   token: string;
+  allPriorStepsDone: boolean;
+  onReviewDataChange: (patch: Record<string, unknown>) => void;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
 };
@@ -54,6 +56,8 @@ export default function Step5Review({
   done,
   readOnly,
   token,
+  allPriorStepsDone,
+  onReviewDataChange,
   savePartial,
   markDone,
 }: Props) {
@@ -156,7 +160,9 @@ export default function Step5Review({
         setEditError(json.error ?? "Couldn't submit. Try again.");
         return;
       }
-      setEdits((prev) => [...prev, json.edit!]);
+      const updatedEdits = [...edits, json.edit!];
+      setEdits(updatedEdits);
+      onReviewDataChange({ edits: updatedEdits });
       setEditDraft("");
       setEditSuccess(
         `Got it. ${json.remaining ?? remaining - 1} edit${(json.remaining ?? remaining - 1) === 1 ? "" : "s"} remaining.`,
@@ -250,27 +256,43 @@ export default function Step5Review({
 
         {phase === 1 && (
           <div className="mt-4 space-y-4">
-            <p className="text-sm text-navy-700">
-              Click the button below to ask me to build your site
-              preview. I&apos;ll take everything you gave me in
-              Steps 1-4 and assemble it into a working site you can
-              view + critique. Typically ready within 5 working days.
-            </p>
-            <button
-              type="button"
-              onClick={handleRequestPreview}
-              disabled={disabled || requestingPreview}
-              className="btn-primary"
-            >
-              {requestingPreview
-                ? "Requesting…"
-                : "Request site preview"}
-            </button>
-            <p className="text-xs text-navy-500">
-              Once requested, the Edits section unlocks for revisions
-              and the final &ldquo;Submit and commit&rdquo; button
-              appears below.
-            </p>
+            {allPriorStepsDone ? (
+              <>
+                <p className="text-sm text-navy-700">
+                  Click the button below to ask me to build your site
+                  preview. I&apos;ll take everything you gave me in
+                  Steps 1-4 and assemble it into a working site you can
+                  view + critique. Typically ready within 5 working days.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRequestPreview}
+                  disabled={disabled || requestingPreview}
+                  className="btn-primary"
+                >
+                  {requestingPreview
+                    ? "Requesting…"
+                    : "Request site preview"}
+                </button>
+                <p className="text-xs text-navy-500">
+                  Once requested, the Edits section unlocks for revisions
+                  and the final &ldquo;Submit and commit&rdquo; button
+                  appears below.
+                </p>
+              </>
+            ) : (
+              <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-5 text-sm text-amber-900">
+                <p className="font-semibold">
+                  Complete Steps 1–4 first
+                </p>
+                <p className="mt-2">
+                  Before I can build your preview, all earlier steps need
+                  to be marked done — Cloudflare account, domain,
+                  tools setup, site content, and photos. Go back and
+                  finish any steps you haven&apos;t completed yet.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

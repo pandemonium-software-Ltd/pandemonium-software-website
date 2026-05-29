@@ -9,11 +9,21 @@ import SentryAlertsPanel from "@/components/admin/SentryAlertsPanel";
 import BuildMonitorPanel from "@/components/admin/BuildMonitorPanel";
 import CustomerInsightPanel from "@/components/admin/CustomerInsightPanel";
 import RunMonitorPanel from "@/components/admin/RunMonitorPanel";
+import OpsActivityPanel from "@/components/admin/OpsActivityPanel";
 import {
   listSentryAlerts,
   countOpenSentryAlerts,
   type SentryAlertRow,
 } from "@/lib/d1-sentry";
+import {
+  listExceptions,
+  listAuditEntries,
+  countUnresolvedExceptions,
+  countRecentActions,
+  type OpsException,
+  type OpsAuditEntry,
+  type PendingAdminAction,
+} from "@/lib/notion-ops";
 import type { D1Database } from "@/lib/d1-analytics";
 import { site } from "@/lib/site";
 import {
@@ -101,6 +111,57 @@ export default async function AdminPage() {
     // D1 unavailable — panels render with empty/default data.
   }
 
+  // Ops activity — exceptions + audit log from Notion.
+  let opsExceptions: OpsException[] = [];
+  let opsActions: OpsAuditEntry[] = [];
+  let unresolvedIncidents = 0;
+  let actionCounts = { total: 0, ok: 0, skip: 0, fail: 0 };
+  try {
+    [opsExceptions, opsActions, unresolvedIncidents, actionCounts] =
+      await Promise.all([
+        listExceptions({ unresolvedOnly: true, limit: 20 }),
+        listAuditEntries({ limit: 30 }),
+        countUnresolvedExceptions(),
+        countRecentActions(24),
+      ]);
+  } catch {
+    // Notion unavailable — panels render with empty data.
+  }
+
+  // Pending admin actions — computed from already-fetched prospects.
+  const pendingActions: PendingAdminAction[] = [];
+  for (const p of prospects) {
+    for (const cr of p.changeRequests) {
+      if (cr.status === "pending" || cr.status === "in-progress") {
+        pendingActions.push({
+          type: "change-request",
+          prospectName: p.name,
+          prospectToken: p.token,
+          id: cr.id,
+          message: cr.message,
+          submittedAt: cr.submittedAt,
+        });
+      }
+    }
+    const reviewEdits = (
+      (p.onboardingData as { review?: { edits?: Array<{ id: string; message: string; submittedAt: string; status: string }> } } | null)
+        ?.review?.edits ?? []
+    );
+    for (const re of reviewEdits) {
+      if (re.status === "submitted") {
+        pendingActions.push({
+          type: "review-edit",
+          prospectName: p.name,
+          prospectToken: p.token,
+          id: re.id,
+          message: re.message,
+          submittedAt: re.submittedAt,
+        });
+      }
+    }
+  }
+  pendingActions.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+
   // Health checks for connected services.
   type DbCheck = { id: string; title: string } | { error: string };
   type AllDbs = {
@@ -161,7 +222,7 @@ export default async function AdminPage() {
         </header>
 
         {/* KPI strip */}
-        <div className="mb-8 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mb-8 grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
           <KpiCard label="Prospects" value={kpis.total} />
           <KpiCard label="Enquiries" value={kpis.enquiries} />
           <KpiCard
@@ -179,6 +240,17 @@ export default async function AdminPage() {
             label="Open alerts"
             value={sentryOpenCount}
             alert={sentryOpenCount > 0 ? `${sentryOpenCount} open` : undefined}
+          />
+          <KpiCard
+            label="Incidents"
+            value={unresolvedIncidents}
+            alert={unresolvedIncidents > 0 ? `${unresolvedIncidents} open` : undefined}
+          />
+          <KpiCard
+            label="Pending"
+            value={pendingActions.length}
+            alert={pendingActions.length > 0 ? `${pendingActions.length} awaiting` : undefined}
+            sub={`${actionCounts.total} auto (24h)`}
           />
         </div>
 
@@ -226,6 +298,13 @@ export default async function AdminPage() {
 
         {/* Dashboard panels */}
         <div className="mb-8 space-y-4">
+          <OpsActivityPanel
+            exceptions={opsExceptions}
+            recentActions={opsActions}
+            unresolvedCount={unresolvedIncidents}
+            actionCounts={actionCounts}
+            pendingActions={pendingActions}
+          />
           <BuildMonitorPanel metrics={buildMetrics} />
           <CustomerInsightPanel metrics={insightMetrics} />
           <RunMonitorPanel metrics={runMetrics} />

@@ -658,9 +658,38 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ success: true, request: updateResult.updated });
 }
 
-export async function GET() {
-  return NextResponse.json(
-    { error: "Method not allowed. Use POST or DELETE." },
-    { status: 405, headers: { Allow: "POST, DELETE" } },
-  );
+const getSchema = z.object({
+  token: z.string().regex(TOKEN_RE, "Missing or invalid token."),
+});
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const parsed = getSchema.safeParse({ token: url.searchParams.get("token") });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Invalid request." },
+      { status: 400 },
+    );
+  }
+  const { token } = parsed.data;
+  const sessionAuth = await requireCustomerSession(request, token);
+  if (!sessionAuth.ok) return sessionAuth.response;
+
+  let prospect;
+  try {
+    prospect = await getProspectByToken(token);
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn't look up your account." },
+      { status: 500 },
+    );
+  }
+  if (!prospect) {
+    return NextResponse.json({ error: "Account not found." }, { status: 404 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    requests: prospect.changeRequests,
+  });
 }

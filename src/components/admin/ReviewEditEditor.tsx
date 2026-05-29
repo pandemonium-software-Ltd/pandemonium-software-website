@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import DictatePatchPanel from "@/components/admin/DictatePatchPanel";
+import CoworkRetryButton from "@/components/admin/CoworkRetryButton";
 
 type CoworkPatchView = {
   target: string;
@@ -376,7 +377,19 @@ export default function ReviewEditEditor({ token, edit }: Props) {
             );
           })()}
           {escalatedNoPatch && (
-            <DictatePatchPanel token={token} editId={current.id} />
+            <>
+              <div className="flex items-center gap-2">
+                <CoworkRetryButton
+                  token={token}
+                  itemId={current.id}
+                  itemKind="re"
+                />
+                <span className="text-[10px] text-navy-500">
+                  or dictate the exact patch below
+                </span>
+              </div>
+              <DictatePatchPanel token={token} editId={current.id} />
+            </>
           )}
           <textarea
             value={reply}

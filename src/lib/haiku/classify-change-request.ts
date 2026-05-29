@@ -141,6 +141,7 @@ export type ClassificationResult = {
    *  patches path is more specific. Currently triggered by asset/
    *  photo/logo references where the customer has just re-uploaded. */
   rebuildOnly?: boolean;
+  skippedPatches?: Array<{ target: string; reason: string }>;
 };
 
 /**
@@ -632,6 +633,17 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
   // Backward-compat: accept legacy single `patch` field too. Haiku
   // can drift back to that shape when the prompt is long; normalise
   // either form into an array.
+  // Parse rebuildOnly early so early-return paths inside the patch
+  // validation loop can preserve it.
+  let rebuildOnly = false;
+  if (obj.rebuildOnly !== undefined && obj.rebuildOnly !== null) {
+    if (typeof obj.rebuildOnly !== "boolean") return null;
+    rebuildOnly = obj.rebuildOnly;
+  }
+  if (rebuildOnly && classification !== "in_scope") {
+    rebuildOnly = false;
+  }
+
   const rawPatches: unknown =
     obj.patches !== undefined && obj.patches !== null
       ? obj.patches
@@ -640,6 +652,7 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
         : undefined;
 
   let patches: ClassificationResult["patches"] | undefined;
+  const skippedPatches: Array<{ target: string; reason: string }> = [];
   if (rawPatches !== undefined) {
     if (!Array.isArray(rawPatches)) return null;
     if (rawPatches.length === 0) {
@@ -665,21 +678,18 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
             classification: "ambiguous",
             confidence: Math.min(confidence, 0.5),
             reasoning: `${reasoning} (Note: Cowork rejected the model's proposed patches because one targeted an unsupported field: ${target}.)`,
+            rebuildOnly: rebuildOnly ? true : undefined,
           };
         }
         if (typeof newValue !== "string" || newValue.length === 0) {
-          // Patches with non-string newValue not yet supported. Drop
-          // the entire patch set — partial apply isn't safe — and
-          // escalate.
           console.warn(
-            `[classify-change-request] Haiku patch had empty/non-string newValue for target '${target}' — discarding patch set`,
+            `[classify-change-request] Haiku patch had empty/non-string newValue for target '${target}' — skipping patch`,
           );
-          return {
-            classification:
-              classification as ClassificationResult["classification"],
-            confidence,
-            reasoning,
-          };
+          skippedPatches.push({
+            target: target as string,
+            reason: `Empty or non-string newValue for '${target}'`,
+          });
+          continue;
         }
         // Locator enforcement — service / faq / testimonial targets
         // need their corresponding locator field. Missing locator =
@@ -709,25 +719,34 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
           target.startsWith("content.testimonials.") &&
           target !== "content.testimonials.add";
         if (needsServiceLocator && !serviceName) {
-          return {
-            classification: "ambiguous",
-            confidence: Math.min(confidence, 0.5),
-            reasoning: `${reasoning} (Note: Cowork rejected a services patch because no service name was specified.)`,
-          };
+          console.warn(
+            `[classify-change-request] Missing serviceName locator for target '${target}' — skipping patch`,
+          );
+          skippedPatches.push({
+            target: target as string,
+            reason: `Missing serviceName locator for '${target}'`,
+          });
+          continue;
         }
         if (needsFaqLocator && !faqQuestion) {
-          return {
-            classification: "ambiguous",
-            confidence: Math.min(confidence, 0.5),
-            reasoning: `${reasoning} (Note: Cowork rejected a FAQ patch because no question was specified.)`,
-          };
+          console.warn(
+            `[classify-change-request] Missing faqQuestion locator for target '${target}' — skipping patch`,
+          );
+          skippedPatches.push({
+            target: target as string,
+            reason: `Missing faqQuestion locator for '${target}'`,
+          });
+          continue;
         }
         if (needsTestimonialLocator && !testimonialName) {
-          return {
-            classification: "ambiguous",
-            confidence: Math.min(confidence, 0.5),
-            reasoning: `${reasoning} (Note: Cowork rejected a testimonial patch because no testimonial name was specified.)`,
-          };
+          console.warn(
+            `[classify-change-request] Missing testimonialName locator for target '${target}' — skipping patch`,
+          );
+          skippedPatches.push({
+            target: target as string,
+            reason: `Missing testimonialName locator for '${target}'`,
+          });
+          continue;
         }
         // Reject duplicate-target requests (Haiku violating rule #8).
         // Last-write-wins would be ambiguous; safer to escalate.
@@ -748,6 +767,7 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
             classification: "ambiguous",
             confidence: Math.min(confidence, 0.5),
             reasoning: `${reasoning} (Note: Cowork rejected the model's patches because a duplicate appeared: ${target}.)`,
+            rebuildOnly: rebuildOnly ? true : undefined,
           };
         }
         seenTargets.add(dedupeKey);
@@ -759,31 +779,17 @@ function validateAndNormalise(raw: unknown): ClassificationResult | null {
           testimonialName,
         });
       }
-      patches = normalised;
+      patches = normalised.length > 0 ? normalised : undefined;
     }
   }
-  // rebuildOnly intent — when the customer's request is about an
-  // asset they've already re-uploaded. Defaults to false. Validated
-  // against the same defence-in-depth pattern as patches: must be
-  // boolean, never silently coerced.
-  let rebuildOnly = false;
-  if (obj.rebuildOnly !== undefined && obj.rebuildOnly !== null) {
-    if (typeof obj.rebuildOnly !== "boolean") return null;
-    rebuildOnly = obj.rebuildOnly;
-  }
-  // Defensive: rebuildOnly only meaningful when in_scope. If
-  // Haiku set it on out_of_scope/ambiguous, drop it.
-  if (rebuildOnly && classification !== "in_scope") {
-    rebuildOnly = false;
-  }
-
-  // In-scope without patches is still useful — Cowork will escalate,
-  // but Ben sees the model's reasoning. Don't filter it.
   return {
     classification,
     confidence,
-    reasoning: reasoning.trim(),
+    reasoning: skippedPatches.length > 0
+      ? `${reasoning.trim()} (Note: ${skippedPatches.length} patch(es) skipped: ${skippedPatches.map(s => s.reason).join('; ')})`
+      : reasoning.trim(),
     patches,
     rebuildOnly: rebuildOnly ? true : undefined,
+    skippedPatches: skippedPatches.length > 0 ? skippedPatches : undefined,
   };
 }

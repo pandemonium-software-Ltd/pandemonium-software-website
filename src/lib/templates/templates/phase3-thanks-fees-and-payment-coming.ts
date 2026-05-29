@@ -29,27 +29,37 @@ export const phase3ThanksFeesAndPaymentComing: Template = {
   subject: "Got your details — here's your quote",
   body: `Hi {{customerName}},
 
-Thanks for filling that in. Here's a quick summary.
+Thanks for filling that in — here's your quote.
 
-What you'll get:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+YOUR PACKAGE
 {{moduleList}}
 
-The cost:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRICING
   Setup (one-off):  £{{setupFee}}
   Monthly:          £{{monthlyFee}}/mo{{#if foundingMember}}
 
-You qualified for our Founding Member rate — flat £99 setup
-plus £15/month, locked in for 5 years.{{/if}}
+  ★ Founding Member rate — £99 setup + £15/mo, locked
+    in for 5 years. No price increases, ever.{{/if}}
 
-What happens next: in a minute you'll get a second email with
-a link to your onboarding hub. That's where we'll work through
-a short checklist (~30 minutes total) — your web address, your
-photos, your launch date.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-We'll handle all the behind-the-scenes work (hosting, secure
-connection, your custom email setup, building the site
-itself). You'll get an email at every step so you always
-know what's happening.
+WHAT HAPPENS NEXT
+  1. Pay — you'll see the payment page now
+  2. Onboarding hub — a short checklist (~30 min) to
+     set up your domain, upload photos, and pick a
+     launch date
+  3. We build — hosting, SSL, custom email, and the
+     site itself are all handled for you
+  4. Go live — you'll get an email at every step so
+     you always know where things stand
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Questions? Just reply to this email.
 
 — ModuForge`,
 };

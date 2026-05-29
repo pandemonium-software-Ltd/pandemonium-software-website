@@ -1574,7 +1574,7 @@ function ColourPicker({
   // swatch always renders something while the text input is incomplete.
   const swatchValue = isValidHex ? value : "#1d3a5f";
   return (
-    <div>
+    <div className="flex flex-col">
       <label
         htmlFor={id}
         className="mb-2 block text-sm font-semibold text-navy-900"
@@ -1586,11 +1586,11 @@ function ColourPicker({
             <span aria-hidden="true" className="text-ember-600">*</span>
           </>
         )}
-        {hint && (
-          <span className="font-normal text-navy-500"> ({hint})</span>
-        )}
       </label>
-      <div className="flex items-center gap-3">
+      {hint && (
+        <p className="mb-2 text-xs text-navy-500">{hint}</p>
+      )}
+      <div className="mt-auto flex items-center gap-3">
         <input
           type="color"
           aria-label={`${label} colour wheel`}

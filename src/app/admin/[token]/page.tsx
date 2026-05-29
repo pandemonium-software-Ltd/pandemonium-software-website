@@ -26,6 +26,13 @@ import UnlockStepButton from "@/components/admin/UnlockStepButton";
 import AdminGrantPanel from "@/components/admin/AdminGrantPanel";
 import { currentMonthKey, getAdminGrant } from "@/lib/admin-grants";
 import { site } from "@/lib/site";
+import {
+  listExceptions,
+  listAuditEntries,
+  type OpsException,
+  type OpsAuditEntry,
+} from "@/lib/notion-ops";
+import ResolveExceptionButton from "@/components/admin/ResolveExceptionButton";
 
 export const metadata: Metadata = {
   title: "Customer detail — ModuForge admin",
@@ -102,6 +109,17 @@ export default async function AdminDetailPage({
   const hasGbpModule = prospect.moduleSelections.includes(
     "Google Business Profile Setup/Audit",
   );
+
+  let customerExceptions: OpsException[] = [];
+  let customerActions: OpsAuditEntry[] = [];
+  try {
+    [customerExceptions, customerActions] = await Promise.all([
+      listExceptions({ prospectPageId: prospect.pageId, limit: 20 }),
+      listAuditEntries({ prospectPageId: prospect.pageId, limit: 30 }),
+    ]);
+  } catch {
+    // Notion unavailable — sections render empty.
+  }
 
   // Per-step done snapshot for the step-progress panel below. Each
   // entry shows the dot AND, when done, an "unlock" link that lets
@@ -188,6 +206,20 @@ export default async function AdminDetailPage({
           </a>
         </div>
       </header>
+
+      <NeedsAttentionBanner
+        pendingChangeRequests={prospect.changeRequests.filter(
+          (r) => r.status === "pending" || r.status === "in-progress",
+        ).length}
+        openIncidents={customerExceptions.filter((e) => !e.resolved).length}
+        pendingReviewEdits={
+          (
+            ((prospect.onboardingData ?? {}) as {
+              review?: { edits?: Array<{ status: string }> };
+            }).review?.edits ?? []
+          ).filter((e) => e.status === "submitted").length
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* ---------- Pipeline state ----------
@@ -656,6 +688,116 @@ export default async function AdminDetailPage({
           </p>
         </div>
       )}
+
+      {/* ---------- Incidents ---------- */}
+      <div className="mt-8">
+        <h2 className="font-serif text-2xl font-semibold text-navy-900">
+          Incidents{" "}
+          <span className="text-sm font-normal text-navy-500">
+            ({customerExceptions.length})
+          </span>
+          {customerExceptions.some((e) => !e.resolved) && (
+            <span className="ml-2 inline-block rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">
+              {customerExceptions.filter((e) => !e.resolved).length} open
+            </span>
+          )}
+        </h2>
+        {customerExceptions.length === 0 ? (
+          <p className="mt-3 text-sm text-navy-600">
+            No incidents recorded for this customer.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {customerExceptions.map((ex) => (
+              <li
+                key={ex.id}
+                className={[
+                  "rounded-xl border p-4 text-sm shadow-card",
+                  ex.resolved
+                    ? "border-navy-100 bg-white"
+                    : "border-red-200 bg-red-50/40",
+                ].join(" ")}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex rounded bg-navy-100 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700">
+                      {ex.step}
+                    </span>
+                    <span
+                      className={[
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                        ex.resolved
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800",
+                      ].join(" ")}
+                    >
+                      {ex.resolved ? "resolved" : "open"}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-xs text-navy-400">
+                    {formatDateTime(ex.detectedAt)}
+                  </span>
+                </div>
+                <p className="mt-2 text-navy-800">{ex.errorMessage}</p>
+                {ex.resolved && ex.resolutionNotes && (
+                  <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+                    {ex.resolutionNotes}
+                  </p>
+                )}
+                {!ex.resolved && (
+                  <div className="mt-2">
+                    <ResolveExceptionButton exceptionId={ex.id} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ---------- Ops activity log ---------- */}
+      <div className="mt-8">
+        <h2 className="font-serif text-2xl font-semibold text-navy-900">
+          Ops activity{" "}
+          <span className="text-sm font-normal text-navy-500">
+            (last {customerActions.length})
+          </span>
+        </h2>
+        {customerActions.length === 0 ? (
+          <p className="mt-3 text-sm text-navy-600">
+            No ops activity recorded yet.
+          </p>
+        ) : (
+          <div className="mt-4 rounded-xl border border-navy-100 bg-white shadow-card">
+            <div className="max-h-80 divide-y divide-navy-100 overflow-y-auto">
+              {customerActions.map((a) => (
+                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span
+                    aria-hidden="true"
+                    className={[
+                      "inline-flex h-2 w-2 shrink-0 rounded-full",
+                      a.status === "ok"
+                        ? "bg-green-500"
+                        : a.status === "fail"
+                          ? "bg-red-500"
+                          : "bg-navy-300",
+                    ].join(" ")}
+                  />
+                  <span className="inline-flex rounded bg-navy-100 px-1.5 py-0.5 text-[10px] font-semibold text-navy-700">
+                    {a.step}
+                  </span>
+                  <span className="flex-1 truncate text-xs text-navy-700">
+                    {a.notes}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-navy-400">
+                    {formatDateTime(a.timestamp)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </Wrapper>
   );
 }
@@ -858,6 +1000,45 @@ function formatAge(iso: string): string {
   if (hours < 48) return `${hours}h ago`;
   const days = Math.round(hours / 24);
   return `${days} days ago`;
+}
+
+function NeedsAttentionBanner({
+  pendingChangeRequests,
+  openIncidents,
+  pendingReviewEdits,
+}: {
+  pendingChangeRequests: number;
+  openIncidents: number;
+  pendingReviewEdits: number;
+}) {
+  const items: string[] = [];
+  if (pendingChangeRequests > 0)
+    items.push(
+      `${pendingChangeRequests} change request${pendingChangeRequests !== 1 ? "s" : ""} pending`,
+    );
+  if (openIncidents > 0)
+    items.push(
+      `${openIncidents} open incident${openIncidents !== 1 ? "s" : ""}`,
+    );
+  if (pendingReviewEdits > 0)
+    items.push(
+      `${pendingReviewEdits} review edit${pendingReviewEdits !== 1 ? "s" : ""} pending`,
+    );
+  if (items.length === 0) return null;
+  return (
+    <div className="mb-6 rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-3">
+      <p className="text-sm font-semibold text-amber-900">
+        Needs attention
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {items.map((item) => (
+          <li key={item} className="text-xs text-amber-800">
+            • {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function ErrorCard({ title, body }: { title: string; body: string }) {

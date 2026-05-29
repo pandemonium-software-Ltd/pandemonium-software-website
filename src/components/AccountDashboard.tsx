@@ -6,7 +6,7 @@
 // from server-fetched Notion data passed as props.
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   countActiveChangeRequestsByKind,
   countActiveChangeRequestsThisMonth,
@@ -255,6 +255,32 @@ export default function AccountDashboard(props: AccountDashboardProps) {
   // Prior change requests, newest first (already sorted server-side by
   // appendChangeRequest helper).
   const [requests, setRequests] = useState<ChangeRequest[]>(changeRequests);
+
+  const refreshRequests = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/account/change-request?token=${encodeURIComponent(token)}`,
+      );
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        success?: boolean;
+        requests?: ChangeRequest[];
+      };
+      if (json.success && json.requests) {
+        setRequests(json.requests);
+      }
+    } catch {
+      // Silent — next visibility change will retry.
+    }
+  }, [token]);
+
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible") refreshRequests();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshRequests]);
 
   return (
     <>

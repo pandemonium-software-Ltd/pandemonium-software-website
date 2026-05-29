@@ -16,6 +16,8 @@
 import { useState } from "react";
 import type { ChangeRequest } from "@/lib/notion-prospects";
 import RAGStatus from "@/components/RAGStatus";
+import CoworkRetryButton from "@/components/admin/CoworkRetryButton";
+import CoworkApplyButton from "@/components/admin/CoworkApplyButton";
 
 type Props = {
   token: string;
@@ -254,6 +256,22 @@ export default function ChangeRequestEditor({ token, request }: Props) {
                 ↺ Revert
               </button>
             )}
+            {!isTerminal && !current.coworkPatchAppliedAt && (
+              <CoworkApplyButton
+                token={token}
+                changeRequestId={current.id}
+              />
+            )}
+            {!isTerminal &&
+              current.coworkClassification &&
+              current.coworkEscalatedAt &&
+              !current.coworkPatchAppliedAt && (
+                <CoworkRetryButton
+                  token={token}
+                  itemId={current.id}
+                  itemKind="cr"
+                />
+              )}
             <button
               type="button"
               onClick={startEdit}

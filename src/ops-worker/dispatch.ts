@@ -19,6 +19,7 @@ import type {
   AuditEntry,
   ExceptionEntry,
 } from "./types";
+import type { D1Database } from "../lib/d1-analytics";
 import { writeAudit } from "./audit";
 import { writeException } from "./exceptions";
 
@@ -68,6 +69,7 @@ export type DispatchDeps = {
   writeException?: (
     env: ServerEnv,
     entry: ExceptionEntry,
+    d1?: D1Database,
   ) => Promise<void>;
 };
 
@@ -100,13 +102,17 @@ export async function dispatchProspect(
 
     // Exception only on fail.
     if (result.status === "fail") {
-      await except(env, {
-        prospect,
-        step: step.id,
-        errorMessage: result.error.message,
-        stackTrace: result.error.stack,
-        timestamp,
-      });
+      await except(
+        env,
+        {
+          prospect,
+          step: step.id,
+          errorMessage: result.error.message,
+          stackTrace: result.error.stack,
+          timestamp,
+        },
+        ctx.d1,
+      );
     }
   }
 }

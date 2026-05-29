@@ -24,7 +24,7 @@
 // Step 3 itself is hidden from the wizard if the customer bought
 // none of the five. See deriveStepList in lib/onboarding.ts.
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   calculateModuleDelta,
@@ -151,6 +151,7 @@ export default function Step3Modules({
   const gbpPendingAddress = typeof data.gbpResolvedAddress === "string" ? data.gbpResolvedAddress : null;
   const gbpHasPending = !!data.gbpPlaceIdPending && !data.gbpPlaceId;
   const gbpIsConfirmed = !!data.gbpPlaceId;
+  const gbpResolutionFailed = typeof data.gbpResolutionFailedAt === "string" && data.gbpResolutionFailedAt.length > 0;
   const initialNotes = typeof data.notes === "string" ? data.notes : "";
 
   const [resendEmail, setResendEmail] = useState(initialResendEmail);
@@ -248,6 +249,10 @@ export default function Step3Modules({
     if (hasGbp) {
       patch.gbpUrl = gbpUrl.trim();
       patch.gbpManagerInvited = gbpInvited;
+      if (gbpResolutionFailed) {
+        patch.gbpResolutionFailedAt = null;
+        patch.gbpResolutionError = null;
+      }
     }
     return patch;
   }
@@ -427,6 +432,12 @@ export default function Step3Modules({
                   title="Online booking"
                   subtitle="Cal.com"
                   status={calcomStatus}
+                  info={[
+                    "Cal.com booking widget embedded on your site",
+                    "Visitors book directly from your homepage",
+                    "Syncs with your Google or Outlook calendar",
+                    "Configurable availability, buffer time and booking limits",
+                  ]}
                 >
                   <ModuleCalcom
                     url={calcomUrl}
@@ -443,6 +454,12 @@ export default function Step3Modules({
                   title="Sender email"
                   subtitle="Resend"
                   status={resendStatus}
+                  info={[
+                    "Professional sender address (e.g. news@yourdomain.co.uk)",
+                    "Full DKIM and SPF authentication on your domain",
+                    "Powers your enquiry form notifications and newsletter sends",
+                    "Deliverability tracking built into your dashboard",
+                  ]}
                 >
                   <ModuleResend
                     email={resendEmail}
@@ -462,7 +479,26 @@ export default function Step3Modules({
                   title="Google Business Profile"
                   subtitle="business.google.com"
                   status={gbpStatus}
+                  info={[
+                    "Full GBP audit with category, description and photo recommendations",
+                    "Weekly automated audits emailed to your account manager",
+                    "Live Google reviews pulled onto your website daily",
+                    "Star ratings marked up for Google search result rich snippets",
+                  ]}
                 >
+                  {gbpResolutionFailed && !gbpHasPending && !gbpIsConfirmed && (
+                    <div className="mb-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                      <p className="font-semibold">
+                        We couldn&apos;t find your business on Google Maps
+                      </p>
+                      <p className="mt-1">
+                        Double-check the link you pasted — search for your
+                        business on Google Maps, tap <strong>Share</strong>,
+                        copy the link and paste it below. Once you save, we&apos;ll
+                        try again automatically.
+                      </p>
+                    </div>
+                  )}
                   <ModuleGbp
                     url={gbpUrl}
                     invited={gbpInvited}
@@ -651,30 +687,22 @@ function ModuleCard({
   title,
   subtitle,
   status,
+  info,
   children,
 }: {
-  /** DOM id used as the scroll target by the previous card's
-   *  Confirm button. Required so per-card scroll-chains work. */
   cardId: string;
-  /** DOM id of the next module card to scroll to when this card's
-   *  Confirm button fires. Undefined for the final card in the
-   *  rendered chain (Confirm just collapses, no scroll). */
   nextSectionId?: string;
   title: string;
   subtitle: string;
   status: ModuleStatus;
+  info?: string[];
   children: ReactNode;
 }) {
-  // Default-expanded if not complete (guides the customer to the
-  // unfinished work); default-collapsed when green.
   const [expanded, setExpanded] = useState(status !== "complete");
 
   function handleConfirm() {
     setExpanded(false);
     if (!nextSectionId) return;
-    // Defer to next paint so the just-collapsed card has its new
-    // height before the smooth-scroll calculation runs (otherwise
-    // the browser sometimes overshoots / undershoots the target).
     requestAnimationFrame(() => {
       const target = document.getElementById(nextSectionId);
       if (target) {
@@ -703,9 +731,12 @@ function ModuleCard({
       >
         <ModuleStatusBadge status={status} />
         <div className="min-w-0 flex-1">
-          <p className="font-serif text-lg font-semibold text-navy-900">
-            {title}
-          </p>
+          <div className="flex items-center gap-2">
+            <p className="font-serif text-lg font-semibold text-navy-900">
+              {title}
+            </p>
+            {info && <InfoButton items={info} />}
+          </div>
           <p className="text-xs text-navy-500">{subtitle}</p>
         </div>
         <Chevron expanded={expanded} />
@@ -779,6 +810,55 @@ function Chevron({ expanded }: { expanded: boolean }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+function InfoButton({ items }: { items: string[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        aria-label="What's included"
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-navy-300 text-[11px] font-bold leading-none text-navy-500 transition-colors hover:border-navy-500 hover:text-navy-700"
+      >
+        i
+      </button>
+      {open && (
+        <>
+          {/* Backdrop — closes popover on tap-away */}
+          <div
+            className="fixed inset-0 z-30"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          />
+          <div className="absolute left-0 top-full z-40 mt-2 w-64 rounded-xl border border-navy-200 bg-white p-4 shadow-lg sm:w-72">
+            <p className="text-xs font-semibold uppercase tracking-wider text-navy-500">
+              What&apos;s included
+            </p>
+            <ul className="mt-2 space-y-1.5">
+              {items.map((item) => (
+                <li
+                  key={item}
+                  className="flex gap-2 text-[0.8rem] leading-snug text-navy-700"
+                >
+                  <span className="mt-0.5 flex-none text-green-600">&#10003;</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

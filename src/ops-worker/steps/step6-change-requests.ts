@@ -97,6 +97,7 @@ type ReviewEditWithCowork = {
   coworkClassification?: "in_scope" | "out_of_scope" | "ambiguous";
   coworkEscalatedAt?: string;
   coworkPatchAppliedAt?: string;
+  coworkRetriedAt?: string;
 };
 
 export const step6ChangeRequests: Step = {
@@ -166,17 +167,23 @@ export const step6ChangeRequests: Step = {
         continue;
       }
 
+      const isRetry = !!(
+        item.kind === "post-commit"
+          ? item.request.coworkClassification && item.request.coworkEscalatedAt
+          : item.edit.coworkClassification && item.edit.coworkEscalatedAt
+      );
+
       const classification = await classifyChangeRequest({
         message: itemMessage,
         snapshot: buildSiteSnapshot(prospect),
       });
       remainingBudget -= 1;
 
-      // Audit-stamp on the right entry (post-commit OR pre-commit).
       await stampClassification({
         prospect,
         item,
         classification,
+        isRetry,
       }).catch(() => {
         /* best-effort */
       });
@@ -298,6 +305,9 @@ export const step6ChangeRequests: Step = {
               : `Cowork auto-applied pre-commit edit — ${prospect.name}`,
           body:
             bodyHeader +
+            (classification.skippedPatches && classification.skippedPatches.length > 0
+              ? `⚠ ${classification.skippedPatches.length} patch(es) could NOT be auto-applied (needs you):\n${classification.skippedPatches.map((s) => `  - ${s.reason}`).join("\n")}\n\n`
+              : "") +
             `Confidence: ${(classification.confidence * 100).toFixed(0)}%\n` +
             `Cowork's reasoning:\n  ${classification.reasoning}\n\n` +
             (item.kind === "post-commit"
@@ -560,8 +570,9 @@ async function stampClassification(args: {
   prospect: ProspectRecord;
   item: Actionable;
   classification: Awaited<ReturnType<typeof classifyChangeRequest>>;
+  isRetry?: boolean;
 }): Promise<void> {
-  const fields = {
+  const fields: Record<string, unknown> = {
     coworkClassification:
       args.classification?.classification ?? "ambiguous",
     coworkConfidence: args.classification?.confidence ?? 0,
@@ -569,6 +580,9 @@ async function stampClassification(args: {
       args.classification?.reasoning ??
       "Cowork couldn't classify (model unavailable or returned malformed JSON).",
   };
+  if (args.isRetry) {
+    fields.coworkRetriedAt = new Date().toISOString();
+  }
   if (args.item.kind === "post-commit") {
     await patchChangeRequest(
       args.prospect.pageId,
@@ -590,8 +604,17 @@ function findActionable(prospect: ProspectRecord): Actionable[] {
   const post: Actionable[] = prospect.changeRequests
     .filter((cr) => {
       if (cr.status !== "pending" && cr.status !== "in-progress") return false;
-      if (cr.coworkClassification && cr.coworkEscalatedAt) return false;
-      if (cr.coworkPatchAppliedAt && cr.previewVersionId) return false;
+      if (cr.coworkPatchAppliedAt) return false;
+      if (cr.coworkClassification && cr.coworkEscalatedAt) {
+        const retryable =
+          cr.coworkClassification === "in_scope" &&
+          !cr.coworkPatchAppliedAt &&
+          !cr.coworkRetriedAt;
+        if (!retryable) return false;
+        const escalatedAt = Date.parse(cr.coworkEscalatedAt);
+        if (Number.isFinite(escalatedAt) && now - escalatedAt < 10 * 60 * 1000)
+          return false;
+      }
       const submitted = Date.parse(cr.submittedAt);
       if (!Number.isFinite(submitted)) return false;
       if (now - submitted < MIN_AGE_BEFORE_CLASSIFY_MS) return false;
@@ -601,11 +624,17 @@ function findActionable(prospect: ProspectRecord): Actionable[] {
 
   const pre: Actionable[] = readReviewEdits(prospect)
     .filter((re) => {
-      // Pre-commit edits are "submitted" until applied or rejected.
-      // We process anything still "submitted" that's not been
-      // classified+escalated yet AND not already applied.
       if (re.status !== "submitted") return false;
-      if (re.coworkClassification && re.coworkEscalatedAt) return false;
+      if (re.coworkClassification && re.coworkEscalatedAt) {
+        const retryable =
+          re.coworkClassification === "in_scope" &&
+          !re.coworkPatchAppliedAt &&
+          !re.coworkRetriedAt;
+        if (!retryable) return false;
+        const escalatedAt = Date.parse(re.coworkEscalatedAt);
+        if (Number.isFinite(escalatedAt) && now - escalatedAt < 10 * 60 * 1000)
+          return false;
+      }
       if (re.coworkPatchAppliedAt) return false;
       const submitted = Date.parse(re.submittedAt);
       if (!Number.isFinite(submitted)) return false;
@@ -662,6 +691,7 @@ function formatBreakdown(
     coworkClassification?: string;
     coworkEscalatedAt?: string;
     coworkPatchAppliedAt?: string;
+    coworkRetriedAt?: string;
     previewVersionId?: string;
   },
   prefix: "pre" | "post",
@@ -669,7 +699,7 @@ function formatBreakdown(
   const ageMin = Math.floor(
     (Date.now() - Date.parse(item.submittedAt)) / 60_000,
   );
-  return `${prefix}:${item.id.slice(0, 8)}[${item.status},${ageMin}min,classified=${!!item.coworkClassification},escalated=${!!item.coworkEscalatedAt},applied=${!!item.coworkPatchAppliedAt}${"previewVersionId" in item ? `,preview=${!!item.previewVersionId}` : ""}]`;
+  return `${prefix}:${item.id.slice(0, 8)}[${item.status},${ageMin}min,classified=${!!item.coworkClassification},escalated=${!!item.coworkEscalatedAt},applied=${!!item.coworkPatchAppliedAt},retried=${!!item.coworkRetriedAt}${"previewVersionId" in item ? `,preview=${!!item.previewVersionId}` : ""}]`;
 }
 
 /** "Alex Smith" → "Alex". Fallback to "there" on empty. Mirrors the

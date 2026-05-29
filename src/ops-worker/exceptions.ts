@@ -24,10 +24,14 @@
 import { notionFetch } from "../lib/notion";
 import type { ServerEnv } from "../lib/env";
 import type { ExceptionEntry } from "./types";
+import type { D1Database } from "../lib/d1-analytics";
+
+const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function writeException(
   env: ServerEnv,
   entry: ExceptionEntry,
+  d1?: D1Database,
 ): Promise<void> {
   // First the Notion write (always attempted; degrades to stdout
   // if NOTION_EXCEPTIONS_DB_ID is unset so the ops worker doesn't
@@ -102,14 +106,22 @@ export async function writeException(
     }
   }
 
-  // Then page Ben via gmail (§9.0 — gmail is one of his two surfaces).
-  // Inline the email send rather than importing email.ts so we keep
-  // this module's dependencies tight; uses Resend's REST API directly.
-  await pageBen(env, entry).catch((e) => {
-    console.error(
-      `[exception:email-failed] ${e instanceof Error ? e.message : String(e)}`,
+  // Dedup: only email Ben if we haven't emailed for this
+  // prospect+step within the last 24 hours. The Notion entry above
+  // is the audit trail; the email is a pager that shouldn't flood.
+  const shouldEmail = await checkDedup(d1, entry);
+  if (shouldEmail) {
+    await pageBen(env, entry).catch((e) => {
+      console.error(
+        `[exception:email-failed] ${e instanceof Error ? e.message : String(e)}`,
+      );
+    });
+    await stampDedup(d1, entry);
+  } else {
+    console.log(
+      `[exception:dedup] suppressed email for ${entry.prospect.token}/${entry.step} — already emailed within 24h`,
     );
-  });
+  }
 }
 
 async function pageBen(
@@ -155,5 +167,46 @@ Open the Notion Exceptions DB to triage and mark resolved.
   if (!res.ok) {
     const errText = await res.text().catch(() => "(no body)");
     throw new Error(`Resend ${res.status}: ${errText}`);
+  }
+}
+
+async function checkDedup(
+  d1: D1Database | undefined,
+  entry: ExceptionEntry,
+): Promise<boolean> {
+  if (!d1) return true;
+  try {
+    const row = await d1
+      .prepare(
+        `SELECT emailed_at FROM exception_dedup WHERE token = ? AND step = ?`,
+      )
+      .bind(entry.prospect.token, entry.step)
+      .first<{ emailed_at: string }>();
+    if (!row) return true;
+    const elapsed = Date.now() - new Date(row.emailed_at).getTime();
+    return elapsed > DEDUP_WINDOW_MS;
+  } catch {
+    return true;
+  }
+}
+
+async function stampDedup(
+  d1: D1Database | undefined,
+  entry: ExceptionEntry,
+): Promise<void> {
+  if (!d1) return;
+  try {
+    const hash = entry.errorMessage.slice(0, 120);
+    await d1
+      .prepare(
+        `INSERT OR REPLACE INTO exception_dedup (token, step, emailed_at, error_hash)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .bind(entry.prospect.token, entry.step, new Date().toISOString(), hash)
+      .run();
+  } catch (e) {
+    console.error(
+      `[exception:dedup-write] ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 }

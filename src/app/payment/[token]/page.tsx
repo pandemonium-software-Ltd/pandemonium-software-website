@@ -308,14 +308,16 @@ export default async function PaymentPage({
             </div>
           </div>
 
-          <p className="mt-6 text-center text-sm text-navy-500">
-            Your intake answers are saved. Edit any time before payment by
-            returning to{" "}
-            <a href={`/intake/${token}`} className="link">
-              your intake link
-            </a>
-            .
-          </p>
+          {!alreadyPaid && (
+            <p className="mt-6 text-center text-sm text-navy-500">
+              Your intake answers are saved. Edit any time before payment by
+              returning to{" "}
+              <a href={`/intake/${token}`} className="link">
+                your intake link
+              </a>
+              .
+            </p>
+          )}
         </div>
       </section>
     </>

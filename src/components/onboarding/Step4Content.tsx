@@ -159,6 +159,16 @@ const NOTES_MAX = 2000;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 type Day = (typeof DAYS)[number];
 
+const DEFAULT_OPENING_HOURS: Record<string, { open: boolean; from?: string; to?: string }> = {
+  Mon: { open: true, from: "09:00", to: "17:00" },
+  Tue: { open: true, from: "09:00", to: "17:00" },
+  Wed: { open: true, from: "09:00", to: "17:00" },
+  Thu: { open: true, from: "09:00", to: "17:00" },
+  Fri: { open: true, from: "09:00", to: "17:00" },
+  Sat: { open: false },
+  Sun: { open: false },
+};
+
 export default function Step4Content({
   data,
   done,
@@ -251,10 +261,14 @@ export default function Step4Content({
     return phase3Seeds.trust;
   });
   const [business, setBusiness] = useState<BusinessDetails>(() => {
-    if (initial.business && typeof initial.business === "object") {
-      return initial.business;
+    const base =
+      initial.business && typeof initial.business === "object"
+        ? initial.business
+        : phase3Seeds.business;
+    if (!base.openingHours || Object.keys(base.openingHours).length === 0) {
+      return { ...base, openingHours: { ...DEFAULT_OPENING_HOURS } };
     }
-    return phase3Seeds.business;
+    return base;
   });
   // Locations — one slot per prospect.extraLocations. Pad / trim
   // saved data to match the current count so the UI always shows
@@ -1796,7 +1810,7 @@ function BusinessDetailsEditor({
       </div>
 
       <div>
-        <FieldLabel>Opening hours</FieldLabel>
+        <FieldLabel>Opening hours (24hr clock)</FieldLabel>
         <p className="text-xs text-navy-600">
           Tick the days you&apos;re open and set the times. Anything
           left unticked renders as &ldquo;Closed&rdquo;.
@@ -1978,7 +1992,7 @@ function LocationsEditor({
             />
           </div>
           <div>
-            <FieldLabel>Opening hours (optional)</FieldLabel>
+            <FieldLabel>Opening hours — 24hr clock (optional)</FieldLabel>
             <p className="text-xs text-navy-600">
               Leave blank to inherit the main location&apos;s hours.
             </p>

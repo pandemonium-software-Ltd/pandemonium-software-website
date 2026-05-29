@@ -415,10 +415,17 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                       locked ||
                       (doneFlags[currentStepId] &&
                         currentStepId !== "review" &&
-                        currentStepId !== "assets")
+                        currentStepId !== "assets" &&
+                        currentStepId !== "content")
                     }
                     savePartial={savePartial}
                     markDone={markDone}
+                    patchData={(stepId, patch) =>
+                      setData((prev) => ({
+                        ...prev,
+                        [stepId]: { ...((prev[stepId] ?? {}) as object), ...patch },
+                      }))
+                    }
                     customerConfirmedNameserversAt={
                       props.customerConfirmedNameserversAt
                     }
@@ -459,6 +466,7 @@ function StepRenderer({
   phase3Services,
   phase3Seeds,
   extraLocations,
+  patchData,
   focusModule,
 }: {
   step: StepDef;
@@ -484,6 +492,7 @@ function StepRenderer({
   phase3Services: ReadonlyArray<{ name: string }>;
   phase3Seeds: import("@/app/onboarding/[token]/page").Phase3Seeds;
   extraLocations: number;
+  patchData: (stepId: StepId, patch: Record<string, unknown>) => void;
   /** Optional ?focus=<module> query param — when set, Step3Modules
    *  restricts to just the matching module's setup card. Used when
    *  the post-launch dashboard sends a customer here to set up one
@@ -602,17 +611,26 @@ function StepRenderer({
         />
       );
     }
-    case "review":
+    case "review": {
+      const priorStepsDone =
+        doneFlags.cloudflare &&
+        doneFlags.domain &&
+        doneFlags.tools &&
+        doneFlags.content &&
+        doneFlags.assets;
       return (
         <Step5Review
           data={slice}
           done={done}
           readOnly={readOnly}
           token={token}
+          allPriorStepsDone={priorStepsDone}
+          onReviewDataChange={(patch) => patchData("review", patch)}
           savePartial={(patch) => savePartial("review", patch)}
           markDone={(patch) => markDone("review", patch)}
         />
       );
+    }
   }
   // Compiler exhaustiveness check.
   const _exhaustive: never = step.id;

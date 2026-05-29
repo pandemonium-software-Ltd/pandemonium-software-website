@@ -547,6 +547,10 @@ export type ChangeRequest = {
    *  Notion. Distinct from customerApprovedAt: applied → preview
    *  goes live only when customer approves. */
   coworkPatchAppliedAt?: string;
+  /** ISO-8601 — stamped when step6 retries a previously-escalated
+   *  in_scope classification. Caps retries at 1: once set,
+   *  findActionable() won't allow another retry. */
+  coworkRetriedAt?: string;
 };
 
 /**
