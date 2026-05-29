@@ -1,15 +1,3 @@
-// /admin — internal fleet view for Ben.
-//
-// Server component: fetches all prospects from the Notion Prospects DB
-// + runs health checks across the connected services + hands the data
-// to <AdminProspectList /> for rendering. The client component owns
-// search + filter + table interactions; this server file owns auth
-// (via middleware Basic Auth) + data fetching + the health strip.
-//
-// Auth: HTTP Basic Auth via src/middleware.ts. The user lands here
-// after the browser handles the password prompt — by the time this
-// component runs, they're already authenticated.
-
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { listAllProspects, type ProspectRecord } from "@/lib/notion-prospects";
@@ -18,12 +6,25 @@ import { isStripeConfigured } from "@/lib/stripe";
 import AdminProspectList from "@/components/admin/AdminProspectList";
 import AnalyticsCard from "@/components/AnalyticsCard";
 import SentryAlertsPanel from "@/components/admin/SentryAlertsPanel";
+import BuildMonitorPanel from "@/components/admin/BuildMonitorPanel";
+import CustomerInsightPanel from "@/components/admin/CustomerInsightPanel";
+import RunMonitorPanel from "@/components/admin/RunMonitorPanel";
 import {
   listSentryAlerts,
+  countOpenSentryAlerts,
   type SentryAlertRow,
 } from "@/lib/d1-sentry";
 import type { D1Database } from "@/lib/d1-analytics";
 import { site } from "@/lib/site";
+import {
+  computeKpis,
+  computeBuildMetrics,
+  computeInsightMetrics,
+  computeRunMetrics,
+  cronHealthStatus,
+  type CronHealthEntry,
+  type GbpIssue,
+} from "@/lib/admin-metrics";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -43,10 +44,15 @@ export default async function AdminPage() {
     loadError = e instanceof Error ? e.message : String(e);
   }
 
-  // Sentry alerts inbox — top 20 open alerts. D1 read on every
-  // page load (fine: tiny query, fast). Empty array when the
-  // binding is missing or no alerts have ever fired.
+  // D1 queries — Sentry alerts + cron health + GBP issues.
+  // All wrapped in try/catch so a D1 outage degrades gracefully.
   let sentryAlerts: SentryAlertRow[] = [];
+  let sentryOpenCount = 0;
+  let sentryResolvedCount = 0;
+  let analyticsLastRan: string | null = null;
+  let gbpLastFetched: string | null = null;
+  let gbpIssues: GbpIssue[] = [];
+
   try {
     const cfCtx = getCloudflareContext();
     const cfEnv = (cfCtx?.env ?? {}) as {
@@ -54,16 +60,48 @@ export default async function AdminPage() {
     };
     const d1 = cfEnv.pandemonium_analytics;
     if (d1) {
-      sentryAlerts = await listSentryAlerts(d1, { status: "open", limit: 20 });
+      const [alerts, openCount, resolvedAlerts, analyticsRow, gbpFreshness, gbpErrors] =
+        await Promise.all([
+          listSentryAlerts(d1, { status: "open", limit: 20 }),
+          countOpenSentryAlerts(d1),
+          listSentryAlerts(d1, { status: "resolved", limit: 1 }).then(
+            (rows) => rows.length,
+          ),
+          d1
+            .prepare(
+              `SELECT MAX(captured_at) AS last_ran FROM daily_analytics WHERE token = '@self'`,
+            )
+            .first<{ last_ran: string | null }>(),
+          d1
+            .prepare(`SELECT MAX(fetched_at) AS last_fetched FROM gbp_reviews`)
+            .first<{ last_fetched: string | null }>(),
+          d1
+            .prepare(
+              `SELECT token, last_error, fetched_at FROM gbp_reviews WHERE last_error IS NOT NULL`,
+            )
+            .all<{ token: string; last_error: string; fetched_at: string }>(),
+        ]);
+
+      sentryAlerts = alerts;
+      sentryOpenCount = openCount;
+      sentryResolvedCount = resolvedAlerts;
+      analyticsLastRan = analyticsRow?.last_ran ?? null;
+      gbpLastFetched = gbpFreshness?.last_fetched ?? null;
+
+      const gbpErrorRows = gbpErrors.results ?? [];
+      const prospectMap = new Map(prospects.map((p) => [p.token, p]));
+      gbpIssues = gbpErrorRows.map((r) => ({
+        token: r.token,
+        name: prospectMap.get(r.token)?.name ?? r.token,
+        lastError: r.last_error,
+        fetchedAt: r.fetched_at,
+      }));
     }
   } catch {
-    // D1 unavailable — render the panel empty rather than fail
-    // the whole admin page.
+    // D1 unavailable — panels render with empty/default data.
   }
 
-  // Health checks for the connected services. If verifyNotionDatabases
-  // throws (auth/network), we treat all DBs as unreachable rather than
-  // hiding the dashboard.
+  // Health checks for connected services.
   type DbCheck = { id: string; title: string } | { error: string };
   type AllDbs = {
     prospects: DbCheck;
@@ -83,34 +121,68 @@ export default async function AdminPage() {
 
   const stripeReady = isStripeConfigured();
 
+  // Compute dashboard metrics from prospect data.
+  const kpis = computeKpis(prospects);
+  const buildMetrics = computeBuildMetrics(prospects);
+  const insightMetrics = computeInsightMetrics(prospects);
+
+  const cronHealth: CronHealthEntry[] = [
+    {
+      label: "Analytics",
+      lastRan: analyticsLastRan,
+      status: cronHealthStatus(analyticsLastRan),
+    },
+    {
+      label: "GBP reviews",
+      lastRan: gbpLastFetched,
+      status: cronHealthStatus(gbpLastFetched),
+    },
+  ];
+
+  const runMetrics = computeRunMetrics(
+    prospects,
+    cronHealth,
+    gbpIssues,
+    sentryOpenCount,
+    sentryResolvedCount,
+  );
+
   return (
     <section className="bg-white py-10 md:py-14">
       <div className="container-content">
         <header className="mb-8">
           <span className="eyebrow">Admin</span>
           <h1 className="font-serif text-3xl font-semibold text-navy-900 md:text-4xl">
-            Prospect pipeline
+            Operations dashboard
           </h1>
           <p className="mt-2 text-sm text-navy-600">
-            All prospects across Phases 1–3. Use the search to find anyone
-            quickly; the filter chips highlight rows that need your attention
-            (open change requests or pending replies).
+            Fleet view across pipeline, builds, revenue and live sites.
           </p>
         </header>
 
-        {/* Marketing-site analytics — at the top so it is the first
-            thing you see when opening /admin. Collapsible inside
-            the card itself. */}
-        <div className="mb-8">
-          <AnalyticsCard
-            token="@self"
-            domain="modu-forge.co.uk"
-            title="📊 Marketing site analytics"
-            apiPath="/api/admin/analytics"
+        {/* KPI strip */}
+        <div className="mb-8 grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          <KpiCard label="Prospects" value={kpis.total} />
+          <KpiCard label="Enquiries" value={kpis.enquiries} />
+          <KpiCard
+            label="In onboarding"
+            value={kpis.onboarding}
+            alert={kpis.stuckBuilds > 0 ? `${kpis.stuckBuilds} stuck` : undefined}
+          />
+          <KpiCard label="Live" value={kpis.live} />
+          <KpiCard
+            label="MRR"
+            value={`£${kpis.totalMrr}`}
+            sub={`${kpis.foundingCount}F / ${kpis.standardCount}S`}
+          />
+          <KpiCard
+            label="Open alerts"
+            value={sentryOpenCount}
+            alert={sentryOpenCount > 0 ? `${sentryOpenCount} open` : undefined}
           />
         </div>
 
-        {/* Health strip */}
+        {/* Service health strip */}
         <div className="mb-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <HealthCard
             label="Notion: Prospects"
@@ -152,13 +224,29 @@ export default async function AdminPage() {
           </div>
         )}
 
-        {/* Sentry alerts inbox — always rendered so the "all quiet"
-            empty state confirms the integration is live, not just
-            silently hidden. */}
+        {/* Dashboard panels */}
+        <div className="mb-8 space-y-4">
+          <BuildMonitorPanel metrics={buildMetrics} />
+          <CustomerInsightPanel metrics={insightMetrics} />
+          <RunMonitorPanel metrics={runMetrics} />
+        </div>
+
+        {/* Marketing-site analytics */}
+        <div className="mb-8">
+          <AnalyticsCard
+            token="@self"
+            domain="modu-forge.co.uk"
+            title="Marketing site analytics"
+            apiPath="/api/admin/analytics"
+          />
+        </div>
+
+        {/* Sentry alerts inbox */}
         <div className="mb-8">
           <SentryAlertsPanel alerts={sentryAlerts} />
         </div>
 
+        {/* Prospect pipeline */}
         {prospects.length === 0 && !loadError ? (
           <div className="card bg-cream-50 text-center">
             <p className="text-navy-700">
@@ -171,6 +259,39 @@ export default async function AdminPage() {
         )}
       </div>
     </section>
+  );
+}
+
+// ---------- KPI card ----------
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  alert,
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+  alert?: string;
+}) {
+  return (
+    <div className="rounded-xl border-2 border-navy-100 bg-white p-3 text-center">
+      <p className="font-mono text-2xl font-bold text-navy-900">
+        {typeof value === "number" ? value.toLocaleString("en-GB") : value}
+      </p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-navy-500">
+        {label}
+      </p>
+      {sub && (
+        <p className="mt-0.5 text-[10px] text-navy-500">{sub}</p>
+      )}
+      {alert && (
+        <span className="mt-1 inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800">
+          {alert}
+        </span>
+      )}
+    </div>
   );
 }
 
