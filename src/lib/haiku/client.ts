@@ -62,6 +62,9 @@ export async function callHaiku(args: {
   prompt: string;
   /** Max output tokens. Polish prompts are short; default 300. */
   maxTokens?: number;
+  /** Override temperature. Default 0.6 (tuned for copy polish).
+   *  Use lower values (0.1-0.2) for structured JSON output. */
+  temperature?: number;
 }): Promise<string | null> {
   const client = getClient();
   if (!client) {
@@ -78,7 +81,7 @@ export async function callHaiku(args: {
       // hallucinate facts. 0.6 is the sweet spot we tuned to in
       // testing; lower than 0.4 gets sterile, higher than 0.8 starts
       // adding embellishments the customer didn't write.
-      temperature: 0.6,
+      temperature: args.temperature ?? 0.6,
       system: args.system,
       messages: [{ role: "user", content: args.prompt }],
     });

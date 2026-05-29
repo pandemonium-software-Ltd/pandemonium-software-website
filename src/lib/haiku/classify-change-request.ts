@@ -1,9 +1,15 @@
 // Haiku classifier for inbound change requests.
 //
-// Inputs: customer's free-text request + sanitised current site
-// state (so the model can write actual values back rather than
-// inventing). Output: a structured classification + (when in_scope
-// + a safe target) a patch the applier can write to Notion.
+// TWO-PASS architecture (2026-05-29):
+//   Pass 1 — CLASSIFY: short prompt → {classification, confidence,
+//     reasoning, rebuildOnly}. Haiku almost never fails at this.
+//   Pass 2 — PATCH (only when in_scope + confident): focused prompt
+//     → {patches: [...]}. Separated so Haiku can concentrate on
+//     structured output without also reasoning about scope.
+//
+// This split eliminated the failure mode where Haiku produced correct
+// classification + reasoning but empty patches — the single-call
+// prompt was too long (~440 lines) for reliable structured output.
 //
 // Failure mode: every callable returns null on any error
 // (invalid JSON, network failure, missing API key). Caller
@@ -13,12 +19,6 @@
 // Confidence threshold for auto-apply lives in the caller, not
 // here. The classifier just reports its confidence; deciding what
 // to do with a 0.6 vs 0.85 is policy.
-//
-// IMPORTANT: this classifier produces patches Cowork will apply
-// to a customer's live data. The system prompt is intentionally
-// strict about staying within the whitelist — if a target isn't
-// safely auto-applicable, it should classify as out_of_scope so
-// Ben can handle it manually.
 
 import { callHaiku } from "./client";
 
@@ -218,6 +218,10 @@ export type SiteSnapshot = {
   };
 };
 
+// ================================================================
+// Public API — unchanged signature, now backed by two-pass internals
+// ================================================================
+
 /**
  * Classify a customer's change request. Returns null on any
  * failure (no key, network error, malformed JSON response,
@@ -228,287 +232,390 @@ export async function classifyChangeRequest(args: {
   message: string;
   snapshot: SiteSnapshot;
 }): Promise<ClassificationResult | null> {
-  const targetsList = SAFE_PATCH_TARGETS.map((t) => `  - ${t}`).join("\n");
+  // ── Pass 1: Classify (is it in scope? how confident? rebuild-only?) ──
+  const classify = await classifyPass(args.message, args.snapshot);
+  if (!classify) return null;
 
+  // Not eligible for auto-apply → return classification only
+  if (
+    classify.classification !== "in_scope" ||
+    classify.confidence < 0.75
+  ) {
+    return {
+      classification: classify.classification,
+      confidence: classify.confidence,
+      reasoning: classify.reasoning,
+    };
+  }
+
+  // ── Pass 2: Generate structured patches ──
+  let patchResult = await patchPass(
+    args.message,
+    args.snapshot,
+    classify.reasoning,
+  );
+
+  // Retry once if patch generation failed or returned nothing
+  // (unless it's pure rebuild-only — empty patches are expected)
+  if (
+    (!patchResult || patchResult.patches.length === 0) &&
+    !classify.rebuildOnly
+  ) {
+    console.log(
+      `[classify] Patch pass returned ${patchResult ? "empty" : "null"} ` +
+        `for in_scope@${classify.confidence} — retrying`,
+    );
+    patchResult = await patchPass(
+      args.message,
+      args.snapshot,
+      classify.reasoning,
+    );
+  }
+
+  const patches =
+    patchResult && patchResult.patches.length > 0
+      ? patchResult.patches
+      : undefined;
+  const skippedPatches = patchResult?.skippedPatches;
+
+  // Apply verbatim quote guard
+  let finalPatches = patches;
+  if (finalPatches && finalPatches.length > 0) {
+    const guarded = enforceVerbatimQuotes(args.message, finalPatches);
+    if (guarded.overrideCount > 0) {
+      console.warn(
+        `[verbatim-quote-guard] Overrode ${guarded.overrideCount} ` +
+          `patch(es) to match customer's double-quoted text.`,
+      );
+    }
+    finalPatches = guarded.patches;
+  }
+
+  return {
+    classification: classify.classification,
+    confidence: classify.confidence,
+    reasoning: classify.reasoning,
+    patches: finalPatches,
+    rebuildOnly: classify.rebuildOnly ? true : undefined,
+    skippedPatches: skippedPatches?.length ? skippedPatches : undefined,
+  };
+}
+
+// ================================================================
+// Pass 1 — Classification (simple output, short prompt)
+// ================================================================
+
+async function classifyPass(
+  message: string,
+  snapshot: SiteSnapshot,
+): Promise<{
+  classification: "in_scope" | "out_of_scope" | "ambiguous";
+  confidence: number;
+  reasoning: string;
+  rebuildOnly: boolean;
+} | null> {
   const system =
     `You classify customer change requests for a website builder. ` +
-    `Output STRICT JSON matching the schema below — no prose, no ` +
-    `code fences, no commentary. Be conservative: when unsure, ` +
-    `prefer "out_of_scope" or "ambiguous" over a wrong "in_scope". ` +
-    `NEVER invent facts (phone numbers, URLs, prices, dates). ` +
-    `If the customer's request implies inventing a value, classify ` +
-    `as ambiguous and flag it in reasoning.`;
+    `Output STRICT JSON — no prose, no code fences, nothing else.`;
 
   const prompt =
-    `Customer's current site state (you can reference these to write ` +
-    `a correct patch):\n\n` +
-    `${JSON.stringify(args.snapshot, null, 2)}\n\n` +
-    `Customer's request:\n\n  ${args.message}\n\n` +
-    `Classify this request. Respond with ONLY this JSON shape:\n\n` +
+    `OUTPUT SCHEMA:\n` +
     `{\n` +
     `  "classification": "in_scope" | "out_of_scope" | "ambiguous",\n` +
-    `  "confidence": <number between 0 and 1>,\n` +
+    `  "confidence": <number 0.0 to 1.0>,\n` +
     `  "reasoning": "<1-2 sentences>",\n` +
-    `  "patches": null OR [ { "target": "<target>", "newValue": "<string>", ` +
-    `"serviceName"?: "<exact service name>", "faqQuestion"?: "<exact question>", ` +
-    `"testimonialName"?: "<exact testimonial name>" }, ... ],\n` +
-    `  "rebuildOnly": true OR false\n` +
+    `  "rebuildOnly": true | false\n` +
     `}\n\n` +
-    `In-scope targets you can patch (any other change is out_of_scope):\n` +
-    `${targetsList}\n\n` +
-    `Value-encoding rules (newValue is ALWAYS a string — encode as below):\n` +
-    `  - String targets: just the text.\n` +
-    `  - "content.aboutBullets" → JSON array of strings, e.g. ` +
-    `'["Free quotes","2-year guarantee"]'.\n` +
-    `  - "content.services.features" → JSON array of strings.\n` +
-    `  - "content.services.priceFrom" → numeric string, e.g. "15000".\n` +
-    `  - "content.trust.yearsExperience" → numeric string, e.g. "12".\n` +
-    `  - "content.testimonials.rating" → numeric string 1-5.\n` +
-    `  - "business.openingHours" → JSON object keyed by day abbreviation ` +
-    `("Mon","Tue","Wed","Thu","Fri","Sat","Sun"). Each entry: ` +
-    `{"open":bool,"from"?:"HH:MM","to"?:"HH:MM"}. Example: ` +
-    `'{"Mon":{"open":true,"from":"09:00","to":"17:00"},"Sat":{"open":false}}'. ` +
-    `Include EVERY day in the object — overwrites the whole record.\n` +
-    `  - "branding.brandColorPrimary" / "branding.brandColorSecondary" → ` +
-    `6-digit hex with leading hash, e.g. "#1a2b3c". Only patch if the ` +
-    `customer supplied a hex code OR a named colour you can map to a ` +
-    `specific hex with high confidence (basic colours like "red"=#dc2626, ` +
-    `"navy"=#1e3a8a). If the customer gave a vague reference like ` +
-    `"more blue" / "darker red" — ambiguous, ask for a hex code.\n` +
-    `  - "*.add" operations (services / faq / testimonials / aboutBullets) → ` +
-    `newValue is a JSON-encoded object describing the new entry:\n` +
-    `      • content.services.add → {"serviceName":"...","description"?,"longDescription"?,"priceFrom"?,"features"?,"pricingNotes"?}\n` +
-    `      • content.faq.add → {"question":"...","answer":"..."}\n` +
-    `      • content.testimonials.add → {"name":"...","quote":"...","location"?,"rating"?}\n` +
-    `      • content.aboutBullets.add → just the plain bullet text\n` +
-    `    .add operations DO NOT need a locator. Adding multiple in one ` +
-    `request → multiple patches with the same target are allowed.\n` +
-    `  - "*.remove" operations → newValue is any non-empty marker ` +
-    `(e.g. "remove" or the locator text); the locator field is what ` +
-    `identifies what gets removed:\n` +
-    `      • content.services.remove → serviceName locator\n` +
-    `      • content.faq.remove → faqQuestion locator\n` +
-    `      • content.testimonials.remove → testimonialName locator\n` +
-    `      • content.aboutBullets.remove → newValue is the exact bullet ` +
-    `text to remove (no locator field).\n\n` +
-    `Locator rules — patches that target a specific entry in an array:\n` +
-    `  - "content.services.*" targets REQUIRE "serviceName" set to the ` +
-    `EXACT name from the snapshot's services array. If the customer ` +
-    `says "the lawn care service" and the snapshot has ` +
-    `services=[{name:"Lawn Care For You"}], use "serviceName":"Lawn Care For You".\n` +
-    `  - "content.faq.*" targets REQUIRE "faqQuestion" set to the EXACT ` +
-    `question from the snapshot's faq array.\n` +
-    `  - "content.testimonials.*" targets REQUIRE "testimonialName" set ` +
-    `to the EXACT name from the snapshot's testimonials array.\n` +
-    `  - If the customer references something that doesn't appear in the ` +
-    `snapshot (e.g. "the FAQ about pricing" but no matching question ` +
-    `exists), classify as "ambiguous" — don't guess the locator.\n\n` +
-    `Rules:\n` +
-    `1. Only set "patches" when classification is "in_scope" AND the ` +
-    `customer asked for a change to ONE OR MORE of the targets above. ` +
-    `Single-field requests produce a 1-element array; multi-field ` +
-    `produce N elements.\n` +
-    `2. Image / layout / design / structural / new-page changes are ` +
-    `always "out_of_scope". Layout/styling beyond the brand-colour ` +
-    `swap is out_of_scope.\n` +
-    `3. If the customer's request is vague (e.g. "make it look better", ` +
-    `"freshen up the copy") mark "ambiguous" and set patches to null.\n` +
-    `4. "newValue" is the FULL replacement value, not a diff.\n` +
-    `5. Confidence below 0.7 means the request is risky — Cowork will ` +
-    `escalate to a human regardless of classification, so be honest about ` +
-    `your uncertainty.\n` +
-    `6. NEVER include a patch with a target outside the list above. If ` +
-    `even one requested change isn't in the list (mixed scope, e.g. ` +
-    `"change phone AND add a new page"), classify as "ambiguous" with ` +
-    `patches=null and explain in reasoning which part you couldn't handle.\n` +
-    `7. MULTI-FIELD: customers commonly bundle related changes ` +
-    `("change phone AND email", "update tagline and address", ` +
-    `"update Garden Pods price and description"). When ALL the requested ` +
-    `fields are in the safe-target list, return ALL of them as patches in ` +
-    `the array — DON'T escalate. Only escalate when the request is ` +
-    `mixed-scope (rule 6) OR vague (rule 3). Single fields with multiple ` +
-    `data points (e.g. "update address to X, Y, postcode Z") are still ` +
-    `ONE patch.\n` +
-    `8. Each (target, locator) combination in the patches array MUST be ` +
-    `unique — never patch the same target+locator twice. Same target ` +
-    `with different locators (e.g. priceFrom on two different services) ` +
-    `is fine.\n` +
-    `8b. BRAND COLOURS clarification: when the customer asks to change ` +
-    `a colour but doesn't give a hex code or unambiguous named colour ` +
-    `("make my primary more blue", "I want a green tone"), classify as ` +
-    `"ambiguous" with patches=null and reasoning starting with ` +
-    `"NEED_HEX_CODE:" so Cowork can email them to ask. Example: ` +
-    `"NEED_HEX_CODE: Customer wants a darker primary but didn't supply ` +
-    `a hex — please reply with the code (e.g. #2c5e9f) and I'll apply it."\n` +
-    `9. ASSET / PHOTO / LOGO refresh — IMPORTANT. The customer's Hub ` +
-    `has a "Brand Assets" step (Step 4) where they upload their logo, ` +
-    `hero image, about photo, service photos and gallery photos. When ` +
-    `they re-upload a new version of an asset there, the new file is ` +
-    `ALREADY in their data and you have NOTHING to patch — Cowork just ` +
-    `needs to dispatch a fresh build to ship it. This is called ` +
-    `"rebuildOnly" intent.\n` +
-    `Set "classification":"in_scope", "patches":null, "rebuildOnly":true ` +
-    `when:\n` +
-    `   (a) the customer's request mentions a visual asset — any of: ` +
-    `logo, photo, image, picture, header, banner, hero, gallery, photos, ` +
-    `headshot, profile photo, team photo, service photo; AND\n` +
-    `   (b) the snapshot's "assets" object shows an "uploadedAt" ` +
-    `timestamp (any slot — logo, hero, about, gallery, services) ` +
-    `within the last 7 DAYS of the current date. The customer is ` +
-    `referring to an upload they just did — this is the signal.\n\n` +
-    `EXAMPLES:\n` +
-    `  - Message: "Update the website logo from the brand asset update." ` +
-    `Snapshot shows assets.logo.uploadedAt = today. → in_scope, ` +
-    `rebuildOnly:true, patches:null. (Customer says "logo" + recent ` +
-    `upload exists → rebuild.)\n` +
-    `  - Message: "Please use my new hero photo I just uploaded." ` +
-    `Snapshot assets.hero.uploadedAt = 2 days ago. → in_scope, ` +
-    `rebuildOnly:true, patches:null.\n` +
-    `  - Message: "Change the logo on my site." Snapshot has no recent ` +
-    `upload (assets.lastUploadedAt > 7 days ago, or absent). → ` +
-    `ambiguous, patches:null, rebuildOnly:false. Reasoning should say ` +
-    `"No recent upload found in Brand Assets — please upload via ` +
-    `Step 4 of the Hub first."\n` +
-    `  - Message: "I uploaded a new logo, please use it. Also change my ` +
-    `phone to 0123." Snapshot has logo uploaded today. → in_scope, ` +
-    `patches:[{target:"business.phoneDisplay",newValue:"0123"}], ` +
-    `rebuildOnly:true. (Combined: text patch + rebuild for asset.)\n\n` +
-    `Do NOT classify asset requests as "out_of_scope" when a recent ` +
-    `upload exists — that's exactly the rebuildOnly case.\n` +
-    `10. rebuildOnly defaults to false. Only set it true when rule 9 ` +
-    `applies. NEVER set rebuildOnly:true for text-only changes — those ` +
-    `use the patches array.\n` +
-    `11. ADD operations for new services / FAQs / testimonials / about ` +
-    `bullets are IN SCOPE. Customers commonly want to extend their site ` +
-    `without changing what's there. Examples:\n\n` +
-    `  - "Add a new service: Tree Felling, £200 starting price, 2-day ` +
-    `turnaround, weekend visits available." → patches: ` +
-    `[{"target":"content.services.add","newValue":"{\\"serviceName\\":\\"Tree Felling\\",` +
-    `\\"priceFrom\\":200,\\"description\\":\\"2-day turnaround. Weekend visits available.\\"}"}]\n` +
-    `  - "Add an FAQ: Q: Do you do emergencies? A: Yes, evenings + weekends ` +
-    `at a 50% surcharge." → patches: [{"target":"content.faq.add","newValue":"{\\"question\\":\\"Do you do emergencies?\\",\\"answer\\":\\"Yes, evenings and weekends at a 50% surcharge.\\"}"}]\n` +
-    `  - "Add a testimonial from Sarah in Oxford: 'Great service, on time' ` +
-    `5 stars." → patches: [{"target":"content.testimonials.add","newValue":"{\\"name\\":\\"Sarah\\",\\"location\\":\\"Oxford\\",\\"quote\\":\\"Great service, on time\\",\\"rating\\":5}"}]\n` +
-    `  - "Add a bullet about our 24-hour callout." → patches: ` +
-    `[{"target":"content.aboutBullets.add","newValue":"24-hour callout service"}]\n` +
-    `  - "Add two services: Mowing £20/visit, and Hedge trimming £60." → ` +
-    `TWO patches both with target "content.services.add" and different ` +
-    `newValue JSON. Same target appearing twice with different newValue ` +
-    `is fine for .add.\n\n` +
-    `12. REMOVE operations are similarly in scope. The customer names ` +
-    `the thing to remove; you put it in the locator field, and newValue ` +
-    `can be any non-empty marker. Examples:\n\n` +
-    `  - "Remove the Garden Pods service." → patches: ` +
-    `[{"target":"content.services.remove","newValue":"remove","serviceName":"Garden Pods"}]\n` +
-    `  - "Drop the FAQ about pricing turnaround time." (snapshot has that ` +
-    `question) → patches: [{"target":"content.faq.remove","newValue":"remove","faqQuestion":"How long do you take to respond?"}]\n` +
-    `  - "Take down John's testimonial." → patches: ` +
-    `[{"target":"content.testimonials.remove","newValue":"remove","testimonialName":"John"}]\n` +
-    `  - "Remove the 'Free quotes' bullet." → patches: ` +
-    `[{"target":"content.aboutBullets.remove","newValue":"Free quotes"}]\n\n` +
-    `13. CONSTRAINTS — the applier rejects .add operations that would ` +
-    `exceed max counts: services 10, faq 10, testimonials 5, ` +
-    `aboutBullets 8. Look at the snapshot's count; if you're at the ` +
-    `cap, classify as ambiguous explaining the customer should remove ` +
-    `something first.\n` +
-    `14. RENAMES of services/FAQs/testimonials (e.g. "rename Lawn Care ` +
-    `to Lawn & Garden Care") are NOT yet supported — classify as ` +
-    `ambiguous with reasoning explaining that rename isn't on the ` +
-    `whitelist; suggest the customer remove the old entry and add a ` +
-    `new one if they want.\n` +
-    `15. VERBATIM QUOTES — when the customer wraps their replacement ` +
-    `text in straight double quotes ("...") or smart double quotes ` +
-    `("..."), that quoted text is a LITERAL string they want applied ` +
-    `as-is. For any patch whose target is a free-text field (tagline, ` +
-    `aboutBlurb, aboutBullets.add, services description/longDescription/` +
-    `pricingNotes, services.add (description fields inside JSON), ` +
-    `faq.question/answer, testimonials.quote, business.address/` +
-    `serviceArea/contactName, trust.associations/awards), the ` +
-    `\`newValue\` MUST equal the quoted text exactly — same punctuation, ` +
-    `capitalisation, spacing. Never paraphrase, polish, "improve", ` +
-    `"smooth", or "fix" quoted text. The customer chose those exact ` +
-    `words on purpose. Examples:\n` +
-    `  - "Update my tagline to \\"we fix gardens fast\\"." → ` +
-    `newValue: "we fix gardens fast" (not "We fix gardens fast." or ` +
-    `"Fast garden fixes" or any rewrite).\n` +
-    `  - "Set the FAQ answer about pricing to \\"Prices vary by job.\\"" ` +
-    `→ newValue: "Prices vary by job." (not "Prices vary depending on ` +
-    `the job.")\n` +
-    `Single quotes ('...') and apostrophes within words ("we're") are ` +
-    `NOT verbatim markers — only double quotes count. Cowork's ` +
-    `deterministic guard will overwrite any patch where you diverged ` +
-    `from a verbatim double-quoted candidate, so it's safer to copy ` +
-    `the quoted text exactly than to "improve" it.`;
+    `RULES:\n` +
+    `1. "in_scope" = ALL requested changes target patchable fields ` +
+    `(see list below) OR a visual asset rebuild, or both.\n` +
+    `2. "out_of_scope" = layout, design, structural, new pages, or ` +
+    `anything not in the patchable fields list.\n` +
+    `3. "ambiguous" = vague request ("make it better"), mixed scope ` +
+    `(some patchable + some not), colour without hex code, or missing info.\n` +
+    `4. "rebuildOnly" = true when request mentions a visual asset ` +
+    `(logo, photo, image, hero, gallery, banner) AND the snapshot ` +
+    `shows a recent upload (<7 days). True EVEN IF there are also ` +
+    `text changes (patches will be generated separately).\n` +
+    `5. Multi-field requests where ALL fields are patchable → "in_scope".\n` +
+    `6. Mixed scope (one patchable + one not) → "ambiguous".\n` +
+    `7. Never invent facts. Prefer "ambiguous" over wrong "in_scope".\n` +
+    `8. Brand colour without hex code → "ambiguous", reasoning starts ` +
+    `with "NEED_HEX_CODE:".\n\n` +
+    `PATCHABLE FIELDS:\n` +
+    `  Text: tagline, about blurb, about bullets\n` +
+    `  Business: contact name, phone (display + tel), email, address, ` +
+    `service area, opening hours\n` +
+    `  Services: description, long description, pricing notes, ` +
+    `price-from, features (per service by name)\n` +
+    `  FAQ: question, answer (per FAQ by question text)\n` +
+    `  Testimonials: quote, location, rating (per testimonial by name)\n` +
+    `  Trust: years experience, associations, awards\n` +
+    `  Brand: primary colour (hex), secondary colour (hex)\n` +
+    `  Offers: current promotional offer\n` +
+    `  Add/remove: services, FAQs, testimonials, about bullets\n\n` +
+    `SITE STATE:\n${JSON.stringify(snapshot, null, 2)}\n\n` +
+    `REQUEST:\n${message}`;
 
   const out = await callHaiku({
     system,
     prompt,
-    // Bumped from 600 → 1000 to accommodate multi-patch responses
-    // with locator fields (services / faq / testimonials) and the
-    // long opening-hours JSON blob.
-    maxTokens: 1000,
+    maxTokens: 300,
+    temperature: 0.2,
   });
   if (!out) return null;
 
-  // Parse + validate. Haiku occasionally wraps JSON in code fences
-  // despite the instruction; strip them defensively.
-  const jsonText = out
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```\s*$/i, "")
-    .trim();
+  const jsonText = stripCodeFences(out);
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
-  } catch (e) {
-    console.warn(
-      `[classify-change-request] JSON parse failed; raw response: ${out.slice(0, 200)}`,
-      e instanceof Error ? e.message : String(e),
-    );
+  } catch {
+    console.warn(`[classify-pass1] JSON parse failed: ${out.slice(0, 200)}`);
     return null;
   }
-  const validated = validateAndNormalise(parsed);
-  if (!validated || !validated.patches || validated.patches.length === 0) {
-    return validated;
-  }
-  // Belt + braces: even with rule #15 in the prompt, Haiku can still
-  // drift and "improve" quoted text. Apply the deterministic verbatim-
-  // quote guard so the customer's exact words ALWAYS win for free-text
-  // targets. See enforceVerbatimQuotes() docstring for the algorithm.
-  const guarded = enforceVerbatimQuotes(args.message, validated.patches);
-  if (guarded.overrideCount > 0) {
-    console.warn(
-      `[verbatim-quote-guard] Overrode ${guarded.overrideCount} ` +
-        `patch(es) on free-text targets to match the customer's ` +
-        `double-quoted text. Haiku had paraphrased the quoted value(s).`,
-    );
-  }
-  return { ...validated, patches: guarded.patches };
+
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as Record<string, unknown>;
+
+  const classification = obj.classification;
+  if (
+    classification !== "in_scope" &&
+    classification !== "out_of_scope" &&
+    classification !== "ambiguous"
+  )
+    return null;
+
+  const confidence = obj.confidence;
+  if (
+    typeof confidence !== "number" ||
+    !Number.isFinite(confidence) ||
+    confidence < 0 ||
+    confidence > 1
+  )
+    return null;
+
+  const reasoning = obj.reasoning;
+  if (typeof reasoning !== "string" || reasoning.trim().length === 0)
+    return null;
+
+  let rebuildOnly = false;
+  if (typeof obj.rebuildOnly === "boolean") rebuildOnly = obj.rebuildOnly;
+  if (rebuildOnly && classification !== "in_scope") rebuildOnly = false;
+
+  return {
+    classification,
+    confidence,
+    reasoning: reasoning.trim(),
+    rebuildOnly,
+  };
 }
 
-/**
- * Free-text patch targets — those where the customer's exact words
- * matter. Numeric, JSON-encoded, hex-colour, structured-locator, and
- * .remove/.add-marker targets are NOT in this set: their newValue
- * format is mechanical (a number, hex, JSON blob, or a marker token),
- * not natural language, so the verbatim-quote guard would either
- * misfire or be a no-op.
- *
- * Notably included:
- *   - business.address / serviceArea / contactName — customer often
- *     quotes the precise wording (postcodes, address punctuation)
- *   - business.publicEmail / phoneDisplay / phoneTel — not free-text
- *     per se, but commonly quoted, and the guard preserves whatever
- *     formatting the customer used (spaces, parentheses, +44 vs 0).
- *   - trust.associations / awards — verbatim acronyms / award names
- *
- * NOT included (intentionally):
- *   - aboutBullets (full array replace via JSON)
- *   - any *.add / *.remove
- *   - openingHours, services.features, services.priceFrom (numeric),
- *     trust.yearsExperience (numeric), testimonials.rating (numeric)
- *   - branding.brandColorPrimary / Secondary (hex)
- *   - content.offers.current (JSON blob)
- */
+// ================================================================
+// Pass 2 — Patch generation (focused prompt, low temperature)
+// ================================================================
+
+async function patchPass(
+  message: string,
+  snapshot: SiteSnapshot,
+  reasoning: string,
+): Promise<{
+  patches: NonNullable<ClassificationResult["patches"]>;
+  skippedPatches?: Array<{ target: string; reason: string }>;
+} | null> {
+  const targetsList = SAFE_PATCH_TARGETS.map((t) => `  ${t}`).join("\n");
+
+  const system =
+    `You generate structured data patches for website change requests. ` +
+    `The request was already classified as in_scope. Your ONLY job is ` +
+    `to produce the patches array. Output STRICT JSON — no prose, ` +
+    `no code fences.`;
+
+  const prompt =
+    `OUTPUT SCHEMA:\n` +
+    `{ "patches": [\n` +
+    `  { "target": "<target>", "newValue": "<string>",\n` +
+    `    "serviceName"?: "<exact name>",\n` +
+    `    "faqQuestion"?: "<exact question>",\n` +
+    `    "testimonialName"?: "<exact name>" }\n` +
+    `] }\n\n` +
+    `Return { "patches": [] } if no text/data patches needed ` +
+    `(pure asset rebuild).\n\n` +
+    `AVAILABLE TARGETS:\n${targetsList}\n\n` +
+    `ENCODING (newValue is ALWAYS a string):\n` +
+    `1. Plain text → the text directly\n` +
+    `2. Numbers (priceFrom, yearsExperience, rating) → numeric ` +
+    `string e.g. "15000"\n` +
+    `3. Arrays (aboutBullets, features) → JSON array string ` +
+    `e.g. '["item1","item2"]'\n` +
+    `4. Opening hours → JSON object by day abbrev ` +
+    `("Mon","Tue","Wed","Thu","Fri","Sat","Sun"), each: ` +
+    `{"open":bool,"from"?:"HH:MM","to"?:"HH:MM"}. Include ALL 7 days.\n` +
+    `5. Brand colours → "#rrggbb" hex\n` +
+    `6. Add ops → newValue is JSON of the new entry\n` +
+    `7. Remove ops → newValue is "remove", identify via locator\n\n` +
+    `LOCATORS:\n` +
+    `- content.services.* (except .add) → "serviceName" = EXACT name ` +
+    `from snapshot services array\n` +
+    `- content.faq.* (except .add) → "faqQuestion" = EXACT question ` +
+    `from snapshot faq array\n` +
+    `- content.testimonials.* (except .add) → "testimonialName" = ` +
+    `EXACT name from snapshot testimonials array\n` +
+    `- .add targets need NO locator\n\n` +
+    `IMPORTANT:\n` +
+    `1. One patch per distinct change. ALL parts of the request.\n` +
+    `2. Each (target + locator) must be unique.\n` +
+    `3. Only use targets from the list above.\n` +
+    `4. Text in "double quotes" in the request → use EXACTLY that ` +
+    `text as newValue. Never paraphrase quoted text.\n` +
+    `5. newValue must be the FULL replacement, not a diff.\n` +
+    `6. Phone number changes need TWO patches: business.phoneDisplay ` +
+    `AND business.phoneTel.\n\n` +
+    `SITE STATE:\n${JSON.stringify(snapshot, null, 2)}\n\n` +
+    `REQUEST:\n${message}\n\n` +
+    `CLASSIFICATION CONTEXT:\n${reasoning}`;
+
+  const out = await callHaiku({
+    system,
+    prompt,
+    maxTokens: 800,
+    temperature: 0.1,
+  });
+  if (!out) return null;
+
+  const jsonText = stripCodeFences(out);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    console.warn(`[classify-pass2] JSON parse failed: ${out.slice(0, 200)}`);
+    return null;
+  }
+
+  return validatePatchArray(parsed);
+}
+
+// ================================================================
+// Patch validation
+// ================================================================
+
+function validatePatchArray(raw: unknown): {
+  patches: NonNullable<ClassificationResult["patches"]>;
+  skippedPatches?: Array<{ target: string; reason: string }>;
+} | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+
+  const rawPatches = obj.patches;
+  if (!Array.isArray(rawPatches)) return null;
+  if (rawPatches.length === 0) return { patches: [] };
+
+  const normalised: NonNullable<ClassificationResult["patches"]> = [];
+  const skippedPatches: Array<{ target: string; reason: string }> = [];
+  const seenTargets = new Set<string>();
+
+  for (const p of rawPatches) {
+    if (!p || typeof p !== "object") continue;
+    const pp = p as Record<string, unknown>;
+    const target = pp.target;
+    const newValue = pp.newValue;
+
+    if (typeof target !== "string") continue;
+
+    if (!(SAFE_PATCH_TARGETS as readonly string[]).includes(target)) {
+      console.warn(
+        `[classify-pass2] Unsafe target '${target}' — skipping patch`,
+      );
+      skippedPatches.push({
+        target,
+        reason: `Unsupported target: ${target}`,
+      });
+      continue;
+    }
+
+    if (typeof newValue !== "string" || newValue.length === 0) {
+      console.warn(
+        `[classify-pass2] Empty/non-string newValue for '${target}' — skipping`,
+      );
+      skippedPatches.push({
+        target,
+        reason: `Empty or non-string newValue for '${target}'`,
+      });
+      continue;
+    }
+
+    const serviceName =
+      typeof pp.serviceName === "string" ? pp.serviceName.trim() : undefined;
+    const faqQuestion =
+      typeof pp.faqQuestion === "string" ? pp.faqQuestion.trim() : undefined;
+    const testimonialName =
+      typeof pp.testimonialName === "string"
+        ? pp.testimonialName.trim()
+        : undefined;
+
+    const needsServiceLocator =
+      target.startsWith("content.services.") &&
+      target !== "content.services.add";
+    const needsFaqLocator =
+      target.startsWith("content.faq.") && target !== "content.faq.add";
+    const needsTestimonialLocator =
+      target.startsWith("content.testimonials.") &&
+      target !== "content.testimonials.add";
+
+    if (needsServiceLocator && !serviceName) {
+      skippedPatches.push({
+        target,
+        reason: `Missing serviceName locator for '${target}'`,
+      });
+      continue;
+    }
+    if (needsFaqLocator && !faqQuestion) {
+      skippedPatches.push({
+        target,
+        reason: `Missing faqQuestion locator for '${target}'`,
+      });
+      continue;
+    }
+    if (needsTestimonialLocator && !testimonialName) {
+      skippedPatches.push({
+        target,
+        reason: `Missing testimonialName locator for '${target}'`,
+      });
+      continue;
+    }
+
+    const isAddOp = target.endsWith(".add");
+    const dedupeKey = isAddOp
+      ? `${target}|${newValue}`
+      : serviceName || faqQuestion || testimonialName
+        ? `${target}|${serviceName ?? ""}|${faqQuestion ?? ""}|${testimonialName ?? ""}`
+        : target;
+
+    if (seenTargets.has(dedupeKey)) {
+      skippedPatches.push({ target, reason: `Duplicate target` });
+      continue;
+    }
+    seenTargets.add(dedupeKey);
+
+    normalised.push({
+      target: target as SafeTarget,
+      newValue,
+      serviceName,
+      faqQuestion,
+      testimonialName,
+    });
+  }
+
+  return {
+    patches: normalised,
+    skippedPatches: skippedPatches.length > 0 ? skippedPatches : undefined,
+  };
+}
+
+// ================================================================
+// Verbatim quote guard
+// ================================================================
+
+/** Free-text patch targets where the customer's exact words matter. */
 const VERBATIM_GUARDED_TARGETS: ReadonlySet<string> = new Set([
   "copy.tagline",
   "copy.aboutBlurb",
@@ -534,22 +641,12 @@ const VERBATIM_GUARDED_TARGETS: ReadonlySet<string> = new Set([
  * customer's change-request message. Single quotes / apostrophes are
  * intentionally excluded — they collide with English contractions
  * (we're, don't) and the false-positive risk outweighs the benefit.
- * Customers who want verbatim text can use double quotes.
- *
- * Returns the inner text only (without the surrounding quotes), in
- * order of appearance. Empty / whitespace-only quotes are dropped.
  *
  * Exported for unit testing.
  */
 export function extractDoubleQuotedStrings(message: string): string[] {
   const results: string[] = [];
-  // Match: ASCII double quote OR Unicode "left double quotation
-  // mark" (U+201C) OR Unicode "right double quotation mark" (U+201D)
-  // → any non-quote, non-newline content → another double-quote
-  // variant. Multi-line quoted strings are extremely rare in change
-  // requests and could mis-bracket, so we require the content stays
-  // on one line.
-  const re = /["“”]([^"“”\n]+)["“”]/g;
+  const re = /[“”""]([^“”""\n]+)[“”""]/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(message)) !== null) {
     const inner = m[1]!.trim();
@@ -562,18 +659,11 @@ export function extractDoubleQuotedStrings(message: string): string[] {
  * Enforce verbatim-quote semantics on Haiku-generated patches.
  *
  * Algorithm:
- *   1. Extract double-quoted strings from the customer's message in
- *      order of appearance.
- *   2. Walk the patches array in order. For each patch whose target
- *      is in VERBATIM_GUARDED_TARGETS, consume the next available
- *      quote and use it as the newValue. (Non-free-text patches do
- *      not consume quotes — order alignment stays sensible when
- *      customers mix numeric + free-text changes.)
- *   3. When a patch's existing newValue already equals the matched
- *      quote, no-op. Otherwise overwrite + count the override.
- *
- * Returns the (possibly mutated) patches array + an override count
- * for caller logging.
+ *   1. Extract double-quoted strings from the customer's message.
+ *   2. Walk patches in order. For each free-text target, consume
+ *      the next available quote as newValue.
+ *   3. If existing newValue already matches, no-op. Otherwise
+ *      overwrite + count.
  *
  * Exported for unit testing.
  */
@@ -601,195 +691,13 @@ export function enforceVerbatimQuotes(
   return { patches: next, overrideCount };
 }
 
-/**
- * Defensive parse of Haiku's JSON output. Returns null on any
- * shape mismatch — a malformed patch or out-of-whitelist target
- * is treated as "couldn't classify" (caller escalates to Ben).
- */
-function validateAndNormalise(raw: unknown): ClassificationResult | null {
-  if (!raw || typeof raw !== "object") return null;
-  const obj = raw as Record<string, unknown>;
-  const classification = obj.classification;
-  const confidence = obj.confidence;
-  const reasoning = obj.reasoning;
-  if (
-    classification !== "in_scope" &&
-    classification !== "out_of_scope" &&
-    classification !== "ambiguous"
-  ) {
-    return null;
-  }
-  if (
-    typeof confidence !== "number" ||
-    !Number.isFinite(confidence) ||
-    confidence < 0 ||
-    confidence > 1
-  ) {
-    return null;
-  }
-  if (typeof reasoning !== "string" || reasoning.trim().length === 0) {
-    return null;
-  }
-  // Backward-compat: accept legacy single `patch` field too. Haiku
-  // can drift back to that shape when the prompt is long; normalise
-  // either form into an array.
-  // Parse rebuildOnly early so early-return paths inside the patch
-  // validation loop can preserve it.
-  let rebuildOnly = false;
-  if (obj.rebuildOnly !== undefined && obj.rebuildOnly !== null) {
-    if (typeof obj.rebuildOnly !== "boolean") return null;
-    rebuildOnly = obj.rebuildOnly;
-  }
-  if (rebuildOnly && classification !== "in_scope") {
-    rebuildOnly = false;
-  }
+// ================================================================
+// Helpers
+// ================================================================
 
-  const rawPatches: unknown =
-    obj.patches !== undefined && obj.patches !== null
-      ? obj.patches
-      : obj.patch !== undefined && obj.patch !== null
-        ? [obj.patch]
-        : undefined;
-
-  let patches: ClassificationResult["patches"] | undefined;
-  const skippedPatches: Array<{ target: string; reason: string }> = [];
-  if (rawPatches !== undefined) {
-    if (!Array.isArray(rawPatches)) return null;
-    if (rawPatches.length === 0) {
-      // Empty array means "no patches" — same as undefined.
-      patches = undefined;
-    } else {
-      const normalised: NonNullable<ClassificationResult["patches"]> = [];
-      const seenTargets = new Set<string>();
-      for (const p of rawPatches) {
-        if (!p || typeof p !== "object") return null;
-        const pp = p as Record<string, unknown>;
-        const target = pp.target;
-        const newValue = pp.newValue;
-        if (typeof target !== "string") return null;
-        // Whitelist enforcement — even one unsafe target invalidates
-        // the entire patch set (we don't apply partial; mixed scope
-        // requires operator review).
-        if (!(SAFE_PATCH_TARGETS as readonly string[]).includes(target)) {
-          console.warn(
-            `[classify-change-request] Haiku proposed unsafe target '${target}' — discarding ALL patches + downgrading to ambiguous`,
-          );
-          return {
-            classification: "ambiguous",
-            confidence: Math.min(confidence, 0.5),
-            reasoning: `${reasoning} (Note: Cowork rejected the model's proposed patches because one targeted an unsupported field: ${target}.)`,
-            rebuildOnly: rebuildOnly ? true : undefined,
-          };
-        }
-        if (typeof newValue !== "string" || newValue.length === 0) {
-          console.warn(
-            `[classify-change-request] Haiku patch had empty/non-string newValue for target '${target}' — skipping patch`,
-          );
-          skippedPatches.push({
-            target: target as string,
-            reason: `Empty or non-string newValue for '${target}'`,
-          });
-          continue;
-        }
-        // Locator enforcement — service / faq / testimonial targets
-        // need their corresponding locator field. Missing locator =
-        // we can't safely identify which entry to patch.
-        const serviceName =
-          typeof pp.serviceName === "string"
-            ? pp.serviceName.trim()
-            : undefined;
-        const faqQuestion =
-          typeof pp.faqQuestion === "string"
-            ? pp.faqQuestion.trim()
-            : undefined;
-        const testimonialName =
-          typeof pp.testimonialName === "string"
-            ? pp.testimonialName.trim()
-            : undefined;
-        // `.add` operations create a new entry, so they don't need
-        // a locator. Everything else under content.services/faq/
-        // testimonials (UPDATE existing field, .remove) MUST have
-        // the matching locator.
-        const needsServiceLocator =
-          target.startsWith("content.services.") &&
-          target !== "content.services.add";
-        const needsFaqLocator =
-          target.startsWith("content.faq.") && target !== "content.faq.add";
-        const needsTestimonialLocator =
-          target.startsWith("content.testimonials.") &&
-          target !== "content.testimonials.add";
-        if (needsServiceLocator && !serviceName) {
-          console.warn(
-            `[classify-change-request] Missing serviceName locator for target '${target}' — skipping patch`,
-          );
-          skippedPatches.push({
-            target: target as string,
-            reason: `Missing serviceName locator for '${target}'`,
-          });
-          continue;
-        }
-        if (needsFaqLocator && !faqQuestion) {
-          console.warn(
-            `[classify-change-request] Missing faqQuestion locator for target '${target}' — skipping patch`,
-          );
-          skippedPatches.push({
-            target: target as string,
-            reason: `Missing faqQuestion locator for '${target}'`,
-          });
-          continue;
-        }
-        if (needsTestimonialLocator && !testimonialName) {
-          console.warn(
-            `[classify-change-request] Missing testimonialName locator for target '${target}' — skipping patch`,
-          );
-          skippedPatches.push({
-            target: target as string,
-            reason: `Missing testimonialName locator for '${target}'`,
-          });
-          continue;
-        }
-        // Reject duplicate-target requests (Haiku violating rule #8).
-        // Last-write-wins would be ambiguous; safer to escalate.
-        // For locator-aware targets, uniqueness is target+locator —
-        // same target with different services is fine.
-        // EXCEPTION: `.add` targets are intentionally append-only
-        // and a customer might want to add multiple entries in one
-        // request ("Add two new FAQs..."). Include newValue in the
-        // dedupe key for those so they don't collide.
-        const isAddOp = target.endsWith(".add");
-        const dedupeKey = isAddOp
-          ? `${target}|${newValue}`
-          : serviceName || faqQuestion || testimonialName
-            ? `${target}|${serviceName ?? ""}|${faqQuestion ?? ""}|${testimonialName ?? ""}`
-            : target;
-        if (seenTargets.has(dedupeKey)) {
-          return {
-            classification: "ambiguous",
-            confidence: Math.min(confidence, 0.5),
-            reasoning: `${reasoning} (Note: Cowork rejected the model's patches because a duplicate appeared: ${target}.)`,
-            rebuildOnly: rebuildOnly ? true : undefined,
-          };
-        }
-        seenTargets.add(dedupeKey);
-        normalised.push({
-          target: target as SafeTarget,
-          newValue,
-          serviceName,
-          faqQuestion,
-          testimonialName,
-        });
-      }
-      patches = normalised.length > 0 ? normalised : undefined;
-    }
-  }
-  return {
-    classification,
-    confidence,
-    reasoning: skippedPatches.length > 0
-      ? `${reasoning.trim()} (Note: ${skippedPatches.length} patch(es) skipped: ${skippedPatches.map(s => s.reason).join('; ')})`
-      : reasoning.trim(),
-    patches,
-    rebuildOnly: rebuildOnly ? true : undefined,
-    skippedPatches: skippedPatches.length > 0 ? skippedPatches : undefined,
-  };
+function stripCodeFences(out: string): string {
+  return out
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
 }
