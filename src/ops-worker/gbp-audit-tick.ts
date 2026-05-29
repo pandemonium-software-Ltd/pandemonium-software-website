@@ -59,6 +59,7 @@ export async function runGbpAuditTick(): Promise<void> {
   }
 
   const targets = prospects
+    .filter((p) => p.status === "Live")
     .filter((p) => p.moduleSelections.includes("Google Business Profile Setup/Audit"))
     .map((p) => ({ prospect: p, placeId: readPlaceId(p) }))
     .filter((t): t is { prospect: ProspectRecord; placeId: string } => !!t.placeId);
