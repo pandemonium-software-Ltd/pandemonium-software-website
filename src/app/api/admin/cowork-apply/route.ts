@@ -216,6 +216,7 @@ export async function POST(request: Request) {
           token,
           prospectName: prospect.name,
           businessName: prospect.business ?? "",
+          changeRequestId,
           trigger: "admin-cowork-apply",
         },
       });

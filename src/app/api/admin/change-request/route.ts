@@ -256,7 +256,7 @@ export async function PATCH(request: Request) {
     (effectiveStatus === "resolved" && updateResult.transitionedToTerminal) ||
     action === "revert";
   if (shouldRebuild) {
-    rebuildStatus = await maybeDispatchRebuild(prospect);
+    rebuildStatus = await maybeDispatchRebuild(prospect, changeRequestId);
   }
 
   // Always notify admin of the action — paper trail in inbox.
@@ -349,6 +349,7 @@ async function maybeDispatchRebuild(
   prospect: { token: string; pageId: string; name: string; business?: string;
     workerName?: string; cloudflareAccountId?: string;
     previewBuildTriggeredAt?: string },
+  changeRequestId?: string,
 ):
   | Promise<
       | { dispatched: true; via: "change-request-resolve" }
@@ -391,9 +392,7 @@ async function maybeDispatchRebuild(
         token: prospect.token,
         prospectName: prospect.name,
         businessName: prospect.business ?? "",
-        // Surfaces in the GitHub Action's run name so logs show
-        // "triggered by change-request-resolve" rather than just
-        // "triggered by repository_dispatch".
+        ...(changeRequestId ? { changeRequestId } : {}),
         trigger: "change-request-resolve",
       },
     });

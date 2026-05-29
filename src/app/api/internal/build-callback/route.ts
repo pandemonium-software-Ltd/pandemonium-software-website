@@ -488,6 +488,23 @@ export async function POST(request: Request) {
     // operator-Apply path in /admin). Mark the CR resolved + send the
     // customer the "your change is live" email.
     if (parsed.data.changeRequestId && parsed.data.changeRequestId.length > 0) {
+      const existingCr = prospect.changeRequests.find(
+        (c) => c.id === parsed.data.changeRequestId,
+      );
+      const alreadyTerminal =
+        existingCr &&
+        (existingCr.status === "resolved" || existingCr.status === "rejected");
+      if (alreadyTerminal) {
+        console.log(
+          `[build-callback] LIVE build for ${parsed.data.token} cr=${parsed.data.changeRequestId} — CR already ${existingCr.status}, skipping resolve + email (admin/push-through already handled)`,
+        );
+        return NextResponse.json({
+          success: true,
+          action: "change-request-already-resolved",
+          mode: "live",
+          changeRequestId: parsed.data.changeRequestId,
+        });
+      }
       const merged = await patchChangeRequest(
         prospect.pageId,
         parsed.data.changeRequestId,
