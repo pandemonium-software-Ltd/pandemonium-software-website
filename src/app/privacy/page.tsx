@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const lastUpdated = "28 May 2026";
+const lastUpdated = "29 May 2026";
 
 export default function PrivacyPage() {
   return (
@@ -241,6 +241,10 @@ export default function PrivacyPage() {
             <li>Ask me to stop using it for a particular purpose.</li>
             <li>Withdraw consent at any time, if consent is the basis.</li>
             <li>Receive your data in a portable format.</li>
+            <li>
+              Make a data protection complaint directly to me (see
+              Section 8 below).
+            </li>
           </ul>
           <p>
             To exercise any of these rights, email{" "}
@@ -248,12 +252,52 @@ export default function PrivacyPage() {
             and tell me which one. I&apos;ll reply within 30 days.
           </p>
 
-          <h2>8. Complaints</h2>
+          <h2>8. Data protection complaints</h2>
           <p>
-            If you think I&apos;ve mishandled your data, I&apos;d like to
-            hear about it first so I can put it right. But you also have
-            the right to complain to the Information Commissioner&apos;s
-            Office (ICO):
+            Under the Data (Use and Access) Act 2025, you have the
+            statutory right to make a data protection complaint
+            directly to me. If you believe I have mishandled your
+            personal data, here is how the process works:
+          </p>
+
+          <h3>How to complain</h3>
+          <p>
+            Email{" "}
+            <a href={`mailto:${site.contactEmail}`}>
+              {site.contactEmail}
+            </a>{" "}
+            with the subject line &quot;Data protection complaint&quot;
+            and describe the issue. You can also raise a complaint by
+            post to my registered office:{" "}
+            {site.legal.registeredOfficeOneLine}.
+          </p>
+
+          <h3>What happens next</h3>
+          <ul>
+            <li>
+              <strong>Acknowledgement:</strong> I will acknowledge
+              your complaint in writing within{" "}
+              <strong>30 calendar days</strong> of receiving it, with
+              a summary of your complaint and a reference number.
+            </li>
+            <li>
+              <strong>Investigation:</strong> I will begin
+              investigating without undue delay, taking into account
+              the complexity of the issue.
+            </li>
+            <li>
+              <strong>Outcome:</strong> I will send you a written
+              response explaining my conclusions, any remedial action
+              I have taken or will take, and your right to escalate
+              to the ICO if you are not satisfied.
+            </li>
+          </ul>
+
+          <h3>Escalation to the ICO</h3>
+          <p>
+            If you are not satisfied with my response, or at any
+            time, you have the right to complain to the Information
+            Commissioner&apos;s Office (ICO):
           </p>
           <ul>
             <li>

@@ -421,7 +421,9 @@ export default function DpaPage() {
           <p>
             If a Data Subject contacts the Processor directly with a
             rights request (access, rectification, erasure, restriction,
-            portability, or objection), the Processor will:
+            portability, objection, or a data protection complaint
+            under the Data (Use and Access) Act 2025), the Processor
+            will:
           </p>
           <ul>
             <li>

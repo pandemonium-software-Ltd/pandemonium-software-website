@@ -113,6 +113,7 @@ asks for a second location.
 
 | # | Item | Complexity | Duration | Monthly cost | Status |
 |---|------|------------|----------|--------------|--------|
+| 5 | **Comprehensive admin dashboard** — 4-panel system extending `/admin`. **(A) Marketing analytics:** site-wide traffic trends, page performance, referrer breakdown (data already in D1 daily_analytics). **(B) Customer insight:** pipeline by niche (businessType already captured at enquiry), location heatmap, conversion funnel (Phase 1→2→3→Paid→Live), revenue by tier/module, founding vs standard mix. **(C) Build monitoring:** onboarding progress per customer (steps 1-7 status), stuck-build detection, launch date tracking, preview/go-live build failures, time-in-step alerts. **(D) Run monitoring:** live site health checks, deployment status, Sentry error rates, cron execution health, R2 storage usage, Stripe payment status. Build order: C→B→D→A. | High | 3-5 days | £0 | Recommended — NEXT |
 | 8 | **Lead inbox / mini-CRM ⭐** — structured enquiry form (project type / size / budget), pipeline (New → Quoted → Won → Lost), follow-up reminders, SMS on new lead | High | 5-7 days | £0 base · +£15-30/mo if SMS (Twilio) | Optional |
 | 9 | **Review request automation ⭐** — auto SMS/email after a job, one-click Google review link, dashboard tracks responses | Medium | 2 days | £0 · +£10-20/mo if SMS | Optional |
 | 10 | **Performance pricing tier ⭐** — base £X + £Y per qualified lead delivered, capped. Needs #1 + #8 first | Medium | 1-2 days | £0 (built on existing) | Optional |
@@ -149,11 +150,11 @@ asks for a second location.
 
 ## 📋 Suggested next 3 moves
 
-1. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
-2. **#11 (Privacy/cookie refresh)** or **#17 (SEO pass)** — polish.
-3. **#8 (Lead inbox)** or **#9 (Review request automation)** — build.
+1. **#5 (Admin dashboard)** — 4-panel build: build monitoring → customer insight → run monitoring → marketing analytics.
+2. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
+3. **#11 (Privacy/cookie refresh)** or **#17 (SEO pass)** — polish.
 
-After #1, you're production-ready for first paying customer.
+After #5 + #1, you're production-ready with full operational visibility.
 
 ---
 
