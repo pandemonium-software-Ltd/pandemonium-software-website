@@ -682,13 +682,28 @@ export function enforceVerbatimQuotes(
   const quotes = extractDoubleQuotedStrings(message);
   if (quotes.length === 0) return { patches, overrideCount: 0 };
 
-  let cursor = 0;
+  const usedQuotes = new Set<number>();
   let overrideCount = 0;
   const next = patches.map((p) => {
     if (!VERBATIM_GUARDED_TARGETS.has(p.target)) return p;
-    if (cursor >= quotes.length) return p;
-    const quote = quotes[cursor]!;
-    cursor++;
+    // Find the best matching quote for THIS patch: prefer exact
+    // match, then fuzzy match (Haiku's value is a substring or
+    // close edit of the quoted text). Skip quotes already consumed.
+    let bestIdx = -1;
+    for (let i = 0; i < quotes.length; i++) {
+      if (usedQuotes.has(i)) continue;
+      const q = quotes[i]!;
+      if (p.newValue === q) { bestIdx = i; break; }
+      // Fuzzy: Haiku's value contains ≥60% of the quote or vice versa
+      const shorter = p.newValue.length < q.length ? p.newValue : q;
+      const longer = p.newValue.length < q.length ? q : p.newValue;
+      if (longer.includes(shorter) && shorter.length / longer.length > 0.6) {
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0) return p;
+    usedQuotes.add(bestIdx);
+    const quote = quotes[bestIdx]!;
     if (p.newValue === quote) return p;
     overrideCount++;
     return { ...p, newValue: quote };

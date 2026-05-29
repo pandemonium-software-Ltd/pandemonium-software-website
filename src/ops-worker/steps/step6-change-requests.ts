@@ -389,6 +389,10 @@ async function tryAutoApply(args: {
       patches: args.patches,
     });
     if (!apply.ok) {
+      console.error(
+        `[step6:${args.prospect.token.slice(0, 8)}] applyChangeRequestPatches FAILED: ${apply.reason}. ` +
+          `Patches attempted: ${JSON.stringify(args.patches.map((p) => p.target))}`,
+      );
       return { kind: "fail", reason: `apply failed: ${apply.reason}` };
     }
     // Persist all patches in audit-log shape (each with its own

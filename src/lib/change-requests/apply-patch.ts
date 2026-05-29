@@ -87,7 +87,18 @@ export async function applyChangeRequestPatches(args: {
   const parsed = onboardingDataSchema.safeParse(
     args.prospect.onboardingData ?? {},
   );
-  const baseData: OnboardingData = parsed.success ? parsed.data : {};
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    console.error(
+      `[apply-patch] onboardingData failed schema validation: ` +
+        `${issue?.path?.join(".")} — ${issue?.message ?? "unknown"}`,
+    );
+    return {
+      ok: false,
+      reason: `onboardingData failed schema validation: ${issue?.path?.join(".")} — ${issue?.message ?? "unknown"}`,
+    };
+  }
+  const baseData: OnboardingData = parsed.data;
 
   // Mutable working copies of each slice we might touch. We
   // re-assemble into the final OnboardingData at the end.
@@ -435,11 +446,24 @@ export async function applyChangeRequestPatches(args: {
   // at the pre-call state because we haven't written yet.
   const reparsed = onboardingDataSchema.safeParse(newData);
   if (!reparsed.success) {
+    const details = reparsed.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join(".")}:${i.message}`)
+      .join("; ");
+    const failPath = reparsed.error.issues[0]?.path;
+    if (failPath) {
+      let val: unknown = newData;
+      for (const k of failPath) {
+        val = (val as Record<string, unknown>)?.[k];
+      }
+      console.error(
+        `[apply-patch] re-validation failed at ${failPath.join(".")}: ` +
+          `value=${JSON.stringify(val)} (type=${typeof val}, len=${typeof val === "string" ? val.length : "N/A"})`,
+      );
+    }
     return {
       ok: false,
-      reason: `Schema rejected combined new state: ${
-        reparsed.error.issues[0]?.message ?? "unknown"
-      }`,
+      reason: `Schema rejected combined new state: ${details}`,
     };
   }
 
