@@ -50,6 +50,7 @@ export type IncomingPatch = {
   serviceName?: string;
   faqQuestion?: string;
   testimonialName?: string;
+  locationName?: string;
 };
 
 /**
@@ -415,6 +416,33 @@ export async function applyChangeRequestPatches(args: {
         }
         content.testimonials = tests;
       }
+      // ----- Per-location fields (locator: locationName) -----
+      else if (patch.target.startsWith("locations.")) {
+        if (!patch.locationName)
+          throw new Error(
+            `locationName locator required for ${patch.target}`,
+          );
+        const locations = Array.isArray(content.locations)
+          ? (content.locations as Record<string, unknown>[])
+          : [];
+        const idx = locations.findIndex(
+          (l) =>
+            normaliseLocator(l?.name) ===
+            normaliseLocator(patch.locationName),
+        );
+        if (idx < 0)
+          throw new Error(
+            `Location "${patch.locationName}" not found on this customer`,
+          );
+        const field = patch.target.slice("locations.".length);
+        previousValue = locations[idx]![field] ?? undefined;
+        if (field === "openingHours") {
+          locations[idx]![field] = parseOpeningHoursBlob(patch.newValue);
+        } else {
+          locations[idx]![field] = patch.newValue;
+        }
+        content.locations = locations;
+      }
       // ----- Unknown -----
       else {
         return {
@@ -735,6 +763,7 @@ export async function applyChangeRequestPatch(args: {
   serviceName?: string;
   faqQuestion?: string;
   testimonialName?: string;
+  locationName?: string;
 }): Promise<
   | { ok: true; target: SafeTarget; previousValue: unknown; newValue: string }
   | { ok: false; reason: string }
@@ -748,6 +777,7 @@ export async function applyChangeRequestPatch(args: {
         serviceName: args.serviceName,
         faqQuestion: args.faqQuestion,
         testimonialName: args.testimonialName,
+        locationName: args.locationName,
       },
     ],
   });

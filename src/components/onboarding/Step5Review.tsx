@@ -124,7 +124,8 @@ export default function Step5Review({
   const [error, setError] = useState<string | null>(null);
 
   const disabled = readOnly;
-  const remaining = MAX_REVIEW_EDITS - edits.length;
+  const activeEdits = edits.filter((e) => e.status !== "rejected");
+  const remaining = MAX_REVIEW_EDITS - activeEdits.length;
   const todayIso = new Date().toISOString().slice(0, 10);
 
   // ---------- Submit a revision ----------
@@ -338,7 +339,7 @@ export default function Step5Review({
           <h3 className="font-serif text-lg font-semibold text-navy-900">
             B. Request edits
           </h3>
-          <EditCounter used={edits.length} max={MAX_REVIEW_EDITS} />
+          <EditCounter used={activeEdits.length} max={MAX_REVIEW_EDITS} />
         </div>
         <p className="mt-2 text-sm text-navy-700">
           You get up to <strong>{MAX_REVIEW_EDITS} rounds</strong> of
@@ -359,7 +360,7 @@ export default function Step5Review({
           <div className="mt-6">
             <label className="block">
               <span className="block text-sm font-semibold text-navy-900">
-                Edit {edits.length + 1} of {MAX_REVIEW_EDITS}
+                Edit {activeEdits.length + 1} of {MAX_REVIEW_EDITS}
               </span>
               <textarea
                 value={editDraft}

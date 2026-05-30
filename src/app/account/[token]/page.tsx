@@ -131,6 +131,24 @@ export default async function AccountPage({
     };
   };
   const onboardingShape = (prospect.onboardingData ?? {}) as OnboardingShape;
+  const contentSlice = (prospect.onboardingData as Record<string, unknown> | null)?.content as Record<string, unknown> | undefined;
+  const businessSlice = (contentSlice?.business ?? {}) as Record<string, unknown>;
+  const locationsSlice = Array.isArray(contentSlice?.locations) ? contentSlice.locations as Array<Record<string, unknown>> : [];
+  const siteData = {
+    phoneDisplay: typeof businessSlice.phoneDisplay === "string" ? businessSlice.phoneDisplay : prospect.phone ?? "",
+    phoneTel: typeof businessSlice.phoneTel === "string" ? businessSlice.phoneTel : "",
+    publicEmail: typeof businessSlice.publicEmail === "string" ? businessSlice.publicEmail : prospect.email ?? "",
+    address: typeof businessSlice.address === "string" ? businessSlice.address : "",
+    openingHours: (businessSlice.openingHours ?? null) as Record<string, { open: boolean; from?: string; to?: string }> | null,
+    locations: locationsSlice.map((l) => ({
+      name: typeof l.name === "string" ? l.name : "",
+      phoneDisplay: typeof l.phoneDisplay === "string" ? l.phoneDisplay : "",
+      phoneTel: typeof l.phoneTel === "string" ? l.phoneTel : "",
+      publicEmail: typeof l.publicEmail === "string" ? l.publicEmail : "",
+      address: typeof l.address === "string" ? l.address : "",
+      openingHours: (l.openingHours ?? null) as Record<string, { open: boolean; from?: string; to?: string }> | null,
+    })),
+  };
   const customerDomain = onboardingShape.domain?.domain ?? "";
   // Pull the live offer through to the dashboard. Only render in
   // OfferCard if we have a headline + dates (the schema guarantees
@@ -249,6 +267,7 @@ export default async function AccountPage({
       newsletterSummary={newsletterSummary}
       effectiveCaps={effectiveCaps}
       hasAnalytics={!!prospect.cloudflareZoneId}
+      siteData={siteData}
     />
   );
 }

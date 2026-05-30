@@ -835,10 +835,10 @@ const step5ReviewSchema = z.object({
   previewSubmittedAt: z.string().optional(),
   /** URL Cowork sets once a preview is built. Empty until then. */
   previewUrl: z.string().trim().url().max(500).optional(),
-  /** Customer's revision requests; capped at MAX_REVIEW_EDITS by
-   *  the schema AND by the dedicated /api/onboarding/review-edit
-   *  endpoint. */
-  edits: z.array(reviewEditSchema).max(MAX_REVIEW_EDITS).optional(),
+  /** Customer's revision requests; capped at MAX_REVIEW_EDITS
+   *  active (non-rejected) edits by the /api/onboarding/review-edit
+   *  endpoint. Array may exceed MAX_REVIEW_EDITS if some are rejected. */
+  edits: z.array(reviewEditSchema).optional(),
   /** YYYY-MM-DD. Persisted to Notion's "Go Live Date" property when
    *  the step is marked done. */
   goLiveDate: z

@@ -361,7 +361,7 @@ type AutoApplyResult = { kind: "ok" } | { kind: "fail"; reason: string };
 async function tryAutoApply(args: {
   prospect: ProspectRecord;
   item: Actionable;
-  patches: Array<{ target: SafeTarget; newValue: string }>;
+  patches: Array<{ target: SafeTarget; newValue: string; serviceName?: string; faqQuestion?: string; testimonialName?: string; locationName?: string }>;
   env: Parameters<Step["run"]>[1];
   reasoning: string;
   /** Rebuild-only intent: customer re-uploaded an asset, no text

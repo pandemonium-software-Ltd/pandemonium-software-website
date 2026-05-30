@@ -104,6 +104,21 @@ export type AccountDashboardProps = {
    *  tile renders — the API would just return empty data
    *  otherwise, no point showing the chrome. */
   hasAnalytics?: boolean;
+  siteData?: {
+    phoneDisplay: string;
+    phoneTel: string;
+    publicEmail: string;
+    address: string;
+    openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+    locations: Array<{
+      name: string;
+      phoneDisplay: string;
+      phoneTel: string;
+      publicEmail: string;
+      address: string;
+      openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+    }>;
+  };
 };
 
 // Stage groupings — used to gate which blocks render.
@@ -185,6 +200,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
     newsletterSummary,
     effectiveCaps,
     hasAnalytics,
+    siteData,
   } = props;
   const hasOffersModule = modules.includes("Offers");
   const hasNewsletterModule = modules.includes("Newsletter");
@@ -832,6 +848,7 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 requests={requests}
                 cap={effectiveCrCap}
                 id="section-changes"
+                siteData={siteData}
                 onSubmitted={(req) => setRequests((prev) => [req, ...prev])}
                 onRetracted={(id) =>
                   setRequests((prev) =>
@@ -1119,6 +1136,237 @@ function NextStepCard({
 
 // ---------- Change requests ----------
 
+type SiteDataProp = NonNullable<AccountDashboardProps["siteData"]>;
+
+type QuickEditField = "phone" | "email" | "address" | "openingHours";
+const QUICK_EDIT_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "phone", label: "Phone number" },
+  { value: "email", label: "Email address" },
+  { value: "address", label: "Address" },
+  { value: "openingHours", label: "Opening hours" },
+];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function QuickEditForm({
+  token,
+  siteData,
+  pending,
+  setPending,
+  setError,
+  setSuccess,
+  onSubmitted,
+  remaining,
+  submitDialogRef,
+}: {
+  token: string;
+  siteData: SiteDataProp;
+  pending: boolean;
+  setPending: (v: boolean) => void;
+  setError: (v: string | null) => void;
+  setSuccess: (v: string | null) => void;
+  onSubmitted: (req: ChangeRequest) => void;
+  remaining: number;
+  submitDialogRef: React.RefObject<HTMLDialogElement | null>;
+}) {
+  const [field, setField] = useState<QuickEditField>("phone");
+  const hasLocations = siteData.locations.length > 0;
+  const [locationIdx, setLocationIdx] = useState(-1); // -1 = HQ/primary
+  const [newValue, setNewValue] = useState("");
+  const [hours, setHours] = useState<Record<string, { open: boolean; from: string; to: string }>>(() =>
+    Object.fromEntries(DAYS.map((d) => [d, { open: true, from: "09:00", to: "17:00" }])),
+  );
+
+  const currentSource = locationIdx < 0 ? siteData : siteData.locations[locationIdx];
+  const currentVal = currentSource
+    ? field === "phone" ? currentSource.phoneDisplay
+      : field === "email" ? currentSource.publicEmail
+      : field === "address" ? currentSource.address
+      : ""
+    : "";
+
+  useEffect(() => {
+    if (field === "openingHours" && currentSource?.openingHours) {
+      const h: Record<string, { open: boolean; from: string; to: string }> = {};
+      for (const d of DAYS) {
+        const existing = currentSource.openingHours[d];
+        h[d] = existing
+          ? { open: existing.open, from: existing.from ?? "09:00", to: existing.to ?? "17:00" }
+          : { open: false, from: "09:00", to: "17:00" };
+      }
+      setHours(h);
+    }
+  }, [field, locationIdx, currentSource]);
+
+  function buildMessage(): string {
+    const loc = locationIdx >= 0 ? siteData.locations[locationIdx]?.name : null;
+    const prefix = loc ? `For ${loc}: ` : "";
+    if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
+    if (field === "email") return `${prefix}Change email to: ${newValue}`;
+    if (field === "address") return `${prefix}Change address to: "${newValue}"`;
+    // opening hours
+    const parts = DAYS.map((d) => {
+      const h = hours[d]!;
+      return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
+    });
+    return `${prefix}Change opening hours to:\n${parts.join("\n")}`;
+  }
+
+  async function handleQuickSubmit() {
+    setError(null);
+    setSuccess(null);
+    if (field !== "openingHours" && newValue.trim().length === 0) {
+      setError("Please enter a new value.");
+      return;
+    }
+    if (remaining <= 0) {
+      setError("No requests remaining this month.");
+      return;
+    }
+    const msg = buildMessage();
+    setPending(true);
+    try {
+      const res = await fetch("/api/account/change-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, message: msg }),
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        request?: ChangeRequest;
+        remaining?: number;
+        error?: string;
+      };
+      if (!res.ok || !json.success || !json.request) {
+        setError(json.error ?? "Couldn't submit. Try again.");
+        return;
+      }
+      onSubmitted(json.request);
+      setNewValue("");
+      const r = json.remaining ?? remaining - 1;
+      setSuccess(`Got it — ${r} request${r === 1 ? "" : "s"} remaining this month.`);
+      setTimeout(() => setSuccess(null), 8000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
+      {/* Field picker */}
+      <div>
+        <span className="block text-sm font-semibold text-navy-900">What do you want to change?</span>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {QUICK_EDIT_FIELDS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => { setField(f.value); setNewValue(""); setError(null); }}
+              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${field === f.value ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Location picker (if multi-location) */}
+      {hasLocations && (
+        <div>
+          <span className="block text-sm font-semibold text-navy-900">Which location?</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setLocationIdx(-1)}
+              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === -1 ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+            >
+              Main / HQ
+            </button>
+            {siteData.locations.map((loc, i) => (
+              <button
+                key={loc.name}
+                type="button"
+                onClick={() => setLocationIdx(i)}
+                className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === i ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+              >
+                {loc.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Value input */}
+      {field !== "openingHours" ? (
+        <div>
+          {currentVal && (
+            <p className="mb-2 text-xs text-navy-500">
+              Currently: <span className="font-medium text-navy-700">{currentVal}</span>
+            </p>
+          )}
+          <input
+            type={field === "email" ? "email" : "text"}
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            disabled={pending}
+            placeholder={
+              field === "phone" ? "07700 900 000"
+                : field === "email" ? "hello@example.com"
+                : "123 High Street, Oxford, OX1 1AA"
+            }
+            maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
+            className="w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {DAYS.map((d) => (
+            <div key={d} className="flex items-center gap-3">
+              <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={hours[d]?.open ?? false}
+                  onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
+                  className="h-4 w-4 rounded border-navy-300"
+                />
+                <span className="text-xs text-navy-600">Open</span>
+              </label>
+              {hours[d]?.open && (
+                <>
+                  <input
+                    type="time"
+                    value={hours[d]?.from ?? "09:00"}
+                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
+                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                  />
+                  <span className="text-navy-400">to</span>
+                  <input
+                    type="time"
+                    value={hours[d]?.to ?? "17:00"}
+                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
+                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                  />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleQuickSubmit}
+        disabled={pending || (field !== "openingHours" && newValue.trim().length === 0)}
+        className="btn-primary"
+      >
+        {pending ? "Submitting…" : "Submit change"}
+      </button>
+    </div>
+  );
+}
+
 function ChangeRequestsBlock({
   token,
   requests,
@@ -1126,27 +1374,23 @@ function ChangeRequestsBlock({
   onSubmitted,
   onRetracted,
   id,
+  siteData,
   defaultOpen = false,
 }: {
   token: string;
   requests: ChangeRequest[];
-  /** Effective monthly cap (default + any admin-granted bonus this
-   *  month). The block displays this number in the usage pill,
-   *  the at-cap banner and the friendly intro paragraph. */
   cap: number;
   onSubmitted: (req: ChangeRequest) => void;
   onRetracted: (id: string) => void;
-  /** DOM id on the outer <details>. Lets the dashboard timeline
-   *  rail target this block for smooth-scroll + open. */
   id?: string;
-  /** Whether the block starts expanded. Defaults to false so the
-   *  dashboard starts as a compact accordion. */
+  siteData?: SiteDataProp;
   defaultOpen?: boolean;
 }) {
   const [message, setMessage] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [mode, setMode] = useState<"quick" | "free">("quick");
 
   // Submission confirmation dialog (native <dialog> for built-in
   // modal behaviour, ESC handling and focus trap).
@@ -1345,20 +1589,23 @@ function ChangeRequestsBlock({
         </div>
       ) : (
         <div className="mt-5">
-          <label className="block">
-            <span className="block text-sm font-semibold text-navy-900">
-              What would you like changed? (one item)
-            </span>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              disabled={pending}
-              placeholder="e.g. Please update my phone number on the contact page from 01865 111 222 to 01865 333 444 — we just got a new line."
-              rows={5}
-              maxLength={5000}
-              className="mt-2 w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-            />
-          </label>
+          {/* Mode switcher */}
+          <div className="flex gap-2 rounded-xl bg-cream-100 p-1">
+            <button
+              type="button"
+              onClick={() => setMode("quick")}
+              className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${mode === "quick" ? "bg-white text-navy-900 shadow-sm" : "text-navy-500 hover:text-navy-700"}`}
+            >
+              Quick edit
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("free")}
+              className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${mode === "free" ? "bg-white text-navy-900 shadow-sm" : "text-navy-500 hover:text-navy-700"}`}
+            >
+              Free text
+            </button>
+          </div>
 
           {error && (
             <p className="mt-3 text-sm text-ember-700" role="alert">
@@ -1371,14 +1618,44 @@ function ChangeRequestsBlock({
             </p>
           )}
 
-          <button
-            type="button"
-            onClick={handleSubmitClick}
-            disabled={pending || message.trim().length === 0}
-            className="btn-primary mt-4"
-          >
-            {pending ? "Submitting…" : "Submit request"}
-          </button>
+          {mode === "quick" && siteData ? (
+            <QuickEditForm
+              token={token}
+              siteData={siteData}
+              pending={pending}
+              setPending={setPending}
+              setError={setError}
+              setSuccess={setSuccess}
+              onSubmitted={onSubmitted}
+              remaining={remaining}
+              submitDialogRef={submitDialogRef}
+            />
+          ) : (
+            <div className="mt-4">
+              <label className="block">
+                <span className="block text-sm font-semibold text-navy-900">
+                  What would you like changed?
+                </span>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  disabled={pending}
+                  placeholder="e.g. Please update my phone number on the contact page from 01865 111 222 to 01865 333 444 — we just got a new line."
+                  rows={5}
+                  maxLength={5000}
+                  className="mt-2 w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleSubmitClick}
+                disabled={pending || message.trim().length === 0}
+                className="btn-primary mt-4"
+              >
+                {pending ? "Submitting…" : "Submit request"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

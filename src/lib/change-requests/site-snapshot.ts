@@ -23,6 +23,7 @@ export function buildSiteSnapshot(prospect: ProspectRecord): SiteSnapshot {
   const testimonials = Array.isArray(content.testimonials)
     ? content.testimonials
     : [];
+  const rawLocations = Array.isArray(content.locations) ? content.locations : [];
   const aboutBullets = Array.isArray(content.aboutBullets)
     ? (content.aboutBullets as unknown[]).filter(
         (x): x is string => typeof x === "string",
@@ -110,6 +111,30 @@ export function buildSiteSnapshot(prospect: ProspectRecord): SiteSnapshot {
           rating: typeof tObj.rating === "number" ? tObj.rating : undefined,
         };
       }),
+    locations:
+      rawLocations.length > 0
+        ? rawLocations
+            .filter((l) => l && typeof l === "object")
+            .map((l) => {
+              const loc = l as Record<string, unknown>;
+              const locHours =
+                loc.openingHours && typeof loc.openingHours === "object"
+                  ? (loc.openingHours as Record<
+                      string,
+                      { open: boolean; from?: string; to?: string }
+                    >)
+                  : undefined;
+              return {
+                name: optionalString(loc.name) ?? "(unnamed)",
+                address: optionalString(loc.address),
+                phoneDisplay: optionalString(loc.phoneDisplay),
+                phoneTel: optionalString(loc.phoneTel),
+                publicEmail: optionalString(loc.publicEmail),
+                mapUrl: optionalString(loc.mapUrl),
+                openingHours: locHours,
+              };
+            })
+        : undefined,
     assets: extractAssetsSummary(ob.assets),
   };
 }

@@ -90,6 +90,13 @@ export const SAFE_PATCH_TARGETS = [
   //       the homepage). newValue is a JSON-encoded OfferEntry
   //       object — Haiku gets the whole offer in one patch. -----
   "content.offers.current",
+  // ----- Per-location fields (requires `locationName` locator) -----
+  "locations.address",
+  "locations.phoneDisplay",
+  "locations.phoneTel",
+  "locations.publicEmail",
+  "locations.mapUrl",
+  "locations.openingHours", // JSON object (full per-day record)
 ] as const;
 
 export type SafeTarget = (typeof SAFE_PATCH_TARGETS)[number];
@@ -128,6 +135,10 @@ export type ClassificationResult = {
     /** Locator for `content.testimonials.*` targets. Matches the
      *  testimonial's `name` field. Required for testimonials. */
     testimonialName?: string;
+    /** Locator for `locations.*` targets. Matches the location's
+     *  `name` field (e.g. "Witney office"). Required for
+     *  location-specific patches. */
+    locationName?: string;
   }>;
   /** When true, the change has ALREADY been applied to the
    *  customer's data outside of Cowork's patch path — for instance
@@ -199,6 +210,21 @@ export type SiteSnapshot = {
   faq?: Array<{ question: string; answer?: string }>;
   /** Testimonial names — same locator pattern. */
   testimonials?: Array<{ name: string; quote?: string; rating?: number }>;
+  /** Extra locations (multi-location module). Each entry has a
+   *  name locator used for `locations.*` patches. Primary/HQ
+   *  location lives in `business` above. */
+  locations?: Array<{
+    name: string;
+    address?: string;
+    phoneDisplay?: string;
+    phoneTel?: string;
+    publicEmail?: string;
+    mapUrl?: string;
+    openingHours?: Record<
+      string,
+      { open: boolean; from?: string; to?: string }
+    >;
+  }>;
   /** Summary of the customer's brand assets — count + most recent
    *  upload per slot. Lets Haiku validate "I re-uploaded my logo"
    *  claims: if the customer says they uploaded a new logo but
@@ -353,6 +379,8 @@ async function classifyPass(
     `  Trust: years experience, associations, awards\n` +
     `  Brand: primary colour (hex), secondary colour (hex)\n` +
     `  Offers: current promotional offer\n` +
+    `  Locations: address, phone, email, map URL, opening hours ` +
+    `(per location by name — see locations array in site state)\n` +
     `  Add/remove: services, FAQs, testimonials, about bullets\n\n` +
     `SITE STATE:\n${JSON.stringify(snapshot, null, 2)}\n\n` +
     `REQUEST:\n${message}`;
@@ -436,7 +464,8 @@ async function patchPass(
     `  { "target": "<target>", "newValue": "<string>",\n` +
     `    "serviceName"?: "<exact name>",\n` +
     `    "faqQuestion"?: "<exact question>",\n` +
-    `    "testimonialName"?: "<exact name>" }\n` +
+    `    "testimonialName"?: "<exact name>",\n` +
+    `    "locationName"?: "<exact name>" }\n` +
     `] }\n\n` +
     `Return { "patches": [] } if no text/data patches needed ` +
     `(pure asset rebuild).\n\n` +
@@ -460,6 +489,8 @@ async function patchPass(
     `from snapshot faq array\n` +
     `- content.testimonials.* (except .add) → "testimonialName" = ` +
     `EXACT name from snapshot testimonials array\n` +
+    `- locations.* → "locationName" = EXACT name from snapshot ` +
+    `locations array\n` +
     `- .add targets need NO locator\n\n` +
     `IMPORTANT:\n` +
     `1. One patch per distinct change. ALL parts of the request.\n` +
@@ -469,7 +500,9 @@ async function patchPass(
     `text as newValue. Never paraphrase quoted text.\n` +
     `5. newValue must be the FULL replacement, not a diff.\n` +
     `6. Phone number changes need TWO patches: business.phoneDisplay ` +
-    `AND business.phoneTel.\n\n` +
+    `AND business.phoneTel. For location-specific phone changes, ` +
+    `use locations.phoneDisplay AND locations.phoneTel with the ` +
+    `same locationName locator.\n\n` +
     `SITE STATE:\n${JSON.stringify(slimSnapshot(snapshot), null, 2)}\n\n` +
     `REQUEST:\n${message}\n\n` +
     `CLASSIFICATION CONTEXT:\n${reasoning}`;
@@ -556,6 +589,10 @@ function validatePatchArray(raw: unknown): {
       typeof pp.testimonialName === "string"
         ? pp.testimonialName.trim()
         : undefined;
+    const locationName =
+      typeof pp.locationName === "string"
+        ? pp.locationName.trim()
+        : undefined;
 
     const needsServiceLocator =
       target.startsWith("content.services.") &&
@@ -565,6 +602,7 @@ function validatePatchArray(raw: unknown): {
     const needsTestimonialLocator =
       target.startsWith("content.testimonials.") &&
       target !== "content.testimonials.add";
+    const needsLocationLocator = target.startsWith("locations.");
 
     if (needsServiceLocator && !serviceName) {
       skippedPatches.push({
@@ -587,12 +625,19 @@ function validatePatchArray(raw: unknown): {
       });
       continue;
     }
+    if (needsLocationLocator && !locationName) {
+      skippedPatches.push({
+        target,
+        reason: `Missing locationName locator for '${target}'`,
+      });
+      continue;
+    }
 
     const isAddOp = target.endsWith(".add");
     const dedupeKey = isAddOp
       ? `${target}|${newValue}`
-      : serviceName || faqQuestion || testimonialName
-        ? `${target}|${serviceName ?? ""}|${faqQuestion ?? ""}|${testimonialName ?? ""}`
+      : serviceName || faqQuestion || testimonialName || locationName
+        ? `${target}|${serviceName ?? ""}|${faqQuestion ?? ""}|${testimonialName ?? ""}|${locationName ?? ""}`
         : target;
 
     if (seenTargets.has(dedupeKey)) {
@@ -607,6 +652,7 @@ function validatePatchArray(raw: unknown): {
       serviceName,
       faqQuestion,
       testimonialName,
+      locationName,
     });
   }
 
@@ -639,6 +685,10 @@ const VERBATIM_GUARDED_TARGETS: ReadonlySet<string> = new Set([
   "content.faq.question",
   "content.testimonials.quote",
   "content.testimonials.location",
+  "locations.address",
+  "locations.phoneDisplay",
+  "locations.phoneTel",
+  "locations.publicEmail",
 ]);
 
 /**
@@ -724,7 +774,7 @@ function stripCodeFences(out: string): string {
 
 /** Strip non-patchable fields from the snapshot so Pass 2 sees only
  *  what it needs: business, copy, services, faq, testimonials, trust,
- *  branding. Removes assets, locations, newsletter, etc. */
+ *  branding, locations. Removes assets, newsletter, etc. */
 function slimSnapshot(s: SiteSnapshot): Record<string, unknown> {
   return {
     business: s.business,
@@ -734,5 +784,6 @@ function slimSnapshot(s: SiteSnapshot): Record<string, unknown> {
     testimonials: s.testimonials,
     trust: s.trust,
     branding: s.branding,
+    locations: s.locations,
   };
 }

@@ -1,12 +1,7 @@
 // Tests for the verbatim-quote guard on Haiku's change-request
-// classifier output. The guard is deterministic — it doesn't call
-// the model — so we can unit-test the matching logic directly.
-//
-// Background: Haiku is asked (via Rule 15 in the prompt) to preserve
-// any text the customer wrapped in double quotes verbatim. The guard
-// is a belt-and-braces post-validator that overwrites any divergence,
-// so even when the model "improves" the customer's wording, the
-// customer's exact text wins for free-text targets.
+// classifier output. The guard uses content-similarity matching
+// (fuzzy substring, >60% length ratio) to pair double-quoted
+// customer text with the correct Haiku-generated patch.
 
 import { describe, expect, test } from "vitest";
 import {
@@ -40,8 +35,6 @@ describe("extractDoubleQuotedStrings", () => {
   });
 
   test("ignores apostrophes within words", () => {
-    // "we're", "don't" etc. — the regex only matches double quotes
-    // so single-quote apostrophes never start/end a span.
     expect(
       extractDoubleQuotedStrings(`We're updating "the tagline" don't worry.`),
     ).toEqual(["the tagline"]);
@@ -53,8 +46,6 @@ describe("extractDoubleQuotedStrings", () => {
   });
 
   test("does not cross newlines (defensive)", () => {
-    // Multi-line quoted strings would mis-bracket if a stray quote
-    // appeared on a different line. Keep matches single-line.
     expect(
       extractDoubleQuotedStrings(`Update tagline to "line one\nline two".`),
     ).toEqual([]);
@@ -93,12 +84,11 @@ describe("enforceVerbatimQuotes", () => {
   });
 
   test("overrides Haiku-paraphrased tagline with verbatim quote", () => {
-    // Lucas's real case: customer quoted the exact tagline, Haiku
-    // "polished" it (added a period, removed "the best ever!" as
-    // hypey). The guard restores the verbatim text.
+    // Haiku drops the trailing exclamation emphasis — the guard
+    // restores the customer's exact quoted text via substring match.
     const out = enforceVerbatimQuotes(
       `Update tagline to "Welcome to BobBuilders - the best ever!"`,
-      [patch("copy.tagline", "Welcome to BobBuilders.")],
+      [patch("copy.tagline", "Welcome to BobBuilders - the best ever")],
     );
     expect(out.overrideCount).toBe(1);
     expect(out.patches[0]!.newValue).toBe(
@@ -115,86 +105,79 @@ describe("enforceVerbatimQuotes", () => {
     expect(out.patches[0]!.newValue).toBe("The exact words");
   });
 
-  test("matches quotes to free-text patches in order", () => {
+  test("matches quotes to patches by content similarity, not position", () => {
+    // Two quoted strings, two patches — content matching pairs them
+    // correctly even if the order of patches differs from quote order.
     const out = enforceVerbatimQuotes(
-      `Tagline "First" and about blurb "Second".`,
+      `Change about blurb to "We build amazing garden rooms" and tagline to "Garden Rooms by Bob".`,
       [
-        patch("copy.tagline", "First polished"),
-        patch("copy.aboutBlurb", "Second polished"),
+        patch("copy.tagline", "Garden Rooms by Bob - polished"),
+        patch("copy.aboutBlurb", "We build amazing garden rooms for you"),
       ],
     );
     expect(out.overrideCount).toBe(2);
-    expect(out.patches.map((p) => p.newValue)).toEqual(["First", "Second"]);
+    expect(out.patches[0]!.newValue).toBe("Garden Rooms by Bob");
+    expect(out.patches[1]!.newValue).toBe("We build amazing garden rooms");
   });
 
   test("non-free-text patches do NOT consume quotes", () => {
-    // "Update phone to 07777 and tagline to 'X'" — phone is NOT a
-    // free-text target so it shouldn't eat the 'X' quote meant for
-    // tagline. Lucas's real case spelled out this concern.
     const out = enforceVerbatimQuotes(
-      `Update phone to 07123 and tagline to "Verbatim Tagline".`,
+      `Update phone to 07123 and tagline to "Verbatim Tagline Here".`,
       [
-        // aboutBullets.add is not free-text (it's the .add marker)
         patch("content.aboutBullets.add", "Some bullet"),
-        patch("copy.tagline", "Polished tagline"),
+        patch("copy.tagline", "Verbatim Tagline Here polished"),
       ],
     );
     expect(out.overrideCount).toBe(1);
-    // The bullet add target should NOT have been overridden.
     expect(out.patches[0]!.newValue).toBe("Some bullet");
-    // The tagline target SHOULD have picked up the only quote.
-    expect(out.patches[1]!.newValue).toBe("Verbatim Tagline");
+    expect(out.patches[1]!.newValue).toBe("Verbatim Tagline Here");
   });
 
   test("more quotes than free-text patches → extras ignored", () => {
     const out = enforceVerbatimQuotes(
-      `Tagline "Wanted" + extra context "ignored please".`,
-      [patch("copy.tagline", "Polished")],
+      `Tagline "Welcome to our amazing website" + extra context "something else entirely different".`,
+      [patch("copy.tagline", "Welcome to our amazing website - polished")],
     );
     expect(out.overrideCount).toBe(1);
-    expect(out.patches[0]!.newValue).toBe("Wanted");
+    expect(out.patches[0]!.newValue).toBe("Welcome to our amazing website");
   });
 
-  test("fewer quotes than free-text patches → only first patches override", () => {
+  test("fewer quotes than free-text patches → only matching patches override", () => {
     const out = enforceVerbatimQuotes(
-      `Tagline "Wanted" and about blurb please make it nicer.`,
+      `Tagline "We build the best gardens in Oxford" and about blurb please make it nicer.`,
       [
-        patch("copy.tagline", "Polished tagline"),
-        patch("copy.aboutBlurb", "Polished blurb"),
+        patch("copy.tagline", "We build the best gardens in Oxford, polished"),
+        patch("copy.aboutBlurb", "Totally different text from Haiku"),
       ],
     );
     expect(out.overrideCount).toBe(1);
-    expect(out.patches[0]!.newValue).toBe("Wanted");
-    // Customer didn't quote the blurb → Haiku's value stands.
-    expect(out.patches[1]!.newValue).toBe("Polished blurb");
+    expect(out.patches[0]!.newValue).toBe("We build the best gardens in Oxford");
+    expect(out.patches[1]!.newValue).toBe("Totally different text from Haiku");
   });
 
   test("preserves non-newValue patch fields (locators, etc.)", () => {
     const out = enforceVerbatimQuotes(
-      `Update Garden Pods description to "Bespoke garden offices".`,
+      `Update Garden Pods description to "Bespoke garden offices built to last".`,
       [
-        patch("content.services.description", "Polished pods description", {
+        patch("content.services.description", "Bespoke garden offices built to last, polished", {
           serviceName: "Garden Pods",
         }),
       ],
     );
     expect(out.patches[0]!.serviceName).toBe("Garden Pods");
-    expect(out.patches[0]!.newValue).toBe("Bespoke garden offices");
+    expect(out.patches[0]!.newValue).toBe("Bespoke garden offices built to last");
   });
 
   test("smart quotes (U+201C / U+201D) work the same as ASCII", () => {
     const out = enforceVerbatimQuotes(
-      `Update tagline to “Smart-quoted text”.`,
-      [patch("copy.tagline", "Some polish")],
+      `Update tagline to “We are the best builders in town”.`,
+      [patch("copy.tagline", "We are the best builders in town, polished")],
     );
     expect(out.overrideCount).toBe(1);
-    expect(out.patches[0]!.newValue).toBe("Smart-quoted text");
+    expect(out.patches[0]!.newValue).toBe("We are the best builders in town");
   });
 
   test("phone and email targets ARE guarded (preserves user formatting)", () => {
-    // Phone formatting matters: customer might quote "+44 7777 777777"
-    // (international) vs "07777 777777" (national). The guard
-    // preserves whichever they typed.
     const out = enforceVerbatimQuotes(
       `Update phone to "+44 7777 123456" and email to "me@example.co.uk".`,
       [
@@ -202,10 +185,38 @@ describe("enforceVerbatimQuotes", () => {
         patch("business.publicEmail", "me@example.co.uk"),
       ],
     );
-    // Both already match → no overrides, but they should be guarded
-    // (a divergent Haiku output WOULD be overridden).
     expect(out.overrideCount).toBe(0);
     expect(out.patches[0]!.newValue).toBe("+44 7777 123456");
     expect(out.patches[1]!.newValue).toBe("me@example.co.uk");
+  });
+
+  test("cross-contamination prevented: phone quote does not match service description", () => {
+    const out = enforceVerbatimQuotes(
+      `Change phone to "0788888888" and service description to "We are the best in the world so come to us"`,
+      [
+        patch("business.phoneDisplay", "0788888888"),
+        patch("content.services.description", "We are the best in the world so come to us", {
+          serviceName: "Wedding Planning",
+        }),
+      ],
+    );
+    expect(out.overrideCount).toBe(0);
+    expect(out.patches[0]!.newValue).toBe("0788888888");
+    expect(out.patches[1]!.newValue).toBe("We are the best in the world so come to us");
+  });
+
+  test("location patch targets are verbatim-guarded", () => {
+    const out = enforceVerbatimQuotes(
+      `Change Witney address to "123 High Street, Witney, OX28 6AB, polished by Haiku"`,
+      [
+        patch("locations.address", "123 High Street, Witney, OX28 6AB", {
+          locationName: "Witney office",
+        } as Record<string, string | undefined>),
+      ],
+    );
+    expect(out.overrideCount).toBe(1);
+    expect(out.patches[0]!.newValue).toBe(
+      "123 High Street, Witney, OX28 6AB, polished by Haiku",
+    );
   });
 });

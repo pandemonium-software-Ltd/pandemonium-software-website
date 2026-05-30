@@ -127,8 +127,9 @@ export async function POST(request: Request) {
   const existingEdits = Array.isArray(reviewSlice.edits)
     ? reviewSlice.edits
     : [];
+  const activeEdits = existingEdits.filter((e) => e.status !== "rejected");
 
-  if (existingEdits.length >= MAX_REVIEW_EDITS) {
+  if (activeEdits.length >= MAX_REVIEW_EDITS) {
     return NextResponse.json(
       {
         error: `You've used all ${MAX_REVIEW_EDITS} pre-launch edits. Anything else needs to wait for the post-launch monthly allowance, or be quoted separately if it's bigger.`,
@@ -163,7 +164,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const remaining = MAX_REVIEW_EDITS - (existingEdits.length + 1);
+  const remaining = MAX_REVIEW_EDITS - (activeEdits.length + 1);
 
   // Internal notification — fail-soft.
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
