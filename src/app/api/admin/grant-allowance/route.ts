@@ -28,7 +28,7 @@ const TOKEN_RE =
 
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE),
-  kind: z.enum(["changeRequests", "offers", "newsletters"]),
+  kind: z.enum(["changeRequests", "offers", "newsletters", "reviewEdits"]),
   /** Bonus to add. Default 1. Positive grants additional allowance;
    *  negative takes back (clamped to 0). Capped at ±10/call to stop
    *  fat-finger giant grants — operator can re-call if they really

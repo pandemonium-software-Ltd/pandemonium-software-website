@@ -18,12 +18,14 @@ import {
   getDoneFlags,
   isOnboardingMutable,
   isOnboardingUnlocked,
+  MAX_REVIEW_EDITS,
   onboardingDataSchema,
   pickInitialStep,
   type OnboardingData,
 } from "@/lib/onboarding";
 import OnboardingHub from "@/components/OnboardingHub";
 import { canChangeModules } from "@/lib/billing/module-policy";
+import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -157,6 +159,25 @@ export default async function OnboardingPage({
   // schema into the client bundle.
   const phase3Seeds = derivePhase3Seeds(prospect.phase3Data);
 
+  const contentSlice = (prospect.onboardingData as Record<string, unknown> | null)?.content as Record<string, unknown> | undefined;
+  const businessSlice = (contentSlice?.business ?? {}) as Record<string, unknown>;
+  const locationsSlice = Array.isArray(contentSlice?.locations) ? contentSlice.locations as Array<Record<string, unknown>> : [];
+  const siteData = {
+    phoneDisplay: typeof businessSlice.phoneDisplay === "string" ? businessSlice.phoneDisplay : prospect.phone ?? "",
+    phoneTel: typeof businessSlice.phoneTel === "string" ? businessSlice.phoneTel : "",
+    publicEmail: typeof businessSlice.publicEmail === "string" ? businessSlice.publicEmail : prospect.email ?? "",
+    address: typeof businessSlice.address === "string" ? businessSlice.address : "",
+    openingHours: (businessSlice.openingHours ?? null) as Record<string, { open: boolean; from?: string; to?: string }> | null,
+    locations: locationsSlice.map((l) => ({
+      name: typeof l.name === "string" ? l.name : "",
+      phoneDisplay: typeof l.phoneDisplay === "string" ? l.phoneDisplay : "",
+      phoneTel: typeof l.phoneTel === "string" ? l.phoneTel : "",
+      publicEmail: typeof l.publicEmail === "string" ? l.publicEmail : "",
+      address: typeof l.address === "string" ? l.address : "",
+      openingHours: (l.openingHours ?? null) as Record<string, { open: boolean; from?: string; to?: string }> | null,
+    })),
+  };
+
   return (
     <OnboardingHub
       token={token}
@@ -177,6 +198,12 @@ export default async function OnboardingPage({
       phase3Services={phase3Services}
       phase3Seeds={phase3Seeds}
       extraLocations={prospect.extraLocations}
+      reviewEditCap={effectiveMonthlyCap({
+        prospect,
+        defaultCap: MAX_REVIEW_EDITS,
+        kind: "reviewEdits",
+      })}
+      siteData={siteData}
     />
   );
 }

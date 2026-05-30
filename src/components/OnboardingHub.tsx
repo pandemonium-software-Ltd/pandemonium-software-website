@@ -84,6 +84,22 @@ export type OnboardingHubProps = {
    *  Content shows a per-location capture section. 0 hides the
    *  whole section. */
   extraLocations: number;
+  reviewEditCap?: number;
+  siteData?: {
+    phoneDisplay: string;
+    phoneTel: string;
+    publicEmail: string;
+    address: string;
+    openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+    locations: Array<{
+      name: string;
+      phoneDisplay: string;
+      phoneTel: string;
+      publicEmail: string;
+      address: string;
+      openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+    }>;
+  };
 };
 
 type SaveState =
@@ -435,6 +451,8 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     phase3Seeds={props.phase3Seeds}
                     extraLocations={props.extraLocations}
                     focusModule={searchParams?.get("focus") ?? undefined}
+                    reviewEditCap={props.reviewEditCap}
+                    siteData={props.siteData}
                   />
                 </>
               )}
@@ -468,6 +486,8 @@ function StepRenderer({
   extraLocations,
   patchData,
   focusModule,
+  reviewEditCap,
+  siteData,
 }: {
   step: StepDef;
   data: OnboardingData;
@@ -498,6 +518,8 @@ function StepRenderer({
    *  the post-launch dashboard sends a customer here to set up one
    *  newly-added module. */
   focusModule?: string;
+  reviewEditCap?: number;
+  siteData?: OnboardingHubProps["siteData"];
 }) {
   const slice = (data[step.id] ?? {}) as Record<string, unknown>;
   const done = doneFlags[step.id];
@@ -625,6 +647,8 @@ function StepRenderer({
           readOnly={readOnly}
           token={token}
           allPriorStepsDone={priorStepsDone}
+          reviewEditCap={reviewEditCap}
+          siteData={siteData}
           onReviewDataChange={(patch) => patchData("review", patch)}
           savePartial={(patch) => savePartial("review", patch)}
           markDone={(patch) => markDone("review", patch)}

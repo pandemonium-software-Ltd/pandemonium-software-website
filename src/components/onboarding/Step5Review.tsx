@@ -36,9 +36,25 @@
 // Submissions go to a dedicated /api/onboarding/review-edit POST
 // endpoint that enforces the cap server-side too.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MAX_REVIEW_EDITS, type ReviewEdit } from "@/lib/onboarding";
 import PreviewFrame from "@/components/PreviewFrame";
+
+type ReviewSiteData = {
+  phoneDisplay: string;
+  phoneTel: string;
+  publicEmail: string;
+  address: string;
+  openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+  locations: Array<{
+    name: string;
+    phoneDisplay: string;
+    phoneTel: string;
+    publicEmail: string;
+    address: string;
+    openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+  }>;
+};
 
 type Props = {
   data: Record<string, unknown>;
@@ -46,6 +62,8 @@ type Props = {
   readOnly: boolean;
   token: string;
   allPriorStepsDone: boolean;
+  reviewEditCap?: number;
+  siteData?: ReviewSiteData;
   onReviewDataChange: (patch: Record<string, unknown>) => void;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
@@ -57,6 +75,8 @@ export default function Step5Review({
   readOnly,
   token,
   allPriorStepsDone,
+  reviewEditCap,
+  siteData,
   onReviewDataChange,
   savePartial,
   markDone,
@@ -125,7 +145,8 @@ export default function Step5Review({
 
   const disabled = readOnly;
   const activeEdits = edits.filter((e) => e.status !== "rejected");
-  const remaining = MAX_REVIEW_EDITS - activeEdits.length;
+  const cap = reviewEditCap ?? MAX_REVIEW_EDITS;
+  const remaining = cap - activeEdits.length;
   const todayIso = new Date().toISOString().slice(0, 10);
 
   // ---------- Submit a revision ----------
@@ -140,7 +161,7 @@ export default function Step5Review({
     }
     if (remaining <= 0) {
       setEditError(
-        `You've used all ${MAX_REVIEW_EDITS} pre-launch edits.`,
+        `You've used all ${cap} pre-launch edits.`,
       );
       return;
     }
@@ -245,7 +266,7 @@ export default function Step5Review({
           Two stages to launch:{" "}
           <strong>request your preview</strong>, then{" "}
           <strong>commit when you&apos;re happy</strong>. You get up
-          to {MAX_REVIEW_EDITS} rounds of edits between the two.
+          to {cap} rounds of edits between the two.
         </p>
       </header>
 
@@ -339,10 +360,10 @@ export default function Step5Review({
           <h3 className="font-serif text-lg font-semibold text-navy-900">
             B. Request edits
           </h3>
-          <EditCounter used={activeEdits.length} max={MAX_REVIEW_EDITS} />
+          <EditCounter used={activeEdits.length} max={cap} />
         </div>
         <p className="mt-2 text-sm text-navy-700">
-          You get up to <strong>{MAX_REVIEW_EDITS} rounds</strong> of
+          You get up to <strong>{cap} rounds</strong> of
           revisions before launch. After launch, you can ask for up
           to 2 changes a month from your dashboard (bundle a few
           related tweaks into one if you like). Bigger jobs I quote
@@ -357,53 +378,91 @@ export default function Step5Review({
 
         {/* Submit form (only if previewed and edits remaining) */}
         {!disabled && remaining > 0 && (
-          <div className="mt-6">
-            <label className="block">
-              <span className="block text-sm font-semibold text-navy-900">
-                Edit {activeEdits.length + 1} of {MAX_REVIEW_EDITS}
-              </span>
-              <textarea
-                value={editDraft}
-                disabled={submittingEdit}
-                onChange={(e) => setEditDraft(e.target.value)}
-                placeholder={
-                  "On the homepage, in the services section, swap the kitchen photo for the new one I uploaded yesterday. Also, in the About paragraph, change \"5 years\" to \"7 years\" — I just hit 7."
-                }
-                rows={6}
-                maxLength={2000}
-                className="mt-2 w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900"
-              />
-            </label>
+          <div className="mt-6 space-y-4">
+            <p className="text-sm font-semibold text-navy-900">
+              Edit {activeEdits.length + 1} of {cap}
+            </p>
+
+            {/* Quick edit form (collapsible) */}
+            {siteData && (
+              <details className="group rounded-xl border-2 border-navy-200 bg-cream-50">
+                <summary className="cursor-pointer select-none px-5 py-3 text-sm font-semibold text-navy-900">
+                  Quick edit (phone, email, address, hours)
+                  <span className="ml-2 text-navy-400 transition-transform group-open:rotate-90">&#9654;</span>
+                </summary>
+                <div className="border-t border-navy-100 px-5 py-4">
+                  <ReviewQuickEditForm
+                    token={token}
+                    siteData={siteData}
+                    submitting={submittingEdit}
+                    previewReady={!!initialPreviewUrl}
+                    onSubmitted={(edit) => {
+                      const updatedEdits = [...edits, edit];
+                      setEdits(updatedEdits);
+                      onReviewDataChange({ edits: updatedEdits });
+                    }}
+                    onError={setEditError}
+                    onSuccess={(msg) => {
+                      setEditSuccess(msg);
+                      setTimeout(() => setEditSuccess(null), 6000);
+                    }}
+                    remaining={remaining}
+                  />
+                </div>
+              </details>
+            )}
+
+            {/* Free text form (collapsible) */}
+            <details className="group rounded-xl border-2 border-navy-200 bg-white" open={!siteData}>
+              <summary className="cursor-pointer select-none px-5 py-3 text-sm font-semibold text-navy-900">
+                Free text edit
+                <span className="ml-2 text-navy-400 transition-transform group-open:rotate-90">&#9654;</span>
+              </summary>
+              <div className="border-t border-navy-100 px-5 py-4">
+                <textarea
+                  value={editDraft}
+                  disabled={submittingEdit}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  placeholder={
+                    "On the homepage, in the services section, swap the kitchen photo for the new one I uploaded yesterday. Also, in the About paragraph, change \"5 years\" to \"7 years\" — I just hit 7."
+                  }
+                  rows={6}
+                  maxLength={2000}
+                  className="w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900"
+                />
+                <button
+                  type="button"
+                  onClick={handleSubmitEdit}
+                  disabled={
+                    submittingEdit ||
+                    editDraft.trim().length < 20 ||
+                    !initialPreviewUrl
+                  }
+                  className="btn-primary mt-3"
+                  title={
+                    !initialPreviewUrl
+                      ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here."
+                      : undefined
+                  }
+                >
+                  {submittingEdit ? "Submitting…" : "Submit this edit"}
+                </button>
+                {!initialPreviewUrl && (
+                  <p className="mt-2 text-xs text-navy-500">
+                    The submit button unlocks once your preview is ready.
+                  </p>
+                )}
+              </div>
+            </details>
+
             {editError && (
-              <p className="mt-2 text-sm text-ember-700" role="alert">
+              <p className="text-sm text-ember-700" role="alert">
                 {editError}
               </p>
             )}
             {editSuccess && (
-              <p className="mt-2 text-sm text-green-700" role="status">
+              <p className="text-sm text-green-700" role="status">
                 {editSuccess}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleSubmitEdit}
-              disabled={
-                submittingEdit ||
-                editDraft.trim().length < 20 ||
-                !initialPreviewUrl
-              }
-              className="btn-primary mt-3"
-              title={
-                !initialPreviewUrl
-                  ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here."
-                  : undefined
-              }
-            >
-              {submittingEdit ? "Submitting…" : "Submit this edit"}
-            </button>
-            {!initialPreviewUrl && (
-              <p className="mt-2 text-xs text-navy-500">
-                The submit button unlocks once your preview is ready.
               </p>
             )}
           </div>
@@ -412,7 +471,7 @@ export default function Step5Review({
         {!disabled && remaining === 0 && edits.length > 0 && (
           <div className="mt-6 rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm leading-relaxed text-navy-700">
             <p className="font-semibold text-navy-900">
-              All {MAX_REVIEW_EDITS} edits used.
+              All {cap} edits used.
             </p>
             <p className="mt-2">
               Anything else from here goes into your post-launch
@@ -952,4 +1011,239 @@ function formatRelative(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+// ---------- Quick edit form for structured field changes ----------
+
+type QuickEditField = "phone" | "email" | "address" | "openingHours";
+const QUICK_EDIT_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "phone", label: "Phone number" },
+  { value: "email", label: "Email address" },
+  { value: "address", label: "Address" },
+  { value: "openingHours", label: "Opening hours" },
+];
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function ReviewQuickEditForm({
+  token,
+  siteData,
+  submitting: externalSubmitting,
+  previewReady,
+  onSubmitted,
+  onError,
+  onSuccess,
+  remaining,
+}: {
+  token: string;
+  siteData: ReviewSiteData;
+  submitting: boolean;
+  previewReady: boolean;
+  onSubmitted: (edit: ReviewEdit) => void;
+  onError: (msg: string | null) => void;
+  onSuccess: (msg: string) => void;
+  remaining: number;
+}) {
+  const [field, setField] = useState<QuickEditField>("phone");
+  const hasLocations = siteData.locations.length > 0;
+  const [locationIdx, setLocationIdx] = useState(-1);
+  const [newValue, setNewValue] = useState("");
+  const [pending, setPending] = useState(false);
+  const [hours, setHours] = useState<Record<string, { open: boolean; from: string; to: string }>>(() =>
+    Object.fromEntries(DAYS.map((d) => [d, { open: true, from: "09:00", to: "17:00" }])),
+  );
+
+  const currentSource = locationIdx < 0 ? siteData : siteData.locations[locationIdx];
+  const currentVal = currentSource
+    ? field === "phone" ? currentSource.phoneDisplay
+      : field === "email" ? currentSource.publicEmail
+      : field === "address" ? currentSource.address
+      : ""
+    : "";
+
+  useEffect(() => {
+    if (field === "openingHours" && currentSource?.openingHours) {
+      const h: Record<string, { open: boolean; from: string; to: string }> = {};
+      for (const d of DAYS) {
+        const existing = currentSource.openingHours[d];
+        h[d] = existing
+          ? { open: existing.open, from: existing.from ?? "09:00", to: existing.to ?? "17:00" }
+          : { open: false, from: "09:00", to: "17:00" };
+      }
+      setHours(h);
+    }
+  }, [field, locationIdx, currentSource]);
+
+  function buildMessage(): string {
+    const loc = locationIdx >= 0 ? siteData.locations[locationIdx]?.name : null;
+    const prefix = loc ? `For ${loc}: ` : "";
+    if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
+    if (field === "email") return `${prefix}Change email to: ${newValue}`;
+    if (field === "address") return `${prefix}Change address to: "${newValue}"`;
+    const parts = DAYS.map((d) => {
+      const h = hours[d]!;
+      return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
+    });
+    return `${prefix}Change opening hours to:\n${parts.join("\n")}`;
+  }
+
+  async function handleSubmit() {
+    onError(null);
+    if (field !== "openingHours" && newValue.trim().length === 0) {
+      onError("Please enter a new value.");
+      return;
+    }
+    if (remaining <= 0) {
+      onError("No edits remaining.");
+      return;
+    }
+    const msg = buildMessage();
+    setPending(true);
+    try {
+      const res = await fetch("/api/onboarding/review-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, message: msg }),
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        edit?: ReviewEdit;
+        remaining?: number;
+        error?: string;
+      };
+      if (!res.ok || !json.success || !json.edit) {
+        onError(json.error ?? "Couldn't submit. Try again.");
+        return;
+      }
+      onSubmitted(json.edit);
+      setNewValue("");
+      const r = json.remaining ?? remaining - 1;
+      onSuccess(`Got it. ${r} edit${r === 1 ? "" : "s"} remaining.`);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const busy = pending || externalSubmitting;
+
+  return (
+    <div className="space-y-4">
+      {/* Field picker */}
+      <div>
+        <span className="block text-sm font-semibold text-navy-900">What do you want to change?</span>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {QUICK_EDIT_FIELDS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => { setField(f.value); setNewValue(""); onError(null); }}
+              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${field === f.value ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Location picker */}
+      {hasLocations && (
+        <div>
+          <span className="block text-sm font-semibold text-navy-900">Which location?</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setLocationIdx(-1)}
+              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === -1 ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+            >
+              Main / HQ
+            </button>
+            {siteData.locations.map((loc, i) => (
+              <button
+                key={loc.name}
+                type="button"
+                onClick={() => setLocationIdx(i)}
+                className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === i ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+              >
+                {loc.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Value input */}
+      {field !== "openingHours" ? (
+        <div>
+          {currentVal && (
+            <p className="mb-2 text-xs text-navy-500">
+              Currently: <span className="font-medium text-navy-700">{currentVal}</span>
+            </p>
+          )}
+          <input
+            type={field === "email" ? "email" : "text"}
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            disabled={busy}
+            placeholder={
+              field === "phone" ? "07700 900 000"
+                : field === "email" ? "hello@example.com"
+                : "123 High Street, Oxford, OX1 1AA"
+            }
+            maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
+            className="w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {DAYS.map((d) => (
+            <div key={d} className="flex items-center gap-3">
+              <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={hours[d]?.open ?? false}
+                  onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
+                  className="h-4 w-4 rounded border-navy-300"
+                />
+                <span className="text-xs text-navy-600">Open</span>
+              </label>
+              {hours[d]?.open && (
+                <>
+                  <input
+                    type="time"
+                    value={hours[d]?.from ?? "09:00"}
+                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
+                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                  />
+                  <span className="text-navy-400">to</span>
+                  <input
+                    type="time"
+                    value={hours[d]?.to ?? "17:00"}
+                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
+                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                  />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={busy || (field !== "openingHours" && newValue.trim().length === 0) || !previewReady}
+        className="btn-primary"
+        title={!previewReady ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here." : undefined}
+      >
+        {busy ? "Submitting…" : "Submit change"}
+      </button>
+      {!previewReady && (
+        <p className="text-xs text-navy-500">
+          The submit button unlocks once your preview is ready.
+        </p>
+      )}
+    </div>
+  );
 }

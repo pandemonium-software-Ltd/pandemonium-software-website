@@ -31,6 +31,7 @@ import {
   type OnboardingData,
   type ReviewEdit,
 } from "@/lib/onboarding";
+import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import {
   buildReviewEditNotification,
   sendInternalNotification,
@@ -128,11 +129,16 @@ export async function POST(request: Request) {
     ? reviewSlice.edits
     : [];
   const activeEdits = existingEdits.filter((e) => e.status !== "rejected");
+  const cap = effectiveMonthlyCap({
+    prospect,
+    defaultCap: MAX_REVIEW_EDITS,
+    kind: "reviewEdits",
+  });
 
-  if (activeEdits.length >= MAX_REVIEW_EDITS) {
+  if (activeEdits.length >= cap) {
     return NextResponse.json(
       {
-        error: `You've used all ${MAX_REVIEW_EDITS} pre-launch edits. Anything else needs to wait for the post-launch monthly allowance, or be quoted separately if it's bigger.`,
+        error: `You've used all ${cap} pre-launch edits. Anything else needs to wait for the post-launch monthly allowance, or be quoted separately if it's bigger.`,
         remaining: 0,
       },
       { status: 400 },
@@ -164,7 +170,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const remaining = MAX_REVIEW_EDITS - (activeEdits.length + 1);
+  const remaining = cap - (activeEdits.length + 1);
 
   // Internal notification — fail-soft.
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;

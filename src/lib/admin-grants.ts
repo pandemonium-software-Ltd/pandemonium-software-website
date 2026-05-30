@@ -37,7 +37,7 @@ import {
   type ProspectRecord,
 } from "./notion-prospects";
 
-export type AdminGrantKind = "changeRequests" | "offers" | "newsletters";
+export type AdminGrantKind = "changeRequests" | "offers" | "newsletters" | "reviewEdits";
 
 /** Current YYYY-MM key (UTC). Same convention as the cap-counters
  *  in the customer-facing routes — keeps the bonus lookup aligned
