@@ -45,7 +45,14 @@ type ReviewSiteData = {
   phoneTel: string;
   publicEmail: string;
   address: string;
+  serviceArea: string;
   openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+  tagline: string;
+  aboutBlurb: string;
+  services: Array<{ name: string; description: string; longDescription: string; pricingNotes: string; priceFrom: number | null }>;
+  faq: Array<{ question: string; answer: string }>;
+  testimonials: Array<{ name: string; quote: string; rating: number | null }>;
+  trust: { yearsExperience: number | null; associations: string; awards: string };
   locations: Array<{
     name: string;
     phoneDisplay: string;
@@ -1015,14 +1022,73 @@ function formatRelative(iso: string): string {
 
 // ---------- Quick edit form for structured field changes ----------
 
-type QuickEditField = "phone" | "email" | "address" | "openingHours";
-const QUICK_EDIT_FIELDS: { value: QuickEditField; label: string }[] = [
-  { value: "phone", label: "Phone number" },
-  { value: "email", label: "Email address" },
+type QuickEditCategory = "contact" | "copy" | "service" | "faq" | "testimonial" | "trust";
+type QuickEditField =
+  | "phone" | "email" | "address" | "serviceArea" | "openingHours"
+  | "tagline" | "aboutBlurb"
+  | "serviceDesc" | "serviceLongDesc" | "servicePricing" | "servicePrice"
+  | "faqAnswer" | "faqQuestion"
+  | "testimonialQuote" | "testimonialRating"
+  | "trustYears" | "trustAssociations" | "trustAwards";
+
+const CATEGORIES: { value: QuickEditCategory; label: string }[] = [
+  { value: "contact", label: "Contact & hours" },
+  { value: "copy", label: "Tagline & about" },
+  { value: "service", label: "Services" },
+  { value: "faq", label: "FAQ" },
+  { value: "testimonial", label: "Testimonials" },
+  { value: "trust", label: "Trust signals" },
+];
+
+const CONTACT_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "phone", label: "Phone" },
+  { value: "email", label: "Email" },
   { value: "address", label: "Address" },
+  { value: "serviceArea", label: "Service area" },
   { value: "openingHours", label: "Opening hours" },
 ];
+
+const COPY_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "tagline", label: "Tagline" },
+  { value: "aboutBlurb", label: "About blurb" },
+];
+
+const SERVICE_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "serviceDesc", label: "Short description" },
+  { value: "serviceLongDesc", label: "Long description" },
+  { value: "servicePricing", label: "Pricing notes" },
+  { value: "servicePrice", label: "Price from" },
+];
+
+const FAQ_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "faqQuestion", label: "Question" },
+  { value: "faqAnswer", label: "Answer" },
+];
+
+const TESTIMONIAL_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "testimonialQuote", label: "Quote" },
+  { value: "testimonialRating", label: "Rating" },
+];
+
+const TRUST_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "trustYears", label: "Years experience" },
+  { value: "trustAssociations", label: "Associations" },
+  { value: "trustAwards", label: "Awards" },
+];
+
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${active ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+    >
+      {label}
+    </button>
+  );
+}
 
 function ReviewQuickEditForm({
   token,
@@ -1043,22 +1109,76 @@ function ReviewQuickEditForm({
   onSuccess: (msg: string) => void;
   remaining: number;
 }) {
+  const [category, setCategory] = useState<QuickEditCategory>("contact");
   const [field, setField] = useState<QuickEditField>("phone");
   const hasLocations = siteData.locations.length > 0;
   const [locationIdx, setLocationIdx] = useState(-1);
+  const [itemIdx, setItemIdx] = useState(0);
   const [newValue, setNewValue] = useState("");
   const [pending, setPending] = useState(false);
   const [hours, setHours] = useState<Record<string, { open: boolean; from: string; to: string }>>(() =>
     Object.fromEntries(DAYS.map((d) => [d, { open: true, from: "09:00", to: "17:00" }])),
   );
 
+  function selectCategory(cat: QuickEditCategory) {
+    setCategory(cat);
+    setItemIdx(0);
+    setNewValue("");
+    onError(null);
+    if (cat === "contact") setField("phone");
+    else if (cat === "copy") setField("tagline");
+    else if (cat === "service") setField("serviceDesc");
+    else if (cat === "faq") setField("faqAnswer");
+    else if (cat === "testimonial") setField("testimonialQuote");
+    else if (cat === "trust") setField("trustYears");
+  }
+
+  function selectField(f: QuickEditField) {
+    setField(f);
+    setNewValue("");
+    onError(null);
+  }
+
   const currentSource = locationIdx < 0 ? siteData : siteData.locations[locationIdx];
-  const currentVal = currentSource
-    ? field === "phone" ? currentSource.phoneDisplay
-      : field === "email" ? currentSource.publicEmail
-      : field === "address" ? currentSource.address
-      : ""
-    : "";
+
+  const currentVal = (() => {
+    if (category === "contact" && currentSource) {
+      if (field === "phone") return currentSource.phoneDisplay;
+      if (field === "email") return currentSource.publicEmail;
+      if (field === "address") return currentSource.address;
+      if (field === "serviceArea") return "serviceArea" in currentSource ? (currentSource as ReviewSiteData).serviceArea : "";
+    }
+    if (category === "copy") {
+      if (field === "tagline") return siteData.tagline;
+      if (field === "aboutBlurb") return siteData.aboutBlurb;
+    }
+    if (category === "service") {
+      const svc = siteData.services[itemIdx];
+      if (!svc) return "";
+      if (field === "serviceDesc") return svc.description;
+      if (field === "serviceLongDesc") return svc.longDescription;
+      if (field === "servicePricing") return svc.pricingNotes;
+      if (field === "servicePrice") return svc.priceFrom != null ? String(svc.priceFrom) : "";
+    }
+    if (category === "faq") {
+      const faqItem = siteData.faq[itemIdx];
+      if (!faqItem) return "";
+      if (field === "faqQuestion") return faqItem.question;
+      if (field === "faqAnswer") return faqItem.answer;
+    }
+    if (category === "testimonial") {
+      const t = siteData.testimonials[itemIdx];
+      if (!t) return "";
+      if (field === "testimonialQuote") return t.quote;
+      if (field === "testimonialRating") return t.rating != null ? String(t.rating) : "";
+    }
+    if (category === "trust") {
+      if (field === "trustYears") return siteData.trust.yearsExperience != null ? String(siteData.trust.yearsExperience) : "";
+      if (field === "trustAssociations") return siteData.trust.associations;
+      if (field === "trustAwards") return siteData.trust.awards;
+    }
+    return "";
+  })();
 
   useEffect(() => {
     if (field === "openingHours" && currentSource?.openingHours) {
@@ -1074,21 +1194,55 @@ function ReviewQuickEditForm({
   }, [field, locationIdx, currentSource]);
 
   function buildMessage(): string {
-    const loc = locationIdx >= 0 ? siteData.locations[locationIdx]?.name : null;
+    const loc = locationIdx >= 0 && category === "contact" ? siteData.locations[locationIdx]?.name : null;
     const prefix = loc ? `For ${loc}: ` : "";
+
     if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
     if (field === "email") return `${prefix}Change email to: ${newValue}`;
     if (field === "address") return `${prefix}Change address to: "${newValue}"`;
-    const parts = DAYS.map((d) => {
-      const h = hours[d]!;
-      return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
-    });
-    return `${prefix}Change opening hours to:\n${parts.join("\n")}`;
+    if (field === "serviceArea") return `Change service area to: "${newValue}"`;
+    if (field === "openingHours") {
+      const parts = DAYS.map((d) => {
+        const h = hours[d]!;
+        return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
+      });
+      return `${prefix}Change opening hours to:\n${parts.join("\n")}`;
+    }
+    if (field === "tagline") return `Change tagline to: "${newValue}"`;
+    if (field === "aboutBlurb") return `Change about blurb to: "${newValue}"`;
+
+    if (category === "service") {
+      const svc = siteData.services[itemIdx];
+      const svcName = svc?.name ?? "Unknown";
+      if (field === "serviceDesc") return `For service "${svcName}": Change short description to: "${newValue}"`;
+      if (field === "serviceLongDesc") return `For service "${svcName}": Change long description to: "${newValue}"`;
+      if (field === "servicePricing") return `For service "${svcName}": Change pricing notes to: "${newValue}"`;
+      if (field === "servicePrice") return `For service "${svcName}": Change price from to: ${newValue}`;
+    }
+    if (category === "faq") {
+      const faqItem = siteData.faq[itemIdx];
+      const q = faqItem?.question ?? "Unknown";
+      if (field === "faqQuestion") return `For FAQ "${q}": Change question to: "${newValue}"`;
+      if (field === "faqAnswer") return `For FAQ "${q}": Change answer to: "${newValue}"`;
+    }
+    if (category === "testimonial") {
+      const t = siteData.testimonials[itemIdx];
+      const tName = t?.name ?? "Unknown";
+      if (field === "testimonialQuote") return `For testimonial by "${tName}": Change quote to: "${newValue}"`;
+      if (field === "testimonialRating") return `For testimonial by "${tName}": Change rating to: ${newValue}`;
+    }
+    if (field === "trustYears") return `Change years of experience to: ${newValue}`;
+    if (field === "trustAssociations") return `Change associations/memberships to: "${newValue}"`;
+    if (field === "trustAwards") return `Change awards/accreditations to: "${newValue}"`;
+    return newValue;
   }
+
+  const needsTextarea = field === "aboutBlurb" || field === "serviceLongDesc" || field === "serviceDesc" || field === "testimonialQuote";
+  const noValueNeeded = field === "openingHours";
 
   async function handleSubmit() {
     onError(null);
-    if (field !== "openingHours" && newValue.trim().length === 0) {
+    if (!noValueNeeded && newValue.trim().length === 0) {
       onError("Please enter a new value.");
       return;
     }
@@ -1127,123 +1281,179 @@ function ReviewQuickEditForm({
 
   const busy = pending || externalSubmitting;
 
+  const fieldPills = category === "contact" ? CONTACT_FIELDS
+    : category === "copy" ? COPY_FIELDS
+    : category === "service" ? SERVICE_FIELDS
+    : category === "faq" ? FAQ_FIELDS
+    : category === "testimonial" ? TESTIMONIAL_FIELDS
+    : TRUST_FIELDS;
+
+  const items = category === "service" ? siteData.services
+    : category === "faq" ? siteData.faq
+    : category === "testimonial" ? siteData.testimonials
+    : null;
+
+  const itemLabel = (idx: number) => {
+    if (category === "service") return siteData.services[idx]?.name ?? `Service ${idx + 1}`;
+    if (category === "faq") return siteData.faq[idx]?.question ? truncate(siteData.faq[idx]!.question, 30) : `FAQ ${idx + 1}`;
+    if (category === "testimonial") return siteData.testimonials[idx]?.name ?? `Testimonial ${idx + 1}`;
+    return "";
+  };
+
   return (
     <div className="space-y-4">
-      {/* Field picker */}
+      {/* Category picker */}
       <div>
-        <span className="block text-sm font-semibold text-navy-900">What do you want to change?</span>
+        <span className="block text-sm font-semibold text-navy-900">Category</span>
         <div className="mt-2 flex flex-wrap gap-2">
-          {QUICK_EDIT_FIELDS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => { setField(f.value); setNewValue(""); onError(null); }}
-              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${field === f.value ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-            >
-              {f.label}
-            </button>
+          {CATEGORIES.map((c) => (
+            <Pill key={c.value} label={c.label} active={category === c.value} onClick={() => selectCategory(c.value)} />
           ))}
         </div>
       </div>
 
-      {/* Location picker */}
-      {hasLocations && (
+      {/* Item picker (services, FAQ, testimonials) */}
+      {items && items.length > 0 && (
+        <div>
+          <span className="block text-sm font-semibold text-navy-900">
+            Which {category === "service" ? "service" : category === "faq" ? "FAQ" : "testimonial"}?
+          </span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {items.map((_, i) => (
+              <Pill key={i} label={itemLabel(i)} active={itemIdx === i} onClick={() => { setItemIdx(i); setNewValue(""); }} />
+            ))}
+          </div>
+        </div>
+      )}
+      {items && items.length === 0 && (
+        <p className="text-sm text-navy-500">
+          No {category === "service" ? "services" : category === "faq" ? "FAQs" : "testimonials"} found in your site content. Add them in Step 4 first.
+        </p>
+      )}
+
+      {/* Field picker */}
+      {(!items || items.length > 0) && (
+        <div>
+          <span className="block text-sm font-semibold text-navy-900">What to change</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {fieldPills.map((f) => (
+              <Pill key={f.value} label={f.label} active={field === f.value} onClick={() => selectField(f.value)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Location picker (contact category only) */}
+      {category === "contact" && hasLocations && (
         <div>
           <span className="block text-sm font-semibold text-navy-900">Which location?</span>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setLocationIdx(-1)}
-              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === -1 ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-            >
-              Main / HQ
-            </button>
+            <Pill label="Main / HQ" active={locationIdx === -1} onClick={() => setLocationIdx(-1)} />
             {siteData.locations.map((loc, i) => (
-              <button
-                key={loc.name}
-                type="button"
-                onClick={() => setLocationIdx(i)}
-                className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === i ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-              >
-                {loc.name}
-              </button>
+              <Pill key={loc.name} label={loc.name} active={locationIdx === i} onClick={() => setLocationIdx(i)} />
             ))}
           </div>
         </div>
       )}
 
       {/* Value input */}
-      {field !== "openingHours" ? (
-        <div>
-          {currentVal && (
-            <p className="mb-2 text-xs text-navy-500">
-              Currently: <span className="font-medium text-navy-700">{currentVal}</span>
-            </p>
-          )}
-          <input
-            type={field === "email" ? "email" : "text"}
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            disabled={busy}
-            placeholder={
-              field === "phone" ? "07700 900 000"
-                : field === "email" ? "hello@example.com"
-                : "123 High Street, Oxford, OX1 1AA"
-            }
-            maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
-            className="w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-          />
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {DAYS.map((d) => (
-            <div key={d} className="flex items-center gap-3">
-              <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={hours[d]?.open ?? false}
-                  onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
-                  className="h-4 w-4 rounded border-navy-300"
+      {(!items || items.length > 0) && (
+        <>
+          {field === "openingHours" ? (
+            <div className="space-y-2">
+              {DAYS.map((d) => (
+                <div key={d} className="flex items-center gap-3">
+                  <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
+                  <label className="flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={hours[d]?.open ?? false}
+                      onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
+                      className="h-4 w-4 rounded border-navy-300"
+                    />
+                    <span className="text-xs text-navy-600">Open</span>
+                  </label>
+                  {hours[d]?.open && (
+                    <>
+                      <input
+                        type="time"
+                        value={hours[d]?.from ?? "09:00"}
+                        onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
+                        className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                      />
+                      <span className="text-navy-400">to</span>
+                      <input
+                        type="time"
+                        value={hours[d]?.to ?? "17:00"}
+                        onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
+                        className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                      />
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div>
+              {currentVal && (
+                <p className="mb-2 text-xs text-navy-500">
+                  Currently: <span className="font-medium text-navy-700">{needsTextarea ? truncate(currentVal, 120) : currentVal}</span>
+                </p>
+              )}
+              {needsTextarea ? (
+                <textarea
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  disabled={busy}
+                  rows={4}
+                  maxLength={2000}
+                  placeholder="Enter new text…"
+                  className="w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
                 />
-                <span className="text-xs text-navy-600">Open</span>
-              </label>
-              {hours[d]?.open && (
-                <>
-                  <input
-                    type="time"
-                    value={hours[d]?.from ?? "09:00"}
-                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
-                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
-                  />
-                  <span className="text-navy-400">to</span>
-                  <input
-                    type="time"
-                    value={hours[d]?.to ?? "17:00"}
-                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
-                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
-                  />
-                </>
+              ) : (
+                <input
+                  type={field === "email" ? "email" : field === "servicePrice" || field === "trustYears" || field === "testimonialRating" ? "number" : "text"}
+                  value={newValue}
+                  onChange={(e) => setNewValue(e.target.value)}
+                  disabled={busy}
+                  placeholder={
+                    field === "phone" ? "07700 900 000"
+                      : field === "email" ? "hello@example.com"
+                      : field === "address" ? "123 High Street, Oxford, OX1 1AA"
+                      : field === "servicePrice" ? "250"
+                      : field === "trustYears" ? "10"
+                      : field === "testimonialRating" ? "5"
+                      : "Enter new value…"
+                  }
+                  min={field === "testimonialRating" ? 1 : undefined}
+                  max={field === "testimonialRating" ? 5 : undefined}
+                  maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
+                  className="w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
+                />
               )}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={busy || (field !== "openingHours" && newValue.trim().length === 0) || !previewReady}
-        className="btn-primary"
-        title={!previewReady ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here." : undefined}
-      >
-        {busy ? "Submitting…" : "Submit change"}
-      </button>
-      {!previewReady && (
-        <p className="text-xs text-navy-500">
-          The submit button unlocks once your preview is ready.
-        </p>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={busy || (!noValueNeeded && newValue.trim().length === 0) || !previewReady}
+            className="btn-primary"
+            title={!previewReady ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here." : undefined}
+          >
+            {busy ? "Submitting…" : "Submit change"}
+          </button>
+          {!previewReady && (
+            <p className="text-xs text-navy-500">
+              The submit button unlocks once your preview is ready.
+            </p>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "…" : s;
 }

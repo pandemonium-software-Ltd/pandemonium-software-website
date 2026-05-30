@@ -90,7 +90,14 @@ export type OnboardingHubProps = {
     phoneTel: string;
     publicEmail: string;
     address: string;
+    serviceArea: string;
     openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+    tagline: string;
+    aboutBlurb: string;
+    services: Array<{ name: string; description: string; longDescription: string; pricingNotes: string; priceFrom: number | null }>;
+    faq: Array<{ question: string; answer: string }>;
+    testimonials: Array<{ name: string; quote: string; rating: number | null }>;
+    trust: { yearsExperience: number | null; associations: string; awards: string };
     locations: Array<{
       name: string;
       phoneDisplay: string;

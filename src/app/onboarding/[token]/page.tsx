@@ -161,19 +161,48 @@ export default async function OnboardingPage({
 
   const contentSlice = (prospect.onboardingData as Record<string, unknown> | null)?.content as Record<string, unknown> | undefined;
   const businessSlice = (contentSlice?.business ?? {}) as Record<string, unknown>;
+  const trustSlice = (contentSlice?.trust ?? {}) as Record<string, unknown>;
   const locationsSlice = Array.isArray(contentSlice?.locations) ? contentSlice.locations as Array<Record<string, unknown>> : [];
+  const rawServices = Array.isArray(contentSlice?.services) ? contentSlice.services as Array<Record<string, unknown>> : [];
+  const rawFaq = Array.isArray(contentSlice?.faq) ? contentSlice.faq as Array<Record<string, unknown>> : [];
+  const rawTestimonials = Array.isArray(contentSlice?.testimonials) ? contentSlice.testimonials as Array<Record<string, unknown>> : [];
+  const str = (v: unknown) => typeof v === "string" ? v : "";
   const siteData = {
-    phoneDisplay: typeof businessSlice.phoneDisplay === "string" ? businessSlice.phoneDisplay : prospect.phone ?? "",
-    phoneTel: typeof businessSlice.phoneTel === "string" ? businessSlice.phoneTel : "",
-    publicEmail: typeof businessSlice.publicEmail === "string" ? businessSlice.publicEmail : prospect.email ?? "",
-    address: typeof businessSlice.address === "string" ? businessSlice.address : "",
+    phoneDisplay: str(businessSlice.phoneDisplay) || (prospect.phone ?? ""),
+    phoneTel: str(businessSlice.phoneTel),
+    publicEmail: str(businessSlice.publicEmail) || (prospect.email ?? ""),
+    address: str(businessSlice.address),
+    serviceArea: str(businessSlice.serviceArea),
     openingHours: (businessSlice.openingHours ?? null) as Record<string, { open: boolean; from?: string; to?: string }> | null,
+    tagline: str(contentSlice?.tagline),
+    aboutBlurb: str(contentSlice?.aboutBlurb),
+    services: rawServices.map((s) => ({
+      name: str(s.serviceName),
+      description: str(s.description),
+      longDescription: str(s.longDescription),
+      pricingNotes: str(s.pricingNotes),
+      priceFrom: typeof s.priceFrom === "number" ? s.priceFrom : null,
+    })),
+    faq: rawFaq.map((f) => ({
+      question: str(f.question),
+      answer: str(f.answer),
+    })),
+    testimonials: rawTestimonials.map((t) => ({
+      name: str(t.name),
+      quote: str(t.quote),
+      rating: typeof t.rating === "number" ? t.rating : null,
+    })),
+    trust: {
+      yearsExperience: typeof trustSlice.yearsExperience === "number" ? trustSlice.yearsExperience : null,
+      associations: str(trustSlice.associations),
+      awards: str(trustSlice.awards),
+    },
     locations: locationsSlice.map((l) => ({
-      name: typeof l.name === "string" ? l.name : "",
-      phoneDisplay: typeof l.phoneDisplay === "string" ? l.phoneDisplay : "",
-      phoneTel: typeof l.phoneTel === "string" ? l.phoneTel : "",
-      publicEmail: typeof l.publicEmail === "string" ? l.publicEmail : "",
-      address: typeof l.address === "string" ? l.address : "",
+      name: str(l.name),
+      phoneDisplay: str(l.phoneDisplay),
+      phoneTel: str(l.phoneTel),
+      publicEmail: str(l.publicEmail),
+      address: str(l.address),
       openingHours: (l.openingHours ?? null) as Record<string, { open: boolean; from?: string; to?: string }> | null,
     })),
   };
