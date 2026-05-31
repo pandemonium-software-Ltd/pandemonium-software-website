@@ -58,6 +58,24 @@ export function middleware(req: NextRequest) {
     return res;
   }
 
+  // Same-origin navigation bypass: if the Referer is from this site,
+  // the visitor already passed the gate (via ?pa= or cookie) and is
+  // now clicking around. Let them through — this covers Next.js RSC
+  // navigations and <Link> clicks that the client-side script can't
+  // intercept. The coming-soon gate is a UX veil, not a security
+  // boundary, so trusting same-origin Referer is acceptable.
+  const referer = req.headers.get("referer");
+  if (referer) {
+    try {
+      const refOrigin = new URL(referer).origin;
+      if (refOrigin === url.origin) {
+        const res = NextResponse.next();
+        addPreviewHeaders(res);
+        return res;
+      }
+    } catch {}
+  }
+
   // Coming-soon: return self-contained HTML directly (no layout).
   if (comingSoon) {
     return new NextResponse(comingSoonHtml(), {
