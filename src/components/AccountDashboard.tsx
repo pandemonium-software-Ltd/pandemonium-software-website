@@ -9,7 +9,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   countActiveChangeRequestsByKind,
-  countActiveChangeRequestsThisMonth,
   MONTHLY_CHANGE_REQUEST_LIMIT,
   MONTHLY_OFFER_UPDATE_LIMIT,
   type ChangeRequest,
@@ -1488,7 +1487,7 @@ function ChangeRequestsBlock({
   );
   const [retracting, setRetracting] = useState(false);
 
-  const usedThisMonth = countActiveChangeRequestsThisMonth(requests);
+  const usedThisMonth = countActiveChangeRequestsByKind(requests, "free-text");
   const remaining = Math.max(0, cap - usedThisMonth);
   const atCap = remaining === 0;
 
