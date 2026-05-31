@@ -22,7 +22,7 @@
 
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { isModuleSetupComplete, type ToolsSlice } from "@/lib/module-setup-status";
 import {
@@ -159,7 +159,66 @@ export default function ModulesEditor({
   const [locModal, setLocModal] = useState<{ target: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Optimistic pending changes submitted this session. Tracked
+  // locally because router.refresh() is async — the user can open
+  // the next Remove modal before the server-side pendingChanges
+  // prop updates. Without this, removing 3 modules in sequence
+  // shows the same "before" price in every modal.
+  //
+  // Each entry records the module name + its monthly/setup delta.
+  // Entries that already appear in the server-confirmed
+  // pendingChanges prop are filtered out when computing effective
+  // amounts, so there's no double-counting once the refresh lands.
+  type OptimisticEntry = {
+    module: string;
+    action: "add" | "remove";
+    monthlyDelta: number;
+    setupDelta: number;
+  };
+  const [optimistic, setOptimistic] = useState<OptimisticEntry[]>([]);
+
+  // When pendingChanges prop updates (router.refresh() landed),
+  // prune any optimistic entries that the server now confirms.
+  const prevPendingRef = useRef(pendingChanges);
+  useEffect(() => {
+    if (prevPendingRef.current !== pendingChanges) {
+      prevPendingRef.current = pendingChanges;
+      setOptimistic((prev) =>
+        prev.filter((o) => {
+          const serverHas = pendingChanges.some(
+            (p) =>
+              p.kind === "modules-post-launch" &&
+              (p.added.includes(o.module) || p.removed.includes(o.module)),
+          );
+          return !serverHas;
+        }),
+      );
+    }
+  }, [pendingChanges]);
+
   const current = new Set(currentModules);
+
+  // Effective monthly/setup: server-confirmed pending deltas PLUS
+  // any optimistic entries not yet confirmed by the server.
+  const serverModuleDeltas = pendingChanges.filter(
+    (p) => p.kind === "modules-post-launch",
+  );
+  const serverPendingModules = new Set(
+    serverModuleDeltas.flatMap((p) => [...p.added, ...p.removed]),
+  );
+  const unconfirmedOptimistic = optimistic.filter(
+    (o) => !serverPendingModules.has(o.module),
+  );
+
+  const effectiveMonthly = foundingMember
+    ? currentMonthly
+    : currentMonthly +
+      serverModuleDeltas.reduce((s, p) => s + p.monthlyDelta, 0) +
+      unconfirmedOptimistic.reduce((s, o) => s + o.monthlyDelta, 0);
+  const effectiveSetup =
+    paidSetup +
+    serverModuleDeltas.reduce((s, p) => s + p.setupDelta, 0) +
+    unconfirmedOptimistic.reduce((s, o) => s + o.setupDelta, 0);
 
   // The customer's effective extra-locations target if there's a
   // pending change queued — otherwise the current count. The
@@ -171,8 +230,13 @@ export default function ModulesEditor({
   const targetExtraLocations =
     pendingLocChange?.toExtraLocations ?? extraLocations;
 
-  /** True if this exact module is queued for an add (so we should
-   *  show "Pending add" on the row + suppress the Add button). */
+  // Combine server-confirmed + optimistic for badge/button gating
+  // so buttons update immediately after submit, not after refresh.
+  const allPendingModules = new Set([
+    ...serverPendingModules,
+    ...optimistic.map((o) => o.module),
+  ]);
+
   function isPendingAdd(mod: ModuleName): PendingChange | undefined {
     return pendingChanges.find(
       (p) => p.kind === "modules-post-launch" && p.added.includes(mod),
@@ -183,18 +247,32 @@ export default function ModulesEditor({
       (p) => p.kind === "modules-post-launch" && p.removed.includes(mod),
     );
   }
+  function isOptimisticAdd(mod: ModuleName): boolean {
+    return (
+      !isPendingAdd(mod) &&
+      optimistic.some((o) => o.module === mod && o.action === "add")
+    );
+  }
+  function isOptimisticRemove(mod: ModuleName): boolean {
+    return (
+      !isPendingRemove(mod) &&
+      optimistic.some((o) => o.module === mod && o.action === "remove")
+    );
+  }
 
   async function submit() {
     if (!modal) return;
     setError(null);
+    const submittedModule = modal.module;
+    const submittedAction = modal.action;
     startTransition(async () => {
       const res = await fetch("/api/account/module-change", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           token,
-          module: modal.module,
-          action: modal.action,
+          module: submittedModule,
+          action: submittedAction,
         }),
       });
       if (!res.ok) {
@@ -203,6 +281,19 @@ export default function ModulesEditor({
         };
         setError(body.error ?? "Couldn't submit just now. Try again.");
         return;
+      }
+      const meta = ALL_MODULES.find((m) => m.name === submittedModule);
+      if (meta) {
+        setOptimistic((prev) => [
+          ...prev,
+          {
+            module: submittedModule,
+            action: submittedAction,
+            monthlyDelta:
+              submittedAction === "add" ? meta.monthly : -meta.monthly,
+            setupDelta: submittedAction === "add" ? meta.setup : 0,
+          },
+        ]);
       }
       setModal(null);
       router.refresh();
@@ -240,12 +331,16 @@ export default function ModulesEditor({
           const active = current.has(m.name);
           const pAdd = isPendingAdd(m.name);
           const pRemove = isPendingRemove(m.name);
+          const oAdd = isOptimisticAdd(m.name);
+          const oRemove = isOptimisticRemove(m.name);
+          const anyPendingAdd = !!(pAdd || oAdd);
+          const anyPendingRemove = !!(pRemove || oRemove);
           return (
             <li key={m.name} className="flex items-start gap-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-navy-900">
                   {m.shortName ?? m.name}
-                  {active && !pRemove && (
+                  {active && !anyPendingRemove && (
                     <StateBadge tone="green" label="Active" />
                   )}
                   {pAdd && (
@@ -254,11 +349,17 @@ export default function ModulesEditor({
                       label={`Pending add · ${formatDate(pAdd.effectiveDate)}`}
                     />
                   )}
+                  {oAdd && (
+                    <StateBadge tone="amber" label="Pending add" />
+                  )}
                   {pRemove && (
                     <StateBadge
                       tone="amber"
                       label={`Pending remove · ${formatDate(pRemove.effectiveDate)}`}
                     />
+                  )}
+                  {oRemove && (
+                    <StateBadge tone="amber" label="Pending remove" />
                   )}
                 </p>
                 <p className="mt-0.5 text-xs leading-relaxed text-navy-600">
@@ -271,15 +372,8 @@ export default function ModulesEditor({
                 )}
               </div>
               <div className="flex flex-none flex-col items-end gap-2">
-                {/* Set-up button — only on active modules that
-                 *  still need customer-side setup (Cal.com URL
-                 *  paste, Resend/GBP Manager invite). Opens the
-                 *  Hub Step 3 page focused on this one module.
-                 *  Modules with no setup task (Enquiry Form,
-                 *  Offers) never trigger this branch since
-                 *  isModuleSetupComplete returns true for them. */}
                 {active &&
-                  !pRemove &&
+                  !anyPendingRemove &&
                   !isModuleSetupComplete(m.name, tools) && (
                     <a
                       href={`/onboarding/${token}?step=tools&focus=${encodeURIComponent(m.name)}`}
@@ -288,7 +382,7 @@ export default function ModulesEditor({
                       Set up →
                     </a>
                   )}
-                {active && !pRemove && (
+                {active && !anyPendingRemove && (
                   <button
                     type="button"
                     onClick={() =>
@@ -299,7 +393,7 @@ export default function ModulesEditor({
                     Remove
                   </button>
                 )}
-                {!active && !pAdd && (
+                {!active && !anyPendingAdd && (
                   <button
                     type="button"
                     onClick={() =>
@@ -393,8 +487,8 @@ export default function ModulesEditor({
           module={modal.module}
           action={modal.action}
           foundingMember={foundingMember}
-          currentMonthly={currentMonthly}
-          paidSetup={paidSetup}
+          currentMonthly={effectiveMonthly}
+          paidSetup={effectiveSetup}
           pending={pending}
           error={error}
           onCancel={() => {
@@ -409,7 +503,7 @@ export default function ModulesEditor({
         <LocationChangeModal
           fromCount={extraLocations}
           toCount={locModal.target}
-          paidSetup={paidSetup}
+          paidSetup={effectiveSetup}
           pending={pending}
           error={error}
           onCancel={() => {

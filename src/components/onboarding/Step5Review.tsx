@@ -39,6 +39,12 @@
 import { useEffect, useRef, useState } from "react";
 import { MAX_REVIEW_EDITS, type ReviewEdit } from "@/lib/onboarding";
 import PreviewFrame from "@/components/PreviewFrame";
+import {
+  buildEditPatches,
+  buildAddPatches,
+  buildRemovePatches,
+  type FormPatch,
+} from "@/lib/change-requests/build-form-patches";
 
 type ReviewSiteData = {
   phoneDisplay: string;
@@ -1132,6 +1138,7 @@ function ReviewQuickEditForm({
 }) {
   const [category, setCategory] = useState<QuickEditCategory>("contact");
   const [field, setField] = useState<QuickEditField>("phone");
+  const [action, setAction] = useState<"edit" | "add" | "remove">("edit");
   const hasLocations = siteData.locations.length > 0;
   const [locationIdx, setLocationIdx] = useState(-1);
   const [itemIdx, setItemIdx] = useState(0);
@@ -1145,13 +1152,23 @@ function ReviewQuickEditForm({
   const [uploading, setUploading] = useState(false);
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
 
+  const [addService, setAddService] = useState({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+  const [addFaq, setAddFaq] = useState({ question: "", answer: "" });
+  const [addTestimonial, setAddTestimonial] = useState({ name: "", quote: "", rating: "" });
+
+  const isListCategory = category === "service" || category === "faq" || category === "testimonial";
+
   function selectCategory(cat: QuickEditCategory) {
     setCategory(cat);
     setItemIdx(0);
     setNewValue("");
     setSelectedFile(null);
     setUploadedUrl(null);
+    setAction("edit");
     onError(null);
+    setAddService({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+    setAddFaq({ question: "", answer: "" });
+    setAddTestimonial({ name: "", quote: "", rating: "" });
     if (cat === "contact") setField("phone");
     else if (cat === "copy") setField("tagline");
     else if (cat === "service") setField("serviceDesc");
@@ -1169,9 +1186,19 @@ function ReviewQuickEditForm({
     onError(null);
   }
 
+  function selectAction(a: "edit" | "add" | "remove") {
+    setAction(a);
+    setNewValue("");
+    onError(null);
+    setAddService({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+    setAddFaq({ question: "", answer: "" });
+    setAddTestimonial({ name: "", quote: "", rating: "" });
+  }
+
   const currentSource = locationIdx < 0 ? siteData : siteData.locations[locationIdx];
 
   const currentVal = (() => {
+    if (action !== "edit") return "";
     if (category === "contact" && currentSource) {
       if (field === "phone") return currentSource.phoneDisplay;
       if (field === "email") return currentSource.publicEmail;
@@ -1224,6 +1251,38 @@ function ReviewQuickEditForm({
   }, [field, locationIdx, currentSource]);
 
   function buildMessage(): string {
+    if (action === "add") {
+      if (category === "service") {
+        const parts = [`Add new service: "${addService.name}"`];
+        if (addService.description) parts.push(`Description: "${addService.description}"`);
+        if (addService.pricingNotes) parts.push(`Pricing notes: "${addService.pricingNotes}"`);
+        if (addService.priceFrom) parts.push(`Price from: ${addService.priceFrom}`);
+        return parts.join("\n");
+      }
+      if (category === "faq") return `Add new FAQ:\nQuestion: "${addFaq.question}"\nAnswer: "${addFaq.answer}"`;
+      if (category === "testimonial") {
+        const parts = [`Add new testimonial by "${addTestimonial.name}"`];
+        parts.push(`Quote: "${addTestimonial.quote}"`);
+        if (addTestimonial.rating) parts.push(`Rating: ${addTestimonial.rating}`);
+        return parts.join("\n");
+      }
+    }
+
+    if (action === "remove") {
+      if (category === "service") {
+        const svc = siteData.services[itemIdx];
+        return `Remove service: "${svc?.name ?? "Unknown"}"`;
+      }
+      if (category === "faq") {
+        const faq = siteData.faq[itemIdx];
+        return `Remove FAQ: "${faq?.question ?? "Unknown"}"`;
+      }
+      if (category === "testimonial") {
+        const t = siteData.testimonials[itemIdx];
+        return `Remove testimonial by "${t?.name ?? "Unknown"}"`;
+      }
+    }
+
     const loc = locationIdx >= 0 && category === "contact" ? siteData.locations[locationIdx]?.name : null;
     const prefix = loc ? `For ${loc}: ` : "";
 
@@ -1278,26 +1337,65 @@ function ReviewQuickEditForm({
   const isPhotoField = category === "photo";
   const noValueNeeded = field === "openingHours" || isPhotoField;
 
+  function buildPatches(): FormPatch[] | null {
+    if (action === "add") {
+      return buildAddPatches({
+        category,
+        service: category === "service" ? addService : undefined,
+        faq: category === "faq" ? addFaq : undefined,
+        testimonial: category === "testimonial" ? { name: addTestimonial.name, quote: addTestimonial.quote, rating: addTestimonial.rating || undefined } : undefined,
+      });
+    }
+    if (action === "remove") {
+      const svc = category === "service" ? siteData.services[itemIdx] : null;
+      const faqItem = category === "faq" ? siteData.faq[itemIdx] : null;
+      const t = category === "testimonial" ? siteData.testimonials[itemIdx] : null;
+      return buildRemovePatches({
+        category,
+        serviceName: svc?.name,
+        faqQuestion: faqItem?.question,
+        testimonialName: t?.name,
+      });
+    }
+    if (isPhotoField) return [];
+    const svc = category === "service" ? siteData.services[itemIdx] : null;
+    const faqItem = category === "faq" ? siteData.faq[itemIdx] : null;
+    const t = category === "testimonial" ? siteData.testimonials[itemIdx] : null;
+    const loc = locationIdx >= 0 && category === "contact" ? siteData.locations[locationIdx] : null;
+    return buildEditPatches({
+      field,
+      newValue,
+      category,
+      serviceName: svc?.name,
+      faqQuestion: faqItem?.question,
+      testimonialName: t?.name,
+      locationName: loc?.name,
+      hours: field === "openingHours" ? hours : undefined,
+    });
+  }
+
+  function validateSubmit(): string | null {
+    if (remaining <= 0) return "No edits remaining.";
+    if (action === "add") {
+      if (category === "service" && !addService.name.trim()) return "Please enter a service name.";
+      if (category === "faq" && (!addFaq.question.trim() || !addFaq.answer.trim())) return "Please fill in both the question and answer.";
+      if (category === "testimonial" && (!addTestimonial.name.trim() || !addTestimonial.quote.trim())) return "Please enter a name and quote.";
+      return null;
+    }
+    if (action === "remove") return null;
+    if (isPhotoField && !selectedFile && !uploadedUrl) return "Please select an image file.";
+    if (!noValueNeeded && newValue.trim().length === 0) return "Please enter a new value.";
+    return null;
+  }
+
   async function handleSubmit() {
     onError(null);
-    if (isPhotoField) {
-      if (!selectedFile && !uploadedUrl) {
-        onError("Please select an image file.");
-        return;
-      }
-    } else if (!noValueNeeded && newValue.trim().length === 0) {
-      onError("Please enter a new value.");
-      return;
-    }
-    if (remaining <= 0) {
-      onError("No edits remaining.");
-      return;
-    }
+    const err = validateSubmit();
+    if (err) { onError(err); return; }
 
     setPending(true);
     try {
-      // Photo: upload to R2 first, then submit the message with the URL
-      if (isPhotoField && selectedFile && !uploadedUrl) {
+      if (action === "edit" && isPhotoField && selectedFile && !uploadedUrl) {
         setUploading(true);
         const form = new FormData();
         form.append("token", token);
@@ -1320,10 +1418,19 @@ function ReviewQuickEditForm({
       }
 
       const msg = buildMessage();
+      const patches = buildPatches();
+      const isStructured = patches !== null;
       const res = await fetch("/api/onboarding/review-edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, message: msg }),
+        body: JSON.stringify({
+          token,
+          message: msg,
+          ...(isStructured ? {
+            patches: patches.length > 0 ? patches : undefined,
+            rebuildOnly: patches.length === 0 ? true : undefined,
+          } : {}),
+        }),
       });
       const json = (await res.json()) as {
         success?: boolean;
@@ -1339,6 +1446,9 @@ function ReviewQuickEditForm({
       setNewValue("");
       setSelectedFile(null);
       setUploadedUrl(null);
+      setAddService({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+      setAddFaq({ question: "", answer: "" });
+      setAddTestimonial({ name: "", quote: "", rating: "" });
       if (fileInputRef.current) fileInputRef.current.value = "";
       const r = json.remaining ?? remaining - 1;
       onSuccess(`Got it. ${r} edit${r === 1 ? "" : "s"} remaining.`);
@@ -1351,6 +1461,9 @@ function ReviewQuickEditForm({
   }
 
   const busy = pending || externalSubmitting || uploading;
+
+  const inputCls = "w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50";
+  const textareaCls = `${inputCls} resize-y`;
 
   const fieldPills = category === "contact" ? CONTACT_FIELDS
     : category === "copy" ? COPY_FIELDS
@@ -1384,187 +1497,264 @@ function ReviewQuickEditForm({
         </div>
       </div>
 
-      {/* Item picker (services, FAQ, testimonials) */}
-      {items && items.length > 0 && (
+      {/* Action picker for list categories */}
+      {isListCategory && (
         <div>
-          <span className="block text-sm font-semibold text-navy-900">
-            Which {category === "service" ? "service" : category === "faq" ? "FAQ" : "testimonial"}?
-          </span>
+          <span className="block text-sm font-semibold text-navy-900">What would you like to do?</span>
           <div className="mt-2 flex flex-wrap gap-2">
+            <Pill label="Edit existing" active={action === "edit"} onClick={() => selectAction("edit")} />
+            <Pill label="+ Add new" active={action === "add"} onClick={() => selectAction("add")} />
+            {items && items.length > 0 && (
+              <Pill label="Remove" active={action === "remove"} onClick={() => selectAction("remove")} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- ADD NEW forms ---- */}
+      {action === "add" && category === "service" && (
+        <div className="space-y-3 rounded-xl border-2 border-green-200 bg-green-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-green-800">New service</p>
+          <input value={addService.name} onChange={(e) => setAddService((p) => ({ ...p, name: e.target.value }))} disabled={busy} placeholder="Service name (required)" maxLength={200} className={inputCls} />
+          <textarea value={addService.description} onChange={(e) => setAddService((p) => ({ ...p, description: e.target.value }))} disabled={busy} placeholder="Short description (optional)" rows={3} maxLength={2000} className={textareaCls} />
+          <input value={addService.pricingNotes} onChange={(e) => setAddService((p) => ({ ...p, pricingNotes: e.target.value }))} disabled={busy} placeholder="Pricing notes, e.g. 'From £500' (optional)" maxLength={500} className={inputCls} />
+          <input type="number" value={addService.priceFrom} onChange={(e) => setAddService((p) => ({ ...p, priceFrom: e.target.value }))} disabled={busy} placeholder="Price from, e.g. 500 (optional)" className={inputCls} />
+          <button type="button" onClick={handleSubmit} disabled={busy || !addService.name.trim() || !previewReady} className="btn-primary">
+            {busy ? "Submitting…" : "Submit new service"}
+          </button>
+          {!previewReady && <p className="text-xs text-navy-500">The submit button unlocks once your preview is ready.</p>}
+        </div>
+      )}
+
+      {action === "add" && category === "faq" && (
+        <div className="space-y-3 rounded-xl border-2 border-green-200 bg-green-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-green-800">New FAQ</p>
+          <input value={addFaq.question} onChange={(e) => setAddFaq((p) => ({ ...p, question: e.target.value }))} disabled={busy} placeholder="Question (required)" maxLength={500} className={inputCls} />
+          <textarea value={addFaq.answer} onChange={(e) => setAddFaq((p) => ({ ...p, answer: e.target.value }))} disabled={busy} placeholder="Answer (required)" rows={4} maxLength={2000} className={textareaCls} />
+          <button type="button" onClick={handleSubmit} disabled={busy || !addFaq.question.trim() || !addFaq.answer.trim() || !previewReady} className="btn-primary">
+            {busy ? "Submitting…" : "Submit new FAQ"}
+          </button>
+          {!previewReady && <p className="text-xs text-navy-500">The submit button unlocks once your preview is ready.</p>}
+        </div>
+      )}
+
+      {action === "add" && category === "testimonial" && (
+        <div className="space-y-3 rounded-xl border-2 border-green-200 bg-green-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-green-800">New testimonial</p>
+          <input value={addTestimonial.name} onChange={(e) => setAddTestimonial((p) => ({ ...p, name: e.target.value }))} disabled={busy} placeholder="Customer name (required)" maxLength={200} className={inputCls} />
+          <textarea value={addTestimonial.quote} onChange={(e) => setAddTestimonial((p) => ({ ...p, quote: e.target.value }))} disabled={busy} placeholder="Their quote (required)" rows={4} maxLength={2000} className={textareaCls} />
+          <input type="number" min={1} max={5} value={addTestimonial.rating} onChange={(e) => setAddTestimonial((p) => ({ ...p, rating: e.target.value }))} disabled={busy} placeholder="Rating 1–5 (optional)" className={inputCls} />
+          <button type="button" onClick={handleSubmit} disabled={busy || !addTestimonial.name.trim() || !addTestimonial.quote.trim() || !previewReady} className="btn-primary">
+            {busy ? "Submitting…" : "Submit new testimonial"}
+          </button>
+          {!previewReady && <p className="text-xs text-navy-500">The submit button unlocks once your preview is ready.</p>}
+        </div>
+      )}
+
+      {/* ---- REMOVE picker ---- */}
+      {action === "remove" && items && items.length > 0 && (
+        <div className="space-y-3 rounded-xl border-2 border-ember-200 bg-ember-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ember-800">
+            Remove {category === "service" ? "a service" : category === "faq" ? "an FAQ" : "a testimonial"}
+          </p>
+          <div className="flex flex-wrap gap-2">
             {items.map((_, i) => (
-              <Pill key={i} label={itemLabel(i)} active={itemIdx === i} onClick={() => { setItemIdx(i); setNewValue(""); }} />
+              <Pill key={i} label={itemLabel(i)} active={itemIdx === i} onClick={() => setItemIdx(i)} />
             ))}
           </div>
-        </div>
-      )}
-      {items && items.length === 0 && (
-        <p className="text-sm text-navy-500">
-          No {category === "service" ? "services" : category === "faq" ? "FAQs" : "testimonials"} found in your site content. Add them in Step 4 first.
-        </p>
-      )}
-
-      {/* Field picker */}
-      {(!items || items.length > 0) && (
-        <div>
-          <span className="block text-sm font-semibold text-navy-900">What to change</span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {fieldPills.map((f) => (
-              <Pill key={f.value} label={f.label} active={field === f.value} onClick={() => selectField(f.value)} />
-            ))}
-          </div>
+          <button type="button" onClick={handleSubmit} disabled={busy || !previewReady} className="rounded-lg bg-ember-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-ember-700 disabled:opacity-60">
+            {busy ? "Submitting…" : `Remove "${itemLabel(itemIdx)}"`}
+          </button>
+          {!previewReady && <p className="text-xs text-navy-500">The submit button unlocks once your preview is ready.</p>}
         </div>
       )}
 
-      {/* Location picker (contact category only) */}
-      {category === "contact" && hasLocations && (
-        <div>
-          <span className="block text-sm font-semibold text-navy-900">Which location?</span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Pill label="Main / HQ" active={locationIdx === -1} onClick={() => setLocationIdx(-1)} />
-            {siteData.locations.map((loc, i) => (
-              <Pill key={loc.name} label={loc.name} active={locationIdx === i} onClick={() => setLocationIdx(i)} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Service picker for photo-service slot */}
-      {category === "photo" && field === "photoService" && siteData.services.length > 0 && (
-        <div>
-          <span className="block text-sm font-semibold text-navy-900">Which service?</span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {siteData.services.map((s, i) => (
-              <Pill key={i} label={s.name} active={itemIdx === i} onClick={() => { setItemIdx(i); setSelectedFile(null); setUploadedUrl(null); }} />
-            ))}
-          </div>
-        </div>
-      )}
-      {category === "photo" && field === "photoService" && siteData.services.length === 0 && (
-        <p className="text-sm text-navy-500">No services found. Add them in Step 4 first.</p>
-      )}
-
-      {/* Value input */}
-      {(!items || items.length > 0) && (
+      {/* ---- EDIT existing (original flow) ---- */}
+      {action === "edit" && (
         <>
-          {isPhotoField ? (
-            <div className="space-y-3">
-              {field === "photoService" && siteData.services.length === 0 ? null : (
-                <>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    disabled={busy}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] ?? null;
-                      setSelectedFile(f);
-                      setUploadedUrl(null);
-                      onError(null);
-                      if (f && f.size > 5 * 1024 * 1024) {
-                        onError("Image too large — max 5 MB. Compress or resize it first.");
-                        setSelectedFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      }
-                    }}
-                    className="w-full text-sm text-navy-700 file:mr-3 file:rounded-full file:border-2 file:border-navy-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-navy-700 hover:file:border-navy-400"
-                  />
-                  {selectedFile && (
-                    <p className="text-xs text-navy-500">
-                      Selected: <span className="font-medium text-navy-700">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)
-                    </p>
-                  )}
-                  {uploading && <p className="text-xs text-navy-500">Uploading…</p>}
-                </>
-              )}
-            </div>
-          ) : field === "openingHours" ? (
-            <div className="space-y-2">
-              {DAYS.map((d) => (
-                <div key={d} className="flex items-center gap-3">
-                  <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
-                  <label className="flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      checked={hours[d]?.open ?? false}
-                      onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
-                      className="h-4 w-4 rounded border-navy-300"
-                    />
-                    <span className="text-xs text-navy-600">Open</span>
-                  </label>
-                  {hours[d]?.open && (
-                    <>
-                      <input
-                        type="time"
-                        value={hours[d]?.from ?? "09:00"}
-                        onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
-                        className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
-                      />
-                      <span className="text-navy-400">to</span>
-                      <input
-                        type="time"
-                        value={hours[d]?.to ?? "17:00"}
-                        onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
-                        className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
-                      />
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
+          {/* Item picker (services, FAQ, testimonials) */}
+          {items && items.length > 0 && (
             <div>
-              {currentVal && (
-                <p className="mb-2 text-xs text-navy-500">
-                  Currently: <span className="font-medium text-navy-700">{needsTextarea ? truncate(currentVal, 120) : currentVal}</span>
-                </p>
-              )}
-              {needsTextarea ? (
-                <textarea
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  disabled={busy}
-                  rows={4}
-                  maxLength={2000}
-                  placeholder="Enter new text…"
-                  className="w-full resize-y rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-                />
-              ) : (
-                <input
-                  type={field === "email" ? "email" : field === "servicePrice" || field === "trustYears" || field === "testimonialRating" ? "number" : "text"}
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  disabled={busy}
-                  placeholder={
-                    field === "phone" ? "07700 900 000"
-                      : field === "email" ? "hello@example.com"
-                      : field === "address" ? "123 High Street, Oxford, OX1 1AA"
-                      : field === "servicePrice" ? "250"
-                      : field === "trustYears" ? "10"
-                      : field === "testimonialRating" ? "5"
-                      : "Enter new value…"
-                  }
-                  min={field === "testimonialRating" ? 1 : undefined}
-                  max={field === "testimonialRating" ? 5 : undefined}
-                  maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
-                  className="w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-                />
-              )}
+              <span className="block text-sm font-semibold text-navy-900">
+                Which {category === "service" ? "service" : category === "faq" ? "FAQ" : "testimonial"}?
+              </span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {items.map((_, i) => (
+                  <Pill key={i} label={itemLabel(i)} active={itemIdx === i} onClick={() => { setItemIdx(i); setNewValue(""); }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {items && items.length === 0 && (
+            <p className="text-sm text-navy-500">
+              No {category === "service" ? "services" : category === "faq" ? "FAQs" : "testimonials"} found. Use &ldquo;+ Add new&rdquo; above to create one.
+            </p>
+          )}
+
+          {/* Field picker */}
+          {(!items || items.length > 0) && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">What to change</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {fieldPills.map((f) => (
+                  <Pill key={f.value} label={f.label} active={field === f.value} onClick={() => selectField(f.value)} />
+                ))}
+              </div>
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={busy || (isPhotoField ? !selectedFile && !uploadedUrl : !noValueNeeded && newValue.trim().length === 0) || !previewReady}
-            className="btn-primary"
-            title={!previewReady ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here." : undefined}
-          >
-            {uploading ? "Uploading…" : busy ? "Submitting…" : isPhotoField ? "Upload & submit" : "Submit change"}
-          </button>
-          {!previewReady && (
-            <p className="text-xs text-navy-500">
-              The submit button unlocks once your preview is ready.
-            </p>
+          {/* Location picker (contact category only) */}
+          {category === "contact" && hasLocations && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">Which location?</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Pill label="Main / HQ" active={locationIdx === -1} onClick={() => setLocationIdx(-1)} />
+                {siteData.locations.map((loc, i) => (
+                  <Pill key={loc.name} label={loc.name} active={locationIdx === i} onClick={() => setLocationIdx(i)} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Service picker for photo-service slot */}
+          {category === "photo" && field === "photoService" && siteData.services.length > 0 && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">Which service?</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {siteData.services.map((s, i) => (
+                  <Pill key={i} label={s.name} active={itemIdx === i} onClick={() => { setItemIdx(i); setSelectedFile(null); setUploadedUrl(null); }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {category === "photo" && field === "photoService" && siteData.services.length === 0 && (
+            <p className="text-sm text-navy-500">No services found.</p>
+          )}
+
+          {/* Value input */}
+          {(!items || items.length > 0) && (
+            <>
+              {isPhotoField ? (
+                <div className="space-y-3">
+                  {field === "photoService" && siteData.services.length === 0 ? null : (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={busy}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          setSelectedFile(f);
+                          setUploadedUrl(null);
+                          onError(null);
+                          if (f && f.size > 5 * 1024 * 1024) {
+                            onError("Image too large — max 5 MB. Compress or resize it first.");
+                            setSelectedFile(null);
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }
+                        }}
+                        className="w-full text-sm text-navy-700 file:mr-3 file:rounded-full file:border-2 file:border-navy-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-navy-700 hover:file:border-navy-400"
+                      />
+                      {selectedFile && (
+                        <p className="text-xs text-navy-500">
+                          Selected: <span className="font-medium text-navy-700">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)
+                        </p>
+                      )}
+                      {uploading && <p className="text-xs text-navy-500">Uploading…</p>}
+                    </>
+                  )}
+                </div>
+              ) : field === "openingHours" ? (
+                <div className="space-y-2">
+                  {DAYS.map((d) => (
+                    <div key={d} className="flex items-center gap-3">
+                      <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
+                      <label className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={hours[d]?.open ?? false}
+                          onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
+                          className="h-4 w-4 rounded border-navy-300"
+                        />
+                        <span className="text-xs text-navy-600">Open</span>
+                      </label>
+                      {hours[d]?.open && (
+                        <>
+                          <input
+                            type="time"
+                            value={hours[d]?.from ?? "09:00"}
+                            onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
+                            className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                          />
+                          <span className="text-navy-400">to</span>
+                          <input
+                            type="time"
+                            value={hours[d]?.to ?? "17:00"}
+                            onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
+                            className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                          />
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  {currentVal && (
+                    <p className="mb-2 text-xs text-navy-500">
+                      Currently: <span className="font-medium text-navy-700">{needsTextarea ? truncate(currentVal, 120) : currentVal}</span>
+                    </p>
+                  )}
+                  {needsTextarea ? (
+                    <textarea
+                      value={newValue}
+                      onChange={(e) => setNewValue(e.target.value)}
+                      disabled={busy}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Enter new text…"
+                      className={textareaCls}
+                    />
+                  ) : (
+                    <input
+                      type={field === "email" ? "email" : field === "servicePrice" || field === "trustYears" || field === "testimonialRating" ? "number" : "text"}
+                      value={newValue}
+                      onChange={(e) => setNewValue(e.target.value)}
+                      disabled={busy}
+                      placeholder={
+                        field === "phone" ? "07700 900 000"
+                          : field === "email" ? "hello@example.com"
+                          : field === "address" ? "123 High Street, Oxford, OX1 1AA"
+                          : field === "servicePrice" ? "250"
+                          : field === "trustYears" ? "10"
+                          : field === "testimonialRating" ? "5"
+                          : "Enter new value…"
+                      }
+                      min={field === "testimonialRating" ? 1 : undefined}
+                      max={field === "testimonialRating" ? 5 : undefined}
+                      maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
+                      className={inputCls}
+                    />
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={busy || (isPhotoField ? !selectedFile && !uploadedUrl : !noValueNeeded && newValue.trim().length === 0) || !previewReady}
+                className="btn-primary"
+                title={!previewReady ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here." : undefined}
+              >
+                {uploading ? "Uploading…" : busy ? "Submitting…" : isPhotoField ? "Upload & submit" : "Submit change"}
+              </button>
+              {!previewReady && (
+                <p className="text-xs text-navy-500">
+                  The submit button unlocks once your preview is ready.
+                </p>
+              )}
+            </>
           )}
         </>
       )}

@@ -36,6 +36,12 @@ import {
   type ToolsSlice,
 } from "@/lib/module-setup-status";
 import { site } from "@/lib/site";
+import {
+  buildEditPatches,
+  buildAddPatches,
+  buildRemovePatches,
+  type FormPatch,
+} from "@/lib/change-requests/build-form-patches";
 
 export type AccountDashboardProps = {
   token: string;
@@ -1459,6 +1465,43 @@ function QuickEditForm({
   const isPhotoField = category === "photo";
   const noValueNeeded = field === "openingHours" || isPhotoField;
 
+  function buildPatches(): FormPatch[] | null {
+    if (action === "add") {
+      return buildAddPatches({
+        category,
+        service: category === "service" ? addService : undefined,
+        faq: category === "faq" ? addFaq : undefined,
+        testimonial: category === "testimonial" ? { name: addTestimonial.name, quote: addTestimonial.quote, rating: addTestimonial.rating || undefined } : undefined,
+      });
+    }
+    if (action === "remove") {
+      const svc = category === "service" ? siteData.services[itemIdx] : null;
+      const faq = category === "faq" ? siteData.faq[itemIdx] : null;
+      const t = category === "testimonial" ? siteData.testimonials[itemIdx] : null;
+      return buildRemovePatches({
+        category,
+        serviceName: svc?.name,
+        faqQuestion: faq?.question,
+        testimonialName: t?.name,
+      });
+    }
+    if (isPhotoField) return [];
+    const svc = category === "service" ? siteData.services[itemIdx] : null;
+    const faqItem = category === "faq" ? siteData.faq[itemIdx] : null;
+    const t = category === "testimonial" ? siteData.testimonials[itemIdx] : null;
+    const loc = locationIdx >= 0 && category === "contact" ? siteData.locations[locationIdx] : null;
+    return buildEditPatches({
+      field,
+      newValue,
+      category,
+      serviceName: svc?.name,
+      faqQuestion: faqItem?.question,
+      testimonialName: t?.name,
+      locationName: loc?.name,
+      hours: field === "openingHours" ? hours : undefined,
+    });
+  }
+
   async function handleQuickSubmit() {
     setError(null);
     setSuccess(null);
@@ -1487,10 +1530,20 @@ function QuickEditForm({
       }
 
       const msg = buildMessage(uploadUrl);
+      const patches = buildPatches();
+      const isStructured = patches !== null;
       const res = await fetch("/api/account/change-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, message: msg }),
+        body: JSON.stringify({
+          token,
+          message: msg,
+          ...(isStructured ? {
+            kind: "direct-edit" as const,
+            patches: patches.length > 0 ? patches : undefined,
+            rebuildOnly: patches.length === 0 ? true : undefined,
+          } : {}),
+        }),
       });
       const json = (await res.json()) as {
         success?: boolean;

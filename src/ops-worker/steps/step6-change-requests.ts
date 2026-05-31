@@ -57,6 +57,7 @@ import {
   type SafeTarget,
 } from "../../lib/haiku/classify-change-request";
 import { applyChangeRequestPatches } from "../../lib/change-requests/apply-patch";
+import { parseFormMessage } from "../../lib/change-requests/build-form-patches";
 import { buildSiteSnapshot } from "../../lib/change-requests/site-snapshot";
 import { dispatchRepositoryEvent, GithubApiError } from "../../lib/github";
 import { notifyAdmin, adminFooter } from "../../lib/admin-notify";
@@ -167,6 +168,75 @@ export const step6ChangeRequests: Step = {
         continue;
       }
 
+      // ---- Deterministic parsing: try to extract patches without Haiku ----
+      // Form-generated messages have a predictable format. If we can
+      // parse them deterministically, skip Haiku entirely — saves cost,
+      // latency, and eliminates misclassification risk.
+      const deterministicPatches = parseFormMessage(itemMessage);
+      if (deterministicPatches !== null) {
+        const isRebuildOnlyDeterministic = deterministicPatches.length === 0;
+        const typedPatches = deterministicPatches.map((p) => ({
+          target: p.target as SafeTarget,
+          newValue: p.newValue,
+          serviceName: p.serviceName,
+          faqQuestion: p.faqQuestion,
+          testimonialName: p.testimonialName,
+          locationName: p.locationName,
+        }));
+
+        // Stamp classification as deterministic (no Haiku token spent)
+        await stampClassification({
+          prospect,
+          item,
+          classification: {
+            classification: "in_scope",
+            confidence: 1.0,
+            reasoning: "Deterministic parse — structured form message, no Haiku needed.",
+            patches: typedPatches.length > 0 ? typedPatches : undefined,
+            rebuildOnly: isRebuildOnlyDeterministic || undefined,
+          },
+          isRetry: false,
+        }).catch(() => { /* best-effort */ });
+
+        const result = await tryAutoApply({
+          prospect,
+          item,
+          patches: typedPatches,
+          env,
+          reasoning: "Deterministic parse — structured form message.",
+          rebuildOnly: isRebuildOnlyDeterministic,
+        });
+        if (result.kind === "ok") {
+          const desc = isRebuildOnlyDeterministic
+            ? "deterministic-rebuild"
+            : `deterministic-applied (${typedPatches.map((p) => p.target).join(", ")})`;
+          summary.push(`${tag} ${desc}`);
+          await notifyAdmin(env, {
+            category: item.kind === "post-commit" ? "change-request" : "review-edit",
+            subject: `Auto-applied (no Haiku) — ${prospect.name}`,
+            body:
+              `Cowork deterministically parsed + auto-applied a ${item.kind} for ${prospect.name}.\n\n` +
+              (typedPatches.length > 0
+                ? `Patches (${typedPatches.length}):\n${typedPatches.map((p) => `  - ${p.target} → "${p.newValue}"`).join("\n")}\n`
+                : "Pure asset rebuild.\n") +
+              `\nCustomer's message:\n  "${itemMessage}"\n\n` +
+              adminFooter({ prospectName: prospect.name, prospectToken: prospect.token, anchor: item.kind === "post-commit" ? `cr-${item.request.id.slice(0, 8)}` : `re-${item.edit.id.slice(0, 8)}` }),
+          }).catch(() => { /* best-effort */ });
+        } else {
+          failures.push(`${tag} deterministic-apply-failed: ${result.reason}`);
+          await escalateOnly({
+            prospect,
+            item,
+            baseUrl,
+            reasonForBen: `Cowork parsed the form message deterministically but apply failed: ${result.reason}. Please review manually.`,
+          }).catch(() => { /* nothing more we can do */ });
+          summary.push(`${tag} escalated (deterministic-apply-failed)`);
+        }
+        void itemSubmitted;
+        continue;
+      }
+
+      // ---- Haiku classification fallback for free-text messages ----
       const isRetry = !!(
         item.kind === "post-commit"
           ? item.request.coworkClassification && item.request.coworkEscalatedAt
@@ -184,8 +254,10 @@ export const step6ChangeRequests: Step = {
         item,
         classification,
         isRetry,
-      }).catch(() => {
-        /* best-effort */
+      }).catch((e) => {
+        console.error(
+          `[step6] stampClassification FAILED for ${item.kind === "post-commit" ? item.request.id.slice(0, 8) : item.edit.id.slice(0, 8)}: ${e instanceof Error ? e.message : String(e)}. coworkRetriedAt may not be persisted — risk of re-escalation loop.`,
+        );
       });
 
       // Two eligibility paths into the auto-action branch:
@@ -250,6 +322,15 @@ export const step6ChangeRequests: Step = {
               ? "\n\nCowork has already emailed the customer for a hex code. Reply when they respond OR if you want to set a specific hex yourself, use the Dictate-patch panel."
               : "")
           : "Cowork couldn't classify — please reply manually.";
+        // Failsafe: stamp coworkRetriedAt on retries to prevent loops
+        if (isRetry) {
+          const retryStamp = { coworkRetriedAt: new Date().toISOString() };
+          if (item.kind === "post-commit") {
+            await patchChangeRequest(prospect.pageId, item.request.id, retryStamp).catch(() => {});
+          } else {
+            await patchReviewEdit(prospect.pageId, item.edit.id, retryStamp).catch(() => {});
+          }
+        }
         await escalateOnly({
           prospect,
           item,
@@ -330,6 +411,16 @@ export const step6ChangeRequests: Step = {
         });
       } else {
         failures.push(`${tag} ${result.reason}`);
+        // Stamp coworkRetriedAt if this was a retry — prevents infinite
+        // re-escalation even if stampClassification silently failed earlier.
+        if (isRetry) {
+          const retryStamp = { coworkRetriedAt: new Date().toISOString() };
+          if (item.kind === "post-commit") {
+            await patchChangeRequest(prospect.pageId, item.request.id, retryStamp).catch(() => {});
+          } else {
+            await patchReviewEdit(prospect.pageId, item.edit.id, retryStamp).catch(() => {});
+          }
+        }
         await escalateOnly({
           prospect,
           item,

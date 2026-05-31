@@ -49,6 +49,9 @@ import {
   OFFER_CTA_URL_MAX,
 } from "@/lib/offers/limits";
 import { applyChangeRequestPatches } from "@/lib/change-requests/apply-patch";
+import { classifyChangeRequest, SAFE_PATCH_TARGETS, type SafeTarget } from "@/lib/haiku/classify-change-request";
+import { parseFormMessage } from "@/lib/change-requests/build-form-patches";
+import { buildSiteSnapshot } from "@/lib/change-requests/site-snapshot";
 import { dispatchRepositoryEvent, GithubApiError } from "@/lib/github";
 import { notifyAdmin, adminFooter } from "@/lib/admin-notify";
 
@@ -97,6 +100,16 @@ const offerPayloadSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "End date must be YYYY-MM-DD"),
 });
 
+/** Structured patch from the form — bypasses Haiku entirely. */
+const formPatchSchema = z.object({
+  target: z.string().min(1),
+  newValue: z.string(),
+  serviceName: z.string().optional(),
+  faqQuestion: z.string().optional(),
+  testimonialName: z.string().optional(),
+  locationName: z.string().optional(),
+});
+
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE, "Missing or invalid token."),
   message: z
@@ -104,14 +117,21 @@ const requestSchema = z.object({
     .trim()
     .min(5, "Please describe the change in at least a few words.")
     .max(5000, "That's a lot for one message — please split it up."),
-  /** Optional discriminator — currently only "offer-update" is
-   *  recognised. When present the server runs the structured
-   *  auto-apply path (no Haiku). Absent = legacy free-text route
-   *  (Haiku-classified). */
-  kind: z.literal("offer-update").optional(),
+  /** Optional discriminator. "offer-update" = structured offer form.
+   *  "direct-edit" = structured form (edit/add/remove) with pre-built
+   *  patches. Absent = legacy free-text (Haiku-classified). */
+  kind: z.enum(["offer-update", "direct-edit"]).optional(),
   /** Required when kind="offer-update". Server validates dates +
    *  embeds the resulting OfferEntry on the change-request. */
   offer: offerPayloadSchema.optional(),
+  /** Pre-computed patches from the structured form. When present,
+   *  skips Haiku classification entirely — applies immediately.
+   *  Only accepted when kind="direct-edit". */
+  patches: z.array(formPatchSchema).optional(),
+  /** When true AND patches is empty/absent, signals a pure asset
+   *  rebuild (photo re-upload). No data to patch — just dispatch
+   *  a fresh build. */
+  rebuildOnly: z.boolean().optional(),
 });
 
 const ELIGIBLE_STATUSES = new Set([
@@ -142,7 +162,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, message, kind, offer } = parsed.data;
+  const { token, message, kind, offer, patches: formPatches, rebuildOnly } = parsed.data;
   // Session gate — defence-in-depth on top of body-token validation.
   // Token regex is enforced by the zod schema above; this verifies
   // the caller's signed session cookie matches that token. Security
@@ -202,12 +222,33 @@ export async function POST(request: Request) {
     );
   }
 
+  // Direct-edit validation: every target must be in the safe whitelist.
+  if (kind === "direct-edit") {
+    if (!formPatches || formPatches.length === 0) {
+      if (!rebuildOnly) {
+        return NextResponse.json(
+          { error: "Missing patches for direct-edit." },
+          { status: 400 },
+        );
+      }
+    } else {
+      for (const p of formPatches) {
+        if (!(SAFE_PATCH_TARGETS as readonly string[]).includes(p.target)) {
+          return NextResponse.json(
+            { error: `Invalid patch target: ${p.target}` },
+            { status: 400 },
+          );
+        }
+      }
+    }
+  }
+
   // Multi-item check: each request must be a single item. Detected
   // patterns get a polite "split into separate requests" reply.
   // Doesn't burn the cap — nothing's saved.
-  // Skipped for offer-update: the message is a server-built summary,
-  // not free-form customer text, so the heuristic doesn't apply.
-  if (kind !== "offer-update" && looksLikeMultipleItems(message)) {
+  // Skipped for structured forms (offer-update, direct-edit): message
+  // is server-built, not free-form customer text.
+  if (!kind && looksLikeMultipleItems(message)) {
     return NextResponse.json(
       {
         error: MULTI_ITEM_DECLINE_MESSAGE,
@@ -222,7 +263,8 @@ export async function POST(request: Request) {
   // to abuse the free-text path). Free-text change-requests share
   // the legacy global cap. Reset on the 1st of each month, UTC.
   const requests = prospect.changeRequests;
-  const usedFreeText = countActiveChangeRequestsByKind(requests, "free-text");
+  const usedFreeText = countActiveChangeRequestsByKind(requests, "free-text")
+    + countActiveChangeRequestsByKind(requests, "direct-edit");
   const usedOffers = countActiveChangeRequestsByKind(requests, "offer-update");
 
   // Effective caps fold in any admin-granted bonus for this month
@@ -252,7 +294,7 @@ export async function POST(request: Request) {
       { status: 429 },
     );
   }
-  if (!kind && usedFreeText >= effectiveCrCap) {
+  if (kind !== "offer-update" && usedFreeText >= effectiveCrCap) {
     return NextResponse.json(
       {
         error: `You've used your ${effectiveCrCap} change requests for this month. ${resetCopy} For anything bigger or more urgent, email me directly and I'll quote it separately.`,
@@ -268,6 +310,113 @@ export async function POST(request: Request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
     "https://pandemonium-software-website.benpandher.workers.dev";
+
+  // ---- Inline classification for free-text ----
+  // Attempt to classify + apply free-text submissions immediately
+  // so the customer gets an instant result. Two-layer approach:
+  //   1. Deterministic regex parse (catches form-formatted messages)
+  //   2. Haiku classification (full AI path)
+  // If either succeeds at high confidence, auto-apply. If not, save
+  // as "pending" and let the cron handle it (existing behaviour).
+  let inlineFreeTextResult: {
+    applied: boolean;
+    patches?: Array<{ target: string; newValue: unknown; previousValue: unknown }>;
+    reply?: string;
+    classification?: "in_scope" | "out_of_scope" | "ambiguous";
+    confidence?: number;
+    reasoning?: string;
+    rebuildOnly?: boolean;
+  } | null = null;
+
+  if (!kind) {
+    // Layer 1: deterministic parse (instant, free)
+    const deterministicPatches = parseFormMessage(message);
+    if (deterministicPatches !== null && deterministicPatches.length > 0) {
+      const apply = await applyChangeRequestPatches({
+        prospect,
+        patches: deterministicPatches.map((p) => ({
+          target: p.target as SafeTarget,
+          newValue: p.newValue,
+          serviceName: p.serviceName,
+          faqQuestion: p.faqQuestion,
+          testimonialName: p.testimonialName,
+          locationName: p.locationName,
+        })),
+      });
+      if (apply.ok) {
+        const targets = apply.applied.map((p) => p.target);
+        inlineFreeTextResult = {
+          applied: true,
+          patches: apply.applied.map((p) => ({
+            target: p.target,
+            newValue: p.newValue as unknown,
+            previousValue: p.previousValue,
+          })),
+          reply: `Done — updated ${targets.join(", ")}. Refresh your site shortly to see it live.`,
+          classification: "in_scope",
+          confidence: 1.0,
+          reasoning: "Deterministic parse of form-formatted message.",
+        };
+      }
+    }
+
+    // Layer 2: Haiku classification (if deterministic didn't apply)
+    if (!inlineFreeTextResult) {
+      try {
+        const classification = await classifyChangeRequest({
+          message,
+          snapshot: buildSiteSnapshot(prospect),
+        });
+        if (classification) {
+          const eligible =
+            classification.classification === "in_scope" &&
+            classification.confidence >= 0.75;
+          const hasPatches = !!classification.patches && classification.patches.length > 0;
+          const isRebuild = eligible && !!classification.rebuildOnly;
+
+          if (eligible && (hasPatches || isRebuild)) {
+            if (hasPatches) {
+              const apply = await applyChangeRequestPatches({
+                prospect,
+                patches: classification.patches!,
+              });
+              if (apply.ok) {
+                const targets = apply.applied.map((p) => p.target);
+                inlineFreeTextResult = {
+                  applied: true,
+                  patches: apply.applied.map((p) => ({
+                    target: p.target,
+                    newValue: p.newValue as unknown,
+                    previousValue: p.previousValue,
+                  })),
+                  reply: `Done — updated ${targets.join(", ")}. Refresh your site shortly to see it live.`,
+                  classification: classification.classification,
+                  confidence: classification.confidence,
+                  reasoning: classification.reasoning,
+                };
+              }
+            } else {
+              // Rebuild-only
+              inlineFreeTextResult = {
+                applied: true,
+                patches: [],
+                reply: "Done — your site is being rebuilt. Refresh shortly to see it live.",
+                classification: classification.classification,
+                confidence: classification.confidence,
+                reasoning: classification.reasoning,
+                rebuildOnly: true,
+              };
+            }
+          }
+        }
+      } catch (e) {
+        // Haiku unreachable or timed out — fall back to cron path
+        console.warn(
+          `[api/account/change-request] inline classify failed, falling back to cron: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
+  }
 
   // ---- Auto-apply path for offer-update ----
   // The customer's submitted structured form data via the dashboard
@@ -325,15 +474,52 @@ export async function POST(request: Request) {
     };
   }
 
+  // ---- Auto-apply path for direct-edit ----
+  // Form-generated structured change requests (edit, add, remove).
+  // Patches are pre-built by the form — no Haiku needed.
+  const isDirectEdit = kind === "direct-edit";
+  let autoAppliedDirect:
+    | { patches: Array<{ target: string; newValue: unknown; previousValue: unknown }> }
+    | null = null;
+  if (isDirectEdit && formPatches && formPatches.length > 0) {
+    const typedPatches = formPatches.map((p) => ({
+      target: p.target as SafeTarget,
+      newValue: p.newValue,
+      serviceName: p.serviceName,
+      faqQuestion: p.faqQuestion,
+      testimonialName: p.testimonialName,
+      locationName: p.locationName,
+    }));
+    const apply = await applyChangeRequestPatches({
+      prospect,
+      patches: typedPatches,
+    });
+    if (!apply.ok) {
+      console.error(
+        `[api/account/change-request] direct-edit auto-apply failed for ${prospect.token.slice(0, 8)}: ${apply.reason}`,
+      );
+      return NextResponse.json(
+        { error: `Couldn't apply that change: ${apply.reason}. Please try again.` },
+        { status: 400 },
+      );
+    }
+    autoAppliedDirect = {
+      patches: apply.applied.map((p) => ({
+        target: p.target,
+        newValue: p.newValue as unknown,
+        previousValue: p.previousValue,
+      })),
+    };
+  }
+
+  const isAutoApplied = isOfferUpdate || isDirectEdit || !!inlineFreeTextResult?.applied;
   const nowIso = new Date().toISOString();
   const newRequest: ChangeRequest = {
     id: requestId,
     submittedAt: nowIso,
     message,
-    kind: isOfferUpdate ? "offer-update" : "free-text",
-    // Auto-applied offer updates are immediately resolved — the
-    // patch is already on Notion and no admin review is needed.
-    status: isOfferUpdate ? "resolved" : "pending",
+    kind: isOfferUpdate ? "offer-update" : isDirectEdit ? "direct-edit" : "free-text",
+    status: isAutoApplied ? "resolved" : "pending",
     ...(isOfferUpdate && autoAppliedOffer
       ? {
           resolvedAt: nowIso,
@@ -352,6 +538,33 @@ export async function POST(request: Request) {
           ],
         }
       : {}),
+    ...(isDirectEdit
+      ? {
+          resolvedAt: nowIso,
+          reply: "Auto-applied — live within a couple of minutes once the build completes.",
+          coworkClassification: "in_scope" as const,
+          coworkConfidence: 1.0,
+          coworkReasoning:
+            "Customer submitted structured form — auto-applied without Haiku classification.",
+          coworkPatchAppliedAt: nowIso,
+          ...(autoAppliedDirect ? { coworkPatches: autoAppliedDirect.patches } : {}),
+          ...(rebuildOnly && !autoAppliedDirect ? { coworkRebuildOnly: true } : {}),
+        }
+      : {}),
+    ...(inlineFreeTextResult?.applied
+      ? {
+          resolvedAt: nowIso,
+          reply: inlineFreeTextResult.reply,
+          coworkClassification: inlineFreeTextResult.classification as "in_scope",
+          coworkConfidence: inlineFreeTextResult.confidence ?? 1.0,
+          coworkReasoning: inlineFreeTextResult.reasoning ?? "Inline classification at submit time.",
+          coworkPatchAppliedAt: nowIso,
+          ...(inlineFreeTextResult.patches && inlineFreeTextResult.patches.length > 0
+            ? { coworkPatches: inlineFreeTextResult.patches }
+            : {}),
+          ...(inlineFreeTextResult.rebuildOnly ? { coworkRebuildOnly: true } : {}),
+        }
+      : {}),
   };
 
   try {
@@ -368,14 +581,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // ---- Dispatch live build for offer auto-apply ----
-  // The patch landed in Notion above; now trigger a customer-site
-  // build (mode=live) so the new offer is visible on the site
-  // within ~2 minutes. Fail-soft — the patch is already in Notion
-  // even if the dispatch fails; we surface a warning and the
-  // operator can re-trigger manually.
+  // ---- Dispatch live build for auto-applied changes ----
+  // Covers both offer-update and direct-edit. The patch landed in
+  // Notion above; now trigger a customer-site build (mode=live) so
+  // the change is visible on the site within ~2 minutes. Fail-soft.
   let buildWarning: string | null = null;
-  if (isOfferUpdate && prospect.workerName && prospect.cloudflareAccountId) {
+  if (isAutoApplied && prospect.workerName && prospect.cloudflareAccountId) {
     const env = getServerEnv();
     if (env.GITHUB_TOKEN && env.GITHUB_OWNER && env.GITHUB_REPO) {
       try {
@@ -417,29 +628,68 @@ export async function POST(request: Request) {
   //   - Regular CR: existing inbox notification flow — operator
   //     reviews in /admin.
   const adminDeepLink = `${baseUrl}/admin/${token}#cr-${newRequest.id}`;
-  if (isOfferUpdate && offer) {
+  if (isAutoApplied) {
+    const subjectKind = isOfferUpdate
+      ? "Offer"
+      : inlineFreeTextResult?.applied
+        ? "Free-text change (inline classified)"
+        : "Change";
+    const subject = `${subjectKind} auto-applied — ${prospect.name}`;
+    const submissionType = isOfferUpdate
+      ? "offer update"
+      : inlineFreeTextResult?.applied
+        ? `free-text change (Haiku confidence: ${((inlineFreeTextResult.confidence ?? 1) * 100).toFixed(0)}%)`
+        : "structured edit";
+    const bodyParts: string[] = [
+      `${prospect.name}${prospect.business ? ` (${prospect.business})` : ""} submitted a ${submissionType} from the dashboard. Auto-applied + live build dispatched.\n\n`,
+    ];
+    if (inlineFreeTextResult?.applied) {
+      bodyParts.push(`Customer's message:\n  "${message}"\n\n`);
+      if (inlineFreeTextResult.patches && inlineFreeTextResult.patches.length > 0) {
+        bodyParts.push(
+          `Patches (${inlineFreeTextResult.patches.length}):\n` +
+          inlineFreeTextResult.patches.map((p) => `  - ${p.target} → "${p.newValue}"`).join("\n") + "\n",
+        );
+      } else if (inlineFreeTextResult.rebuildOnly) {
+        bodyParts.push("Rebuild-only (asset refresh, no text patches).\n");
+      }
+      if (inlineFreeTextResult.reasoning) {
+        bodyParts.push(`Reasoning: ${inlineFreeTextResult.reasoning}\n`);
+      }
+    } else if (isOfferUpdate && offer) {
+      bodyParts.push(
+        `Headline: "${offer.headline}"\n` +
+        (offer.body ? `Body: "${offer.body}"\n` : "") +
+        `Dates: ${offer.startsAt} → ${offer.endsAt}\n` +
+        (offer.ctaLabel ? `Button: "${offer.ctaLabel}"${offer.ctaUrl ? ` → ${offer.ctaUrl}` : ""}\n` : ""),
+      );
+    } else if (autoAppliedDirect) {
+      bodyParts.push(
+        `Patches (${autoAppliedDirect.patches.length}):\n` +
+        autoAppliedDirect.patches.map((p) => `  - ${p.target} → "${p.newValue}"`).join("\n") + "\n",
+      );
+    } else if (rebuildOnly) {
+      bodyParts.push("Pure asset rebuild (photo re-upload) — no data patches.\n");
+    }
+    bodyParts.push(
+      buildWarning
+        ? `\n⚠️  Build dispatch FAILED: ${buildWarning}. Apply landed in Notion but the site won't rebuild — re-trigger manually.\n`
+        : `\nBuild should be live within ~2 minutes.\n`,
+    );
+    bodyParts.push(
+      `\n` +
+      adminFooter({
+        prospectName: prospect.name,
+        prospectToken: token,
+        anchor: `cr-${requestId.slice(0, 8)}`,
+      }),
+    );
     try {
       const env = getServerEnv();
       await notifyAdmin(env, {
         category: "change-request",
-        subject: `Offer auto-applied — ${prospect.name}`,
-        body:
-          `${prospect.name}${prospect.business ? ` (${prospect.business})` : ""} submitted an offer update from the dashboard. Auto-applied + live build dispatched.\n\n` +
-          `Headline: "${offer.headline}"\n` +
-          (offer.body ? `Body: "${offer.body}"\n` : "") +
-          `Dates: ${offer.startsAt} → ${offer.endsAt}\n` +
-          (offer.ctaLabel
-            ? `Button: "${offer.ctaLabel}"${offer.ctaUrl ? ` → ${offer.ctaUrl}` : ""}\n`
-            : "") +
-          (buildWarning
-            ? `\n⚠️  Build dispatch FAILED: ${buildWarning}. Apply landed in Notion but the site won't rebuild — re-trigger manually.\n`
-            : `\nBuild should be live within ~2 minutes.\n`) +
-          `\n` +
-          adminFooter({
-            prospectName: prospect.name,
-            prospectToken: token,
-            anchor: `cr-${requestId.slice(0, 8)}`,
-          }),
+        subject,
+        body: bodyParts.join(""),
       });
     } catch (e) {
       console.warn(
@@ -465,30 +715,47 @@ export async function POST(request: Request) {
     }
   }
 
-  // Customer receipt email (NEW Phase A). Confirms the submission
-  // landed safely, sets expectations on what happens next (auto-
-  // apply OR Ben-reviewed). Branded HTML wrapper for visual parity
-  // with all other customer-facing emails. Fail-soft — if the email
-  // bounces, the customer still sees the optimistic UI confirmation
-  // on /account/[token] and can refresh to see the request in their
-  // history.
+  // Customer email — varies by outcome:
+  //   - Auto-applied (any path): "resolved" template with the reply
+  //   - Pending (free-text cron path): "received" confirmation
   let receiptErr: string | null = null;
   try {
     const accountUrl = `${baseUrl.replace(/\/$/, "") || site.url}/account/${token}`;
-    await sendCustomerEmail(
-      getServerEnv(),
-      prospect.email,
-      "change-request-received",
-      {
-        customerName: firstName(prospect.name),
-        message,
-        accountUrl,
-      },
-    );
+    if (isAutoApplied) {
+      const customerDomain = ((prospect.onboardingData ?? {}) as {
+        domain?: { domain?: string };
+      }).domain?.domain;
+      const siteUrl = customerDomain
+        ? `https://${customerDomain}/`
+        : "https://your-site.example/";
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "change-request-resolved",
+        {
+          customerName: firstName(prospect.name),
+          originalMessage: message,
+          reply: newRequest.reply ?? "Done — your change is live.",
+          siteUrl,
+          accountUrl,
+        },
+      );
+    } else {
+      await sendCustomerEmail(
+        getServerEnv(),
+        prospect.email,
+        "change-request-received",
+        {
+          customerName: firstName(prospect.name),
+          message,
+          accountUrl,
+        },
+      );
+    }
   } catch (e) {
     receiptErr = e instanceof Error ? e.message : String(e);
     console.warn(
-      `[api/account/change-request] customer receipt email failed: ${receiptErr}`,
+      `[api/account/change-request] customer email failed: ${receiptErr}`,
     );
   }
 
@@ -508,7 +775,7 @@ export async function POST(request: Request) {
      *  auto-applied. Dashboard composer relies on this to show the
      *  "live within ~2 min" toast instead of "we'll review and get
      *  back to you". */
-    autoApplied: isOfferUpdate,
+    autoApplied: isAutoApplied,
     buildWarning,
   });
 }

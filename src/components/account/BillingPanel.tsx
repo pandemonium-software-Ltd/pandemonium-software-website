@@ -57,6 +57,15 @@ export default function BillingPanel({
       p.kind === "cancel-immediate-prorated",
   );
 
+  const pendingModuleDeltas = pendingChanges.filter(
+    (p) => p.kind === "modules-post-launch",
+  );
+  const effectiveMonthly = foundingMember
+    ? monthlyFee
+    : monthlyFee +
+      pendingModuleDeltas.reduce((s, p) => s + p.monthlyDelta, 0);
+  const hasModuleChanges = pendingModuleDeltas.length > 0;
+
   async function submitCancel(mode: "end-of-period" | "immediate-prorated") {
     setError(null);
     startTransition(async () => {
@@ -90,7 +99,20 @@ export default function BillingPanel({
         </dd>
         <dt className="text-navy-600">Monthly</dt>
         <dd className="font-semibold text-navy-900">
-          £{monthlyFee}/mo
+          {hasModuleChanges ? (
+            <>
+              <span className="text-navy-500 line-through">£{monthlyFee}/mo</span>
+              {" "}
+              <span className={effectiveMonthly < monthlyFee ? "text-green-700" : "text-ember-700"}>
+                £{effectiveMonthly}/mo
+              </span>
+              <span className="ml-1 text-xs font-normal text-navy-500">
+                from next bill
+              </span>
+            </>
+          ) : (
+            <>£{monthlyFee}/mo</>
+          )}
           {foundingMember && (
             <span className="ml-2 inline-block rounded-full bg-ember-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ember-700">
               Founding rate

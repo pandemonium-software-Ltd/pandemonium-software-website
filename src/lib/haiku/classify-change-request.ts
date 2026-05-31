@@ -480,7 +480,11 @@ async function patchPass(
     `("Mon","Tue","Wed","Thu","Fri","Sat","Sun"), each: ` +
     `{"open":bool,"from"?:"HH:MM","to"?:"HH:MM"}. Include ALL 7 days.\n` +
     `5. Brand colours → "#rrggbb" hex\n` +
-    `6. Add ops → newValue is JSON of the new entry\n` +
+    `6. Add ops → newValue is JSON of the new entry. For services ` +
+    `use {"serviceName":"...","description":"...","pricingNotes":"...",` +
+    `"priceFrom":"..."} (serviceName is REQUIRED). For FAQ use ` +
+    `{"question":"...","answer":"..."}. For testimonials use ` +
+    `{"name":"...","quote":"...","rating":"..."}\n` +
     `7. Remove ops → newValue is "remove", identify via locator\n\n` +
     `LOCATORS:\n` +
     `- content.services.* (except .add) → "serviceName" = EXACT name ` +

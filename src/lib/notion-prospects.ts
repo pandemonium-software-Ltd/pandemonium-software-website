@@ -447,7 +447,7 @@ export type ChangeRequest = {
    * When absent (old records), the inferred kind comes from the
    * patch targets — see inferChangeRequestKind().
    */
-  kind?: "free-text" | "offer-update";
+  kind?: "free-text" | "offer-update" | "direct-edit";
   status:
     | "pending"
     | "in-progress"

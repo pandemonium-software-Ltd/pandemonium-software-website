@@ -774,7 +774,7 @@ const reviewEditSchema = z.object({
   message: z
     .string()
     .trim()
-    .min(20, "Tell me a bit more — at least a couple of sentences.")
+    .min(5, "Tell me a bit more about what you'd like changed.")
     .max(2000),
   /** Set to "applied" once the change is live; "rejected" if
    *  Cowork or Ben deems it out of scope. Customers see this on

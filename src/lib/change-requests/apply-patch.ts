@@ -609,10 +609,12 @@ function parseServiceObject(s: string): Record<string, unknown> {
   if (!v || typeof v !== "object" || Array.isArray(v))
     throw new Error("Service must be a JSON object");
   const obj = v as Record<string, unknown>;
-  if (typeof obj.serviceName !== "string" || obj.serviceName.trim() === "")
+  const rawName = typeof obj.serviceName === "string" ? obj.serviceName
+    : typeof obj.name === "string" ? obj.name : "";
+  if (!rawName.trim())
     throw new Error("Service.serviceName is required");
   const result: Record<string, unknown> = {
-    serviceName: obj.serviceName.trim(),
+    serviceName: rawName.trim(),
   };
   if (typeof obj.description === "string")
     result.description = obj.description.trim();
