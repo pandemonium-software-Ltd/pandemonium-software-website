@@ -199,6 +199,16 @@ export default function RootLayout({
          *  not a consent toggle. See CookieNotice.tsx head comment
          *  for the legal reasoning. */}
         <CookieNotice />
+        {/* Propagate ?pa= preview-access token across client-side
+         *  navigations so the middleware gate passes on every page
+         *  when viewed inside the Hub iframe. Third-party cookies
+         *  are blocked in Safari/Chrome iframes, so sessionStorage
+         *  is the only reliable cross-page persistence. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var k="pa",s=sessionStorage,p=new URLSearchParams(location.search).get(k);if(p)s.setItem(k,p);var t=s.getItem(k);if(!t)return;document.addEventListener("click",function(e){var a=e.target;while(a&&a.tagName!=="A")a=a.parentElement;if(!a||!a.href)return;try{var u=new URL(a.href);if(u.origin===location.origin&&!u.searchParams.has(k)){u.searchParams.set(k,t);a.href=u.toString()}}catch(x){}})})();`,
+          }}
+        />
       </body>
     </html>
   );
