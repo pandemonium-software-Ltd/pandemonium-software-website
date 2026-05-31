@@ -78,14 +78,13 @@ describe("customer-site middleware — coming-soon gate", () => {
     expect(body).toContain("Coming Soon");
   });
 
-  it("grants access via ?pa= query param and sets cookie", () => {
+  it("grants access via ?pa= query param (pass-through, no redirect)", () => {
     process.env.COMING_SOON = "true";
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
     const res = middleware(makeRequest("/", { query: { pa: ACCESS_TOKEN } }));
     const location = res.headers.get("location");
-    expect(location).toBeTruthy();
-    expect(new URL(location!).searchParams.has("pa")).toBe(false);
+    expect(location).toBeNull();
     const setCookie = res.headers.get("set-cookie");
     expect(setCookie).toContain("pf_preview_access");
     expect(setCookie).toContain(ACCESS_TOKEN);
@@ -140,7 +139,7 @@ describe("customer-site middleware — coming-soon gate", () => {
 
     const res = middleware(makeRequest("/", { query: { pa: ACCESS_TOKEN } }));
     const location = res.headers.get("location");
-    expect(location).toBeTruthy();
+    expect(location).toBeNull();
     const setCookie = res.headers.get("set-cookie");
     expect(setCookie).toContain("pf_preview_access");
   });

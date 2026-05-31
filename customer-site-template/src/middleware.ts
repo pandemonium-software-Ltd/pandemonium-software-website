@@ -32,9 +32,16 @@ export function middleware(req: NextRequest) {
   const cookieToken = req.cookies.get(COOKIE_NAME)?.value;
 
   if (expected && queryToken && constantTimeEqual(queryToken, expected)) {
-    const clean = url.clone();
-    clean.searchParams.delete(QUERY_PARAM);
-    const res = NextResponse.redirect(clean);
+    // Pass through directly — don't redirect. In cross-site iframes
+    // (Hub on modu-forge.co.uk embedding *.store), third-party cookies
+    // are blocked by Safari ITP and Chrome, so the redirect+cookie
+    // flow never works. Serving the page directly with ?pa= in the
+    // URL always works because the iframe src carries the token.
+    // Also set the cookie as a best-effort fallback for internal
+    // navigation within the iframe (works in browsers that still
+    // allow third-party cookies).
+    const res = NextResponse.next();
+    addPreviewHeaders(res);
     res.cookies.set(COOKIE_NAME, expected, {
       httpOnly: true,
       secure: true,
