@@ -351,7 +351,7 @@ export async function POST(request: Request) {
     const reviewSlice = (baseData.review ?? {}) as Record<string, unknown>;
     const merged = mergeStepData(baseData, "review", {
       ...reviewSlice,
-      previewUrl: parsed.data.previewUrl,
+      previewUrl: customerPreviewUrl,
     });
 
     try {

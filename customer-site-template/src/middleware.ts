@@ -76,9 +76,10 @@ function comingSoonHtml(): string {
   const name = escapeHtml(SITE_DATA.business.name);
   const logoUrl = SITE_DATA.brandAssets.logoUrl;
   const primary = SITE_DATA.colors.primary;
+  const secondary = SITE_DATA.colors.secondary;
 
   const logoTag = logoUrl
-    ? `<img src="${escapeHtml(logoUrl)}" alt="" style="width:80px;height:80px;object-fit:contain;border-radius:0.75rem;margin:0 auto 1.5rem;display:block">`
+    ? `<img class="logo" src="${escapeHtml(logoUrl)}" alt="">`
     : "";
 
   return `<!DOCTYPE html>
@@ -90,20 +91,29 @@ function comingSoonHtml(): string {
   <title>${name} — Coming Soon</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#fafaf9;color:#1f2937;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
-    main{max-width:28rem;text-align:center}
-    h1{font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;margin-bottom:0.75rem}
-    .divider{width:3rem;height:3px;background:${primary};border-radius:2px;margin:0 auto 1.25rem}
-    p{color:#6b7280;font-size:1.05rem;line-height:1.6}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+    @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:linear-gradient(160deg,#fafaf9 0%,${secondary}22 50%,${primary}15 100%);color:#1f2937;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;overflow:hidden}
+    .wrapper{text-align:center;animation:fadeUp .8s ease-out both}
+    .logo{width:120px;height:120px;object-fit:contain;border-radius:1rem;margin:0 auto 2rem;display:block;animation:fadeUp .8s ease-out .15s both;filter:drop-shadow(0 8px 24px ${primary}30)}
+    h1{font-size:clamp(2.25rem,5vw,3.5rem);font-weight:800;letter-spacing:-0.03em;line-height:1.1;margin-bottom:1rem;animation:fadeUp .8s ease-out .3s both}
+    .divider{width:5rem;height:4px;background:linear-gradient(90deg,${primary},${secondary});border-radius:4px;margin:0 auto 1.5rem;animation:fadeUp .8s ease-out .45s both;background-size:200% 100%;animation:fadeUp .8s ease-out .45s both,shimmer 3s ease-in-out 1.5s infinite}
+    .tagline{color:#6b7280;font-size:clamp(1.1rem,2.5vw,1.35rem);line-height:1.6;max-width:24rem;margin:0 auto 2.5rem;animation:fadeUp .8s ease-out .6s both}
+    .dots{display:flex;gap:.5rem;justify-content:center;animation:fadeUp .8s ease-out .75s both}
+    .dots span{width:8px;height:8px;border-radius:50%;background:${primary};animation:pulse 1.5s ease-in-out infinite}
+    .dots span:nth-child(2){animation-delay:.3s}
+    .dots span:nth-child(3){animation-delay:.6s}
   </style>
 </head>
 <body>
-  <main>
+  <div class="wrapper">
     ${logoTag}
     <h1>${name}</h1>
     <div class="divider"></div>
-    <p>Our new website is launching soon.</p>
-  </main>
+    <p class="tagline">We're building something great. Our new website is launching soon.</p>
+    <div class="dots"><span></span><span></span><span></span></div>
+  </div>
 </body>
 </html>`;
 }
