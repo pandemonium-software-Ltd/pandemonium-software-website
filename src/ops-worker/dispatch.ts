@@ -29,6 +29,7 @@ import { step3Tools } from "./steps/step3-tools";
 import { step4Assets } from "./steps/step4-assets";
 import { step5Review } from "./steps/step5-review";
 import { step6ChangeRequests } from "./steps/step6-change-requests";
+import { step2bResendDomain } from "./steps/step2b-resend-domain";
 import { step7GoLive } from "./steps/step7-go-live";
 
 /**
@@ -51,6 +52,7 @@ import { step7GoLive } from "./steps/step7-go-live";
 export const STEPS: readonly Step[] = [
   step1Cloudflare,
   step2Domain,
+  step2bResendDomain,
   step3Tools,
   step4Assets,
   step5Review,

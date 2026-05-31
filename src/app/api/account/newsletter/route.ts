@@ -39,7 +39,7 @@ import {
   NEWSLETTER_HISTORY_CAP,
 } from "@/lib/newsletter/limits";
 import { pickLogoUrl, pickBrandColor } from "@/lib/newsletter/brand";
-import { site } from "@/lib/site";
+
 
 export const runtime = "nodejs";
 
@@ -231,8 +231,10 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  const VERIFIED_SENDER_DOMAIN = "modu-forge.co.uk";
-  const fromAddress = `${senderName} <${senderLocal}@${VERIFIED_SENDER_DOMAIN}>`;
+  const senderDomain = prospect.resendDomainVerifiedAt
+    ? customerDomain
+    : "modu-forge.co.uk";
+  const fromAddress = `${senderName} <${senderLocal}@${senderDomain}>`;
   // Reply-to: subscriber hits Reply → message lands with the
   // customer (their public email), not with us. Falls back to the
   // prospect's main email if no public override is set.
@@ -245,7 +247,6 @@ export async function POST(request: Request) {
     prospect.email;
 
   const env = getServerEnv();
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? site.url;
   const websiteUrl = `https://${customerDomain}`;
 
   // Render once per recipient — unsubscribe link is per-token,
@@ -260,7 +261,7 @@ export async function POST(request: Request) {
   const messages: SendEntry[] = [];
   for (const sub of subscribers) {
     if (!sub.email || !sub.unsubscribeToken) continue;
-    const unsubscribeUrl = `${baseUrl.replace(/\/$/, "")}/unsubscribe/${sub.unsubscribeToken}?c=${token}`;
+    const unsubscribeUrl = `${websiteUrl.replace(/\/$/, "")}/unsubscribe/${sub.unsubscribeToken}?c=${token}`;
     const rendered = renderNewsletter(
       {
         template: template as NewsletterTemplateId,

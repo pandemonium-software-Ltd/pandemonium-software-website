@@ -311,7 +311,7 @@ function BookingHero({ data }: Props) {
       <div className="border-b border-navy-100 bg-brand-primary-500 text-brand-primary-text">
         <div className="container-content flex flex-wrap items-center justify-between gap-3 py-2.5 text-sm">
           <p className="font-semibold">
-            <span aria-hidden="true">●</span> Next available — usually within 48 hours
+            <span aria-hidden="true">●</span> Taking bookings now
           </p>
           <p className="text-xs opacity-90">
             Most appointments confirm instantly

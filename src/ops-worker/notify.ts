@@ -61,6 +61,12 @@ export type SenderBrand =
       /** Customer's domain (e.g. "mygem.co.uk"). Shown in the
        *  footer "from yourdomain.co.uk" line. */
       domain: string;
+      /** Customer's public email. When set, subscriber replies go
+       *  to the customer instead of the ops inbox. */
+      replyTo?: string;
+      /** When true, the customer's Resend domain is verified and
+       *  emails can be sent from their domain directly. */
+      resendDomainVerified?: boolean;
     };
 
 export type SendResult = {
@@ -99,7 +105,9 @@ export async function sendCustomerEmail(
   // in their inbox, with "MyGem" being the visible part.
   const fromHeader =
     senderBrand.kind === "customer"
-      ? `${senderBrand.businessName} <${FROM_SENDER_EMAIL}>`
+      ? senderBrand.resendDomainVerified && senderBrand.domain
+        ? `${senderBrand.businessName} <news@${senderBrand.domain}>`
+        : `${senderBrand.businessName} <${FROM_SENDER_EMAIL}>`
       : FROM_NOTIFICATIONS;
 
   const opsEmail =
@@ -130,10 +138,10 @@ export async function sendCustomerEmail(
     senderBrand,
   });
 
-  // Reply-to: for customer-branded emails, replies should land
-  // with the operator (we don't have the customer's inbox plumbed
-  // for visitor-side replies). ModuForge-branded emails reply
-  // to OPS_EMAIL too. Same handler either way.
+  const replyTo =
+    senderBrand.kind === "customer" && senderBrand.replyTo
+      ? senderBrand.replyTo
+      : opsEmail;
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -143,7 +151,7 @@ export async function sendCustomerEmail(
     body: JSON.stringify({
       from: fromHeader,
       to: recipientEmail,
-      reply_to: opsEmail,
+      reply_to: replyTo,
       subject: rendered.subject,
       text,
       html,

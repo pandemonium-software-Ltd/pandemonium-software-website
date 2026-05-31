@@ -13,6 +13,7 @@ import type { D1Database } from "../lib/d1-analytics";
 export type StepId =
   | "step1"
   | "step2"
+  | "step2b"
   | "step3"
   | "step4"
   | "step5"

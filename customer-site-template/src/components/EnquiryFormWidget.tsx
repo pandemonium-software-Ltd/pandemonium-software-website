@@ -147,8 +147,8 @@ export default function EnquiryFormWidget({
         </p>
         <p className="mt-2 text-sm text-green-800">
           {businessName
-            ? `${businessName} will reply within a working day.`
-            : "We'll reply within a working day."}{" "}
+            ? `${businessName} will be in touch soon.`
+            : "We'll be in touch soon."}{" "}
           Keep an eye on your inbox.
         </p>
       </div>

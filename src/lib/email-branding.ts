@@ -48,10 +48,21 @@ export function customerSenderBrand(prospect: ProspectRecord): SenderBrand {
     ? primaryRaw
     : FALLBACK_PRIMARY;
 
+  const contentSlice = (ob.content ?? {}) as {
+    business?: { publicEmail?: unknown };
+  };
+  const publicEmail =
+    typeof contentSlice.business?.publicEmail === "string"
+      ? contentSlice.business.publicEmail.trim()
+      : "";
+  const replyTo = publicEmail || prospect.email || undefined;
+
   return {
     kind: "customer",
     businessName,
     primaryColor,
     domain: domainRaw,
+    replyTo,
+    resendDomainVerified: !!prospect.resendDomainVerifiedAt,
   };
 }

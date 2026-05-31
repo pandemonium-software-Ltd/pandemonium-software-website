@@ -471,7 +471,7 @@ function BookingBody({ data }: Props) {
                 Free reschedule
               </p>
               <p className="mt-1 text-sm text-navy-700">
-                Reschedule any time up to 24 hours before
+                Reschedule any time — hassle-free
               </p>
             </div>
             <div>

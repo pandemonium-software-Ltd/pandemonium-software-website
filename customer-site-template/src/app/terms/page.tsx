@@ -99,7 +99,7 @@ export default function TermsPage() {
             <p>
               When you submit an enquiry through the contact form, we use
               the information you give us only to respond to your message.
-              We aim to reply within 24 hours during the working week. If
+              We aim to reply as soon as possible. If
               you want us to delete your enquiry from our records, just ask
               — see our{" "}
               <Link href="/privacy" className="link">

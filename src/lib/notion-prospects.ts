@@ -172,6 +172,15 @@ export type ProspectRecord = {
    *  site build fails. Cleared on next successful build. Useful
    *  for surfacing "last build failed" in /admin. NEW C5.4. */
   previewBuildFailedAt?: string;
+  /** Resend domain id (UUID) — set by step2b-resend-domain after
+   *  registering the customer's domain with Resend. Used to poll
+   *  verification status and to look up the verified sender domain
+   *  when sending newsletter emails. */
+  resendDomainId?: string;
+  /** ISO-8601 — set when Resend reports the domain as "verified".
+   *  Once set, newsletter emails send from the customer's domain
+   *  instead of modu-forge.co.uk. */
+  resendDomainVerifiedAt?: string;
   /** Haiku polish cache — JSON object keyed by polish target (e.g.
    *  "tagline", "service:Loft conversions:longDesc", "faq:0:answer").
    *  Each value carries an `inputHash` so we re-polish when the
@@ -1053,6 +1062,8 @@ function pageToProspect(page: NotionPage): ProspectRecord | null {
     previewBuildTriggeredAt: readDate(p["Preview Build Triggered At"]),
     previewBuildFailedAt: readDate(p["Preview Build Failed At"]),
     finalLaunchTriggeredAt: readDate(p["Final Launch Triggered At"]),
+    resendDomainId: readRichText(p["Resend Domain Id"]) || undefined,
+    resendDomainVerifiedAt: readDate(p["Resend Domain Verified At"]),
     haikuCache: (() => {
       const raw = readRichText(p["Haiku Cache"]);
       if (!raw) return undefined;
@@ -1382,6 +1393,40 @@ export async function clearFinalLaunchTriggered(
     body: {
       properties: {
         "Final Launch Triggered At": { date: null },
+      },
+    },
+  });
+}
+
+/** Store the Resend domain id after registering the customer's
+ *  domain. step2b-resend-domain calls this once per customer. */
+export async function recordResendDomainId(
+  pageId: string,
+  domainId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Resend Domain Id": rt(domainId),
+      },
+    },
+  });
+}
+
+/** Stamp Resend Domain Verified At — called by step2b when Resend
+ *  reports the domain as verified. Once set, newsletter emails
+ *  send from the customer's own domain. */
+export async function markResendDomainVerified(
+  pageId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Resend Domain Verified At": {
+          date: { start: new Date().toISOString() },
+        },
       },
     },
   });
