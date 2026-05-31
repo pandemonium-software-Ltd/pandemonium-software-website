@@ -809,10 +809,10 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 )}
                 <UsageRow
                   label="Change requests"
-                  used={countActiveChangeRequestsByKind(
-                    requests,
-                    "free-text",
-                  )}
+                  used={
+                    countActiveChangeRequestsByKind(requests, "free-text") +
+                    countActiveChangeRequestsByKind(requests, "direct-edit")
+                  }
                   cap={effectiveCrCap}
                 />
               </dl>
@@ -1905,7 +1905,8 @@ function ChangeRequestsBlock({
   );
   const [retracting, setRetracting] = useState(false);
 
-  const usedThisMonth = countActiveChangeRequestsByKind(requests, "free-text");
+  const usedThisMonth = countActiveChangeRequestsByKind(requests, "free-text")
+    + countActiveChangeRequestsByKind(requests, "direct-edit");
   const remaining = Math.max(0, cap - usedThisMonth);
   const atCap = remaining === 0;
 
