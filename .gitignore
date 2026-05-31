@@ -31,9 +31,6 @@ yarn-error.log*
 .env
 .dev.vars
 
-# vercel (legacy host, kept while migrating away)
-.vercel
-
 # cloudflare pages / wrangler
 .wrangler/
 
