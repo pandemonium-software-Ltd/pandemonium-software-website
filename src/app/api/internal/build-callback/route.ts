@@ -334,6 +334,16 @@ export async function POST(request: Request) {
     // clear the final-launch latch, send the celebratory email.
     const isFinalLaunch = parsed.data.finalLaunch === true;
 
+    // Pre-launch builds set COMING_SOON on the Worker, gating public
+    // access. Append ?pa=<token> to the preview URL so customer-
+    // facing email links bypass the gate (the middleware sets a cookie
+    // and strips the param on first hit).
+    const pat = parsed.data.previewAccessToken;
+    const customerPreviewUrl =
+      pat && !isFinalLaunch
+        ? `${parsed.data.previewUrl}${parsed.data.previewUrl.includes("?") ? "&" : "?"}pa=${pat}`
+        : parsed.data.previewUrl;
+
     const existing = onboardingDataSchema.safeParse(
       prospect.onboardingData ?? {},
     );
@@ -445,7 +455,7 @@ export async function POST(request: Request) {
           "review-edit-applied",
           {
             customerName: firstName(prospect.name),
-            previewUrl: parsed.data.previewUrl,
+            previewUrl: customerPreviewUrl,
             hubUrl: `${baseUrl}/onboarding/${parsed.data.token}`,
           },
         );
@@ -560,7 +570,7 @@ export async function POST(request: Request) {
     try {
       await sendCustomerEmail(env, prospect.email, "preview-ready", {
         customerName: firstName(prospect.name),
-        previewUrl: parsed.data.previewUrl,
+        previewUrl: customerPreviewUrl,
         hubUrl: `${baseUrl}/onboarding/${parsed.data.token}`,
       });
     } catch (e) {

@@ -1138,13 +1138,22 @@ function NextStepCard({
 
 type SiteDataProp = NonNullable<AccountDashboardProps["siteData"]>;
 
-type QuickEditField = "phone" | "email" | "address" | "openingHours";
+type QuickEditField = "phone" | "email" | "address" | "openingHours" | "photo";
 const QUICK_EDIT_FIELDS: { value: QuickEditField; label: string }[] = [
   { value: "phone", label: "Phone number" },
   { value: "email", label: "Email address" },
   { value: "address", label: "Address" },
   { value: "openingHours", label: "Opening hours" },
+  { value: "photo", label: "Swap a photo" },
 ];
+const PHOTO_SLOTS = [
+  { value: "logo", label: "Logo" },
+  { value: "hero", label: "Hero image" },
+  { value: "about", label: "About photo" },
+  { value: "service", label: "Service photo" },
+  { value: "gallery", label: "Gallery" },
+  { value: "background", label: "Background" },
+] as const;
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 function QuickEditForm({
@@ -1170,11 +1179,15 @@ function QuickEditForm({
 }) {
   const [field, setField] = useState<QuickEditField>("phone");
   const hasLocations = siteData.locations.length > 0;
-  const [locationIdx, setLocationIdx] = useState(-1); // -1 = HQ/primary
+  const [locationIdx, setLocationIdx] = useState(-1);
   const [newValue, setNewValue] = useState("");
   const [hours, setHours] = useState<Record<string, { open: boolean; from: string; to: string }>>(() =>
     Object.fromEntries(DAYS.map((d) => [d, { open: true, from: "09:00", to: "17:00" }])),
   );
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [photoSlot, setPhotoSlot] = useState("hero");
+  const [uploading, setUploading] = useState(false);
 
   const currentSource = locationIdx < 0 ? siteData : siteData.locations[locationIdx];
   const currentVal = currentSource
@@ -1197,13 +1210,16 @@ function QuickEditForm({
     }
   }, [field, locationIdx, currentSource]);
 
-  function buildMessage(): string {
+  function buildMessage(uploadUrl?: string): string {
     const loc = locationIdx >= 0 ? siteData.locations[locationIdx]?.name : null;
     const prefix = loc ? `For ${loc}: ` : "";
     if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
     if (field === "email") return `${prefix}Change email to: ${newValue}`;
     if (field === "address") return `${prefix}Change address to: "${newValue}"`;
-    // opening hours
+    if (field === "photo" && uploadUrl) {
+      const slotLabel = PHOTO_SLOTS.find((s) => s.value === photoSlot)?.label ?? photoSlot;
+      return `Replace ${slotLabel} with uploaded image: ${uploadUrl}`;
+    }
     const parts = DAYS.map((d) => {
       const h = hours[d]!;
       return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
@@ -1214,7 +1230,11 @@ function QuickEditForm({
   async function handleQuickSubmit() {
     setError(null);
     setSuccess(null);
-    if (field !== "openingHours" && newValue.trim().length === 0) {
+    if (field === "photo" && !selectedFile) {
+      setError("Please select an image file.");
+      return;
+    }
+    if (field !== "openingHours" && field !== "photo" && newValue.trim().length === 0) {
       setError("Please enter a new value.");
       return;
     }
@@ -1222,9 +1242,28 @@ function QuickEditForm({
       setError("No requests remaining this month.");
       return;
     }
-    const msg = buildMessage();
     setPending(true);
     try {
+      let uploadUrl: string | undefined;
+      if (field === "photo" && selectedFile) {
+        setUploading(true);
+        const form = new FormData();
+        form.append("token", token);
+        form.append("file", selectedFile);
+        const upRes = await fetch("/api/account/upload-photo", {
+          method: "POST",
+          body: form,
+        });
+        const upJson = (await upRes.json()) as { success?: boolean; error?: string; url?: string };
+        setUploading(false);
+        if (!upRes.ok || !upJson.success || !upJson.url) {
+          setError(upJson.error ?? "Upload failed. Try again.");
+          return;
+        }
+        uploadUrl = upJson.url;
+      }
+
+      const msg = buildMessage(uploadUrl);
       const res = await fetch("/api/account/change-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1242,6 +1281,8 @@ function QuickEditForm({
       }
       onSubmitted(json.request);
       setNewValue("");
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       const r = json.remaining ?? remaining - 1;
       setSuccess(`Got it — ${r} request${r === 1 ? "" : "s"} remaining this month.`);
       setTimeout(() => setSuccess(null), 8000);
@@ -1249,6 +1290,7 @@ function QuickEditForm({
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setPending(false);
+      setUploading(false);
     }
   }
 
@@ -1271,8 +1313,8 @@ function QuickEditForm({
         </div>
       </div>
 
-      {/* Location picker (if multi-location) */}
-      {hasLocations && (
+      {/* Location picker (if multi-location, not for photos) */}
+      {hasLocations && field !== "photo" && (
         <div>
           <span className="block text-sm font-semibold text-navy-900">Which location?</span>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -1298,7 +1340,48 @@ function QuickEditForm({
       )}
 
       {/* Value input */}
-      {field !== "openingHours" ? (
+      {field === "photo" ? (
+        <div className="space-y-3">
+          <div>
+            <span className="block text-sm font-semibold text-navy-900">Which photo slot?</span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PHOTO_SLOTS.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => { setPhotoSlot(s.value); setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                  className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${photoSlot === s.value ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={pending || uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0] ?? null;
+              setSelectedFile(f);
+              setError(null);
+              if (f && f.size > 5 * 1024 * 1024) {
+                setError("Image too large — max 5 MB.");
+                setSelectedFile(null);
+                if (fileInputRef.current) fileInputRef.current.value = "";
+              }
+            }}
+            className="w-full text-sm text-navy-700 file:mr-3 file:rounded-full file:border-2 file:border-navy-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-navy-700 hover:file:border-navy-400"
+          />
+          {selectedFile && (
+            <p className="text-xs text-navy-500">
+              Selected: <span className="font-medium text-navy-700">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)
+            </p>
+          )}
+          {uploading && <p className="text-xs text-navy-500">Uploading…</p>}
+        </div>
+      ) : field !== "openingHours" ? (
         <div>
           {currentVal && (
             <p className="mb-2 text-xs text-navy-500">
@@ -1358,10 +1441,10 @@ function QuickEditForm({
       <button
         type="button"
         onClick={handleQuickSubmit}
-        disabled={pending || (field !== "openingHours" && newValue.trim().length === 0)}
+        disabled={pending || uploading || (field === "photo" ? !selectedFile : field !== "openingHours" && newValue.trim().length === 0)}
         className="btn-primary"
       >
-        {pending ? "Submitting…" : "Submit change"}
+        {uploading ? "Uploading…" : pending ? "Submitting…" : field === "photo" ? "Upload & submit" : "Submit change"}
       </button>
     </div>
   );
@@ -1569,6 +1652,17 @@ function ChangeRequestsBlock({
         </p>
       </div>
 
+      {error && (
+        <p className="mt-4 text-sm text-ember-700" role="alert">
+          {error}
+        </p>
+      )}
+      {success && (
+        <p className="mt-4 text-sm text-green-700" role="status">
+          {success}
+        </p>
+      )}
+
       {atCap ? (
         <div className="mt-5 rounded-xl border-2 border-navy-200 bg-cream-50 p-5 text-sm leading-relaxed text-navy-700">
           <p className="font-semibold text-navy-900">
@@ -1606,17 +1700,6 @@ function ChangeRequestsBlock({
               Free text
             </button>
           </div>
-
-          {error && (
-            <p className="mt-3 text-sm text-ember-700" role="alert">
-              {error}
-            </p>
-          )}
-          {success && (
-            <p className="mt-3 text-sm text-green-700" role="status">
-              {success}
-            </p>
-          )}
 
           {mode === "quick" && siteData ? (
             <QuickEditForm

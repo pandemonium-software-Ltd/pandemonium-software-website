@@ -86,11 +86,16 @@ jobs:
           # send the "you're live" email. Normal live-mode rebuilds
           # (e.g. review-edit applies) leave this empty.
           FINAL_LAUNCH="${{ github.event.client_payload.finalLaunch }}"
-          # Preview-access token (NEW C5.7 preview-gate) — passed
-          # via wrangler `--var PREVIEW_ACCESS_TOKEN=...` on
-          # `versions upload` so the customer-site middleware can
-          # gate access by checking the cookie / query param.
+          # Preview-access token — gates the customer-site middleware.
+          # Used for both `versions upload` (preview builds) and
+          # `wrangler deploy` (live builds before finalLaunch, which
+          # set COMING_SOON + PREVIEW_ACCESS_TOKEN so public visitors
+          # see "Coming Soon" while the customer can still view via
+          # ?pa=<token>). Generate one if not provided in the payload.
           PREVIEW_TOKEN="${{ github.event.client_payload.previewAccessToken }}"
+          if [ -z "$PREVIEW_TOKEN" ]; then
+            PREVIEW_TOKEN=$(uuidgen | tr '[:upper:]' '[:lower:]')
+          fi
           echo "value=$TOKEN" >> "$GITHUB_OUTPUT"
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "change_request_id=$CR_ID" >> "$GITHUB_OUTPUT"
@@ -123,11 +128,13 @@ jobs:
             echo "::error::Missing deploy metadata (accountId=$ACCOUNT_ID, workerName=$WORKER_NAME)"
             exit 1
           fi
+          IS_LAUNCHED=$(echo "$BODY" | jq -r '.deploy.isLaunched // false')
           echo "$BODY" | jq '.siteData' > customer-site-template/src/data/site-data.json
           echo "account_id=$ACCOUNT_ID" >> "$GITHUB_OUTPUT"
           echo "worker_name=$WORKER_NAME" >> "$GITHUB_OUTPUT"
           echo "preview_url=https://${DOMAIN}/" >> "$GITHUB_OUTPUT"
-          echo "Resolved deploy target: account=$ACCOUNT_ID worker=$WORKER_NAME"
+          echo "is_launched=$IS_LAUNCHED" >> "$GITHUB_OUTPUT"
+          echo "Resolved deploy target: account=$ACCOUNT_ID worker=$WORKER_NAME (launched=$IS_LAUNCHED)"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -148,7 +155,16 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ steps.fetch.outputs.account_id }}
         run: |
-          npx wrangler deploy --name "${{ steps.fetch.outputs.worker_name }}"
+          # Pre-launch builds deploy with a COMING_SOON gate so
+          # public visitors see "Coming Soon" while the customer can
+          # still view via ?pa=<token>. Skip the gate when:
+          #   - finalLaunch=true (launch-day build → site goes public)
+          #   - isLaunched=true (post-launch rebuild for a CR/edit)
+          WRANGLER_VARS=""
+          if [ "${{ steps.token.outputs.final_launch }}" != "true" ] && [ "${{ steps.fetch.outputs.is_launched }}" != "true" ]; then
+            WRANGLER_VARS="--var COMING_SOON:true --var PREVIEW_ACCESS_TOKEN:${{ steps.token.outputs.preview_access_token }}"
+          fi
+          npx wrangler deploy --name "${{ steps.fetch.outputs.worker_name }}" $WRANGLER_VARS
 
       - name: Upload PREVIEW version (wrangler versions upload)
         id: preview_upload
@@ -250,7 +266,8 @@ jobs:
               --arg reid "${{ steps.token.outputs.review_edit_id }}" \
               --arg crid "${{ steps.token.outputs.change_request_id }}" \
               --arg fl "${{ steps.token.outputs.final_launch }}" \
-              '{token: $token, status: "success", mode: "live", previewUrl: $url, reviewEditId: $reid, changeRequestId: $crid, finalLaunch: $fl}')
+              --arg pat "${{ steps.token.outputs.preview_access_token }}" \
+              '{token: $token, status: "success", mode: "live", previewUrl: $url, reviewEditId: $reid, changeRequestId: $crid, finalLaunch: $fl, previewAccessToken: $pat}')
           fi
           curl -sS -X POST \
             -H "Content-Type: application/json" \

@@ -36,7 +36,7 @@
 // Submissions go to a dedicated /api/onboarding/review-edit POST
 // endpoint that enforces the cap server-side too.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MAX_REVIEW_EDITS, type ReviewEdit } from "@/lib/onboarding";
 import PreviewFrame from "@/components/PreviewFrame";
 
@@ -394,7 +394,7 @@ export default function Step5Review({
             {siteData && (
               <details className="group rounded-xl border-2 border-navy-200 bg-cream-50">
                 <summary className="cursor-pointer select-none px-5 py-3 text-sm font-semibold text-navy-900">
-                  Quick edit (phone, email, address, hours)
+                  Quick edit (contact, services, FAQ, etc.)
                   <span className="ml-2 text-navy-400 transition-transform group-open:rotate-90">&#9654;</span>
                 </summary>
                 <div className="border-t border-navy-100 px-5 py-4">
@@ -462,17 +462,18 @@ export default function Step5Review({
               </div>
             </details>
 
-            {editError && (
-              <p className="text-sm text-ember-700" role="alert">
-                {editError}
-              </p>
-            )}
-            {editSuccess && (
-              <p className="text-sm text-green-700" role="status">
-                {editSuccess}
-              </p>
-            )}
           </div>
+        )}
+
+        {editError && (
+          <p className="mt-4 text-sm text-ember-700" role="alert">
+            {editError}
+          </p>
+        )}
+        {editSuccess && (
+          <p className="mt-4 text-sm text-green-700" role="status">
+            {editSuccess}
+          </p>
         )}
 
         {!disabled && remaining === 0 && edits.length > 0 && (
@@ -1022,14 +1023,15 @@ function formatRelative(iso: string): string {
 
 // ---------- Quick edit form for structured field changes ----------
 
-type QuickEditCategory = "contact" | "copy" | "service" | "faq" | "testimonial" | "trust";
+type QuickEditCategory = "contact" | "copy" | "service" | "faq" | "testimonial" | "trust" | "photo";
 type QuickEditField =
   | "phone" | "email" | "address" | "serviceArea" | "openingHours"
   | "tagline" | "aboutBlurb"
   | "serviceDesc" | "serviceLongDesc" | "servicePricing" | "servicePrice"
   | "faqAnswer" | "faqQuestion"
   | "testimonialQuote" | "testimonialRating"
-  | "trustYears" | "trustAssociations" | "trustAwards";
+  | "trustYears" | "trustAssociations" | "trustAwards"
+  | "photoLogo" | "photoHero" | "photoAbout" | "photoService" | "photoGallery" | "photoBackground";
 
 const CATEGORIES: { value: QuickEditCategory; label: string }[] = [
   { value: "contact", label: "Contact & hours" },
@@ -1038,6 +1040,7 @@ const CATEGORIES: { value: QuickEditCategory; label: string }[] = [
   { value: "faq", label: "FAQ" },
   { value: "testimonial", label: "Testimonials" },
   { value: "trust", label: "Trust signals" },
+  { value: "photo", label: "Photos" },
 ];
 
 const CONTACT_FIELDS: { value: QuickEditField; label: string }[] = [
@@ -1075,6 +1078,24 @@ const TRUST_FIELDS: { value: QuickEditField; label: string }[] = [
   { value: "trustAssociations", label: "Associations" },
   { value: "trustAwards", label: "Awards" },
 ];
+
+const PHOTO_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "photoLogo", label: "Logo" },
+  { value: "photoHero", label: "Hero image" },
+  { value: "photoAbout", label: "About photo" },
+  { value: "photoService", label: "Service photo" },
+  { value: "photoGallery", label: "Gallery" },
+  { value: "photoBackground", label: "Background" },
+];
+
+const PHOTO_SLOT_MAP: Record<string, string> = {
+  photoLogo: "logo",
+  photoHero: "hero",
+  photoAbout: "about",
+  photoService: "service",
+  photoGallery: "gallery",
+  photoBackground: "background",
+};
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
@@ -1119,11 +1140,17 @@ function ReviewQuickEditForm({
   const [hours, setHours] = useState<Record<string, { open: boolean; from: string; to: string }>>(() =>
     Object.fromEntries(DAYS.map((d) => [d, { open: true, from: "09:00", to: "17:00" }])),
   );
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
 
   function selectCategory(cat: QuickEditCategory) {
     setCategory(cat);
     setItemIdx(0);
     setNewValue("");
+    setSelectedFile(null);
+    setUploadedUrl(null);
     onError(null);
     if (cat === "contact") setField("phone");
     else if (cat === "copy") setField("tagline");
@@ -1131,11 +1158,14 @@ function ReviewQuickEditForm({
     else if (cat === "faq") setField("faqAnswer");
     else if (cat === "testimonial") setField("testimonialQuote");
     else if (cat === "trust") setField("trustYears");
+    else if (cat === "photo") setField("photoHero");
   }
 
   function selectField(f: QuickEditField) {
     setField(f);
     setNewValue("");
+    setSelectedFile(null);
+    setUploadedUrl(null);
     onError(null);
   }
 
@@ -1198,7 +1228,7 @@ function ReviewQuickEditForm({
     const prefix = loc ? `For ${loc}: ` : "";
 
     if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
-    if (field === "email") return `${prefix}Change email to: ${newValue}`;
+    if (field === "email") return `${prefix}Change email address to: ${newValue}`;
     if (field === "address") return `${prefix}Change address to: "${newValue}"`;
     if (field === "serviceArea") return `Change service area to: "${newValue}"`;
     if (field === "openingHours") {
@@ -1234,15 +1264,28 @@ function ReviewQuickEditForm({
     if (field === "trustYears") return `Change years of experience to: ${newValue}`;
     if (field === "trustAssociations") return `Change associations/memberships to: "${newValue}"`;
     if (field === "trustAwards") return `Change awards/accreditations to: "${newValue}"`;
+    if (category === "photo" && uploadedUrl) {
+      const slotLabel = PHOTO_FIELDS.find((f) => f.value === field)?.label ?? field;
+      const svcNote = field === "photoService" && siteData.services[itemIdx]
+        ? ` for service "${siteData.services[itemIdx]!.name}"`
+        : "";
+      return `Replace ${slotLabel}${svcNote} with uploaded image: ${uploadedUrl}`;
+    }
     return newValue;
   }
 
   const needsTextarea = field === "aboutBlurb" || field === "serviceLongDesc" || field === "serviceDesc" || field === "testimonialQuote";
-  const noValueNeeded = field === "openingHours";
+  const isPhotoField = category === "photo";
+  const noValueNeeded = field === "openingHours" || isPhotoField;
 
   async function handleSubmit() {
     onError(null);
-    if (!noValueNeeded && newValue.trim().length === 0) {
+    if (isPhotoField) {
+      if (!selectedFile && !uploadedUrl) {
+        onError("Please select an image file.");
+        return;
+      }
+    } else if (!noValueNeeded && newValue.trim().length === 0) {
       onError("Please enter a new value.");
       return;
     }
@@ -1250,9 +1293,33 @@ function ReviewQuickEditForm({
       onError("No edits remaining.");
       return;
     }
-    const msg = buildMessage();
+
     setPending(true);
     try {
+      // Photo: upload to R2 first, then submit the message with the URL
+      if (isPhotoField && selectedFile && !uploadedUrl) {
+        setUploading(true);
+        const form = new FormData();
+        form.append("token", token);
+        form.append("kind", PHOTO_SLOT_MAP[field] ?? "gallery");
+        form.append("file", selectedFile);
+        if (field === "photoService" && siteData.services[itemIdx]) {
+          form.append("serviceName", siteData.services[itemIdx]!.name);
+        }
+        const upRes = await fetch("/api/onboarding/upload", {
+          method: "POST",
+          body: form,
+        });
+        const upJson = (await upRes.json()) as { success?: boolean; error?: string; asset?: { key: string } };
+        setUploading(false);
+        if (!upRes.ok || !upJson.success) {
+          onError(upJson.error ?? "Upload failed. Try again.");
+          return;
+        }
+        setUploadedUrl(upJson.asset?.key ?? "uploaded");
+      }
+
+      const msg = buildMessage();
       const res = await fetch("/api/onboarding/review-edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1270,22 +1337,27 @@ function ReviewQuickEditForm({
       }
       onSubmitted(json.edit);
       setNewValue("");
+      setSelectedFile(null);
+      setUploadedUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       const r = json.remaining ?? remaining - 1;
       onSuccess(`Got it. ${r} edit${r === 1 ? "" : "s"} remaining.`);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
       setPending(false);
+      setUploading(false);
     }
   }
 
-  const busy = pending || externalSubmitting;
+  const busy = pending || externalSubmitting || uploading;
 
   const fieldPills = category === "contact" ? CONTACT_FIELDS
     : category === "copy" ? COPY_FIELDS
     : category === "service" ? SERVICE_FIELDS
     : category === "faq" ? FAQ_FIELDS
     : category === "testimonial" ? TESTIMONIAL_FIELDS
+    : category === "photo" ? PHOTO_FIELDS
     : TRUST_FIELDS;
 
   const items = category === "service" ? siteData.services
@@ -1356,10 +1428,56 @@ function ReviewQuickEditForm({
         </div>
       )}
 
+      {/* Service picker for photo-service slot */}
+      {category === "photo" && field === "photoService" && siteData.services.length > 0 && (
+        <div>
+          <span className="block text-sm font-semibold text-navy-900">Which service?</span>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {siteData.services.map((s, i) => (
+              <Pill key={i} label={s.name} active={itemIdx === i} onClick={() => { setItemIdx(i); setSelectedFile(null); setUploadedUrl(null); }} />
+            ))}
+          </div>
+        </div>
+      )}
+      {category === "photo" && field === "photoService" && siteData.services.length === 0 && (
+        <p className="text-sm text-navy-500">No services found. Add them in Step 4 first.</p>
+      )}
+
       {/* Value input */}
       {(!items || items.length > 0) && (
         <>
-          {field === "openingHours" ? (
+          {isPhotoField ? (
+            <div className="space-y-3">
+              {field === "photoService" && siteData.services.length === 0 ? null : (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setSelectedFile(f);
+                      setUploadedUrl(null);
+                      onError(null);
+                      if (f && f.size > 5 * 1024 * 1024) {
+                        onError("Image too large — max 5 MB. Compress or resize it first.");
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }
+                    }}
+                    className="w-full text-sm text-navy-700 file:mr-3 file:rounded-full file:border-2 file:border-navy-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-navy-700 hover:file:border-navy-400"
+                  />
+                  {selectedFile && (
+                    <p className="text-xs text-navy-500">
+                      Selected: <span className="font-medium text-navy-700">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)
+                    </p>
+                  )}
+                  {uploading && <p className="text-xs text-navy-500">Uploading…</p>}
+                </>
+              )}
+            </div>
+          ) : field === "openingHours" ? (
             <div className="space-y-2">
               {DAYS.map((d) => (
                 <div key={d} className="flex items-center gap-3">
@@ -1437,11 +1555,11 @@ function ReviewQuickEditForm({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={busy || (!noValueNeeded && newValue.trim().length === 0) || !previewReady}
+            disabled={busy || (isPhotoField ? !selectedFile && !uploadedUrl : !noValueNeeded && newValue.trim().length === 0) || !previewReady}
             className="btn-primary"
             title={!previewReady ? "Your preview isn't ready yet — once it is, you'll be able to submit edits here." : undefined}
           >
-            {busy ? "Submitting…" : "Submit change"}
+            {uploading ? "Uploading…" : busy ? "Submitting…" : isPhotoField ? "Upload & submit" : "Submit change"}
           </button>
           {!previewReady && (
             <p className="text-xs text-navy-500">
