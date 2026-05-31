@@ -1,8 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-// Import the middleware directly from the customer-site-template.
-// It only depends on next/server (shared dep), no project-local imports.
+// The middleware imports `@/lib/site-data` which resolves to the
+// customer-site-template's src/lib/site-data via its own tsconfig.
+// Vitest resolves `@` to the main project's src/ (per vitest.config),
+// so we mock the path that vitest will actually look up.
+vi.mock("@/lib/site-data", () => ({
+  SITE_DATA: {
+    business: { name: "Test Biz" },
+    brandAssets: { logoUrl: "https://example.com/logo.png" },
+    colors: { primary: "#ff0000" },
+  },
+}));
+
 import { middleware } from "../../../customer-site-template/src/middleware";
 
 const BASE = "https://example-customer.co.uk";
@@ -40,32 +50,32 @@ describe("customer-site middleware — coming-soon gate", () => {
 
   it("passes through when no env vars are set (live site)", () => {
     const res = middleware(makeRequest("/"));
-    // NextResponse.next() has no Location header and no rewrite URL
     expect(res.headers.get("location")).toBeNull();
     expect(res.headers.get("x-middleware-rewrite")).toBeNull();
   });
 
   // ---- COMING_SOON gate ----
 
-  it("rewrites to /coming-soon for public visitors when COMING_SOON is set", () => {
+  it("returns inline coming-soon HTML for public visitors", async () => {
     process.env.COMING_SOON = "true";
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
     const res = middleware(makeRequest("/"));
-    const rewrite = res.headers.get("x-middleware-rewrite");
-    expect(rewrite).toBeTruthy();
-    expect(new URL(rewrite!).pathname).toBe("/coming-soon");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    const body = await res.text();
+    expect(body).toContain("Coming Soon");
+    expect(body).toContain("Test Biz");
   });
 
-  it("rewrites to /coming-soon for deep paths too", () => {
+  it("returns coming-soon for deep paths too", async () => {
     process.env.COMING_SOON = "true";
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
     const res = middleware(makeRequest("/services"));
-    const rewrite = res.headers.get("x-middleware-rewrite");
-    expect(rewrite).toBeTruthy();
-    expect(new URL(rewrite!).pathname).toBe("/coming-soon");
+    const body = await res.text();
+    expect(body).toContain("Coming Soon");
   });
 
   it("grants access via ?pa= query param and sets cookie", () => {
@@ -73,11 +83,9 @@ describe("customer-site middleware — coming-soon gate", () => {
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
     const res = middleware(makeRequest("/", { query: { pa: ACCESS_TOKEN } }));
-    // Should redirect (strip the ?pa= param)
     const location = res.headers.get("location");
     expect(location).toBeTruthy();
     expect(new URL(location!).searchParams.has("pa")).toBe(false);
-    // Should set the preview-access cookie
     const setCookie = res.headers.get("set-cookie");
     expect(setCookie).toContain("pf_preview_access");
     expect(setCookie).toContain(ACCESS_TOKEN);
@@ -90,33 +98,30 @@ describe("customer-site middleware — coming-soon gate", () => {
     const res = middleware(
       makeRequest("/", { cookie: `pf_preview_access=${ACCESS_TOKEN}` }),
     );
-    // Should pass through (no rewrite, no redirect)
     const rewrite = res.headers.get("x-middleware-rewrite");
     const location = res.headers.get("location");
     expect(rewrite).toBeNull();
     expect(location).toBeNull();
   });
 
-  it("rejects wrong ?pa= token", () => {
+  it("rejects wrong ?pa= token", async () => {
     process.env.COMING_SOON = "true";
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
     const res = middleware(makeRequest("/", { query: { pa: "wrong-token" } }));
-    const rewrite = res.headers.get("x-middleware-rewrite");
-    expect(rewrite).toBeTruthy();
-    expect(new URL(rewrite!).pathname).toBe("/coming-soon");
+    const body = await res.text();
+    expect(body).toContain("Coming Soon");
   });
 
-  it("rejects wrong cookie token", () => {
+  it("rejects wrong cookie token", async () => {
     process.env.COMING_SOON = "true";
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
     const res = middleware(
       makeRequest("/", { cookie: "pf_preview_access=wrong-token" }),
     );
-    const rewrite = res.headers.get("x-middleware-rewrite");
-    expect(rewrite).toBeTruthy();
-    expect(new URL(rewrite!).pathname).toBe("/coming-soon");
+    const body = await res.text();
+    expect(body).toContain("Coming Soon");
   });
 
   // ---- PREVIEW_ACCESS_TOKEN only (no COMING_SOON) ----
@@ -165,7 +170,7 @@ describe("customer-site middleware — coming-soon gate", () => {
     expect(csp).toContain("modu-forge.co.uk");
   });
 
-  it("does NOT add frame-ancestors on coming-soon rewrite (public page)", () => {
+  it("does NOT add frame-ancestors on coming-soon response", () => {
     process.env.COMING_SOON = "true";
     process.env.PREVIEW_ACCESS_TOKEN = ACCESS_TOKEN;
 
@@ -176,12 +181,12 @@ describe("customer-site middleware — coming-soon gate", () => {
 
   // ---- COMING_SOON without PREVIEW_ACCESS_TOKEN (edge case) ----
 
-  it("rewrites to /coming-soon even without PREVIEW_ACCESS_TOKEN", () => {
+  it("returns coming-soon HTML even without PREVIEW_ACCESS_TOKEN", async () => {
     process.env.COMING_SOON = "true";
 
     const res = middleware(makeRequest("/"));
-    const rewrite = res.headers.get("x-middleware-rewrite");
-    expect(rewrite).toBeTruthy();
-    expect(new URL(rewrite!).pathname).toBe("/coming-soon");
+    const body = await res.text();
+    expect(body).toContain("Coming Soon");
+    expect(body).toContain("Test Biz");
   });
 });
