@@ -38,7 +38,7 @@ export function middleware(req: NextRequest) {
     res.cookies.set(COOKIE_NAME, expected, {
       httpOnly: true,
       secure: true,
-      sameSite: "lax",
+      sameSite: "none",
       path: "/",
       maxAge: COOKIE_MAX_AGE_SECONDS,
     });
