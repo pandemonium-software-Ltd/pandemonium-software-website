@@ -283,8 +283,10 @@ export default function AccountDashboard(props: AccountDashboardProps) {
   // Prior change requests, newest first (already sorted server-side by
   // appendChangeRequest helper).
   const [requests, setRequests] = useState<ChangeRequest[]>(changeRequests);
+  const [liveOffer, setLiveOffer] = useState(currentOffer ?? null);
+  const [liveNewsletter, setLiveNewsletter] = useState(newsletterSummary ?? null);
 
-  const refreshRequests = useCallback(async () => {
+  const refreshDashboard = useCallback(async () => {
     try {
       const res = await fetch(
         `/api/account/change-request?token=${encodeURIComponent(token)}`,
@@ -293,22 +295,32 @@ export default function AccountDashboard(props: AccountDashboardProps) {
       const json = (await res.json()) as {
         success?: boolean;
         requests?: ChangeRequest[];
+        currentOffer?: typeof currentOffer;
+        newsletterSummary?: typeof newsletterSummary;
       };
-      if (json.success && json.requests) {
-        setRequests(json.requests);
+      if (json.success) {
+        if (json.requests) setRequests(json.requests);
+        if (json.currentOffer !== undefined) setLiveOffer(json.currentOffer ?? null);
+        if (json.newsletterSummary !== undefined) setLiveNewsletter(json.newsletterSummary ?? null);
       }
     } catch {
-      // Silent — next visibility change will retry.
+      // Silent — next poll or visibility change will retry.
     }
   }, [token]);
 
   useEffect(() => {
     function onVisible() {
-      if (document.visibilityState === "visible") refreshRequests();
+      if (document.visibilityState === "visible") refreshDashboard();
     }
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [refreshRequests]);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") refreshDashboard();
+    }, 15_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      clearInterval(interval);
+    };
+  }, [refreshDashboard]);
 
   return (
     <>
@@ -689,18 +701,18 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                       // composer pills show the right "X of Y" total
                       // (default + admin grant).
                       <div className="mt-4 grid gap-4">
-                        {hasNewsletterModule && newsletterSummary && (
+                        {hasNewsletterModule && liveNewsletter && (
                           <NewsletterCard
                             token={token}
-                            summary={newsletterSummary}
+                            summary={liveNewsletter}
                             cap={effectiveNewsletterCap}
                           />
                         )}
                         {hasOffersModule && (
                           <OfferCard
                             token={token}
-                            current={currentOffer ?? null}
-                            changeRequests={changeRequests}
+                            current={liveOffer}
+                            changeRequests={requests}
                             cap={effectiveOfferCap}
                           />
                         )}
@@ -778,10 +790,10 @@ export default function AccountDashboard(props: AccountDashboardProps) {
                 don&apos;t count.
               </p>
               <dl className="mt-4 space-y-2 text-sm">
-                {hasNewsletterModule && newsletterSummary && (
+                {hasNewsletterModule && liveNewsletter && (
                   <UsageRow
                     label="Newsletter sends"
-                    used={newsletterSummary.sentThisMonth}
+                    used={liveNewsletter.sentThisMonth}
                     cap={effectiveNewsletterCap}
                   />
                 )}

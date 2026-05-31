@@ -955,8 +955,96 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Account not found." }, { status: 404 });
   }
 
+  type OnboardingShape = {
+    content?: {
+      offers?: {
+        current?: {
+          headline?: string;
+          body?: string;
+          ctaLabel?: string;
+          ctaUrl?: string;
+          startsAt?: string;
+          endsAt?: string;
+        };
+      };
+      newsletter?: {
+        subscribers?: Array<{
+          confirmedAt?: string;
+          unsubscribedAt?: string;
+        }>;
+        history?: Array<{
+          id?: string;
+          subject?: string;
+          sentAt?: string;
+          recipientCount?: number;
+          status?: "draft" | "sending" | "sent" | "failed";
+        }>;
+      };
+    };
+  };
+  const onboardingShape = (prospect.onboardingData ?? {}) as OnboardingShape;
+
+  const offerRaw = onboardingShape.content?.offers?.current;
+  const currentOffer =
+    offerRaw &&
+    typeof offerRaw.headline === "string" &&
+    typeof offerRaw.startsAt === "string" &&
+    typeof offerRaw.endsAt === "string"
+      ? {
+          headline: offerRaw.headline,
+          body: offerRaw.body,
+          ctaLabel: offerRaw.ctaLabel,
+          ctaUrl: offerRaw.ctaUrl,
+          startsAt: offerRaw.startsAt,
+          endsAt: offerRaw.endsAt,
+        }
+      : null;
+
+  const newsletterRaw = onboardingShape.content?.newsletter;
+  const subscriberCount = (newsletterRaw?.subscribers ?? []).filter(
+    (s) => s.confirmedAt && !s.unsubscribedAt,
+  ).length;
+  const historyAll = newsletterRaw?.history ?? [];
+  const currentYearMonth = (() => {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  })();
+  const sentThisMonth = historyAll.filter(
+    (h) =>
+      typeof h.sentAt === "string" &&
+      h.sentAt.startsWith(currentYearMonth) &&
+      h.status !== "failed",
+  ).length;
+  const lastSentAt = historyAll
+    .filter((h) => typeof h.sentAt === "string" && h.status !== "failed")
+    .sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? ""))[0]
+    ?.sentAt;
+  const newsletterSummary = {
+    subscriberCount,
+    lastSentAt,
+    sentThisMonth,
+    history: historyAll
+      .filter(
+        (h): h is {
+          id: string;
+          subject: string;
+          sentAt: string;
+          recipientCount: number;
+          status: "draft" | "sending" | "sent" | "failed";
+        } =>
+          typeof h.id === "string" &&
+          typeof h.subject === "string" &&
+          typeof h.sentAt === "string" &&
+          typeof h.recipientCount === "number" &&
+          typeof h.status === "string",
+      )
+      .slice(0, 5),
+  };
+
   return NextResponse.json({
     success: true,
     requests: prospect.changeRequests,
+    currentOffer,
+    newsletterSummary,
   });
 }
