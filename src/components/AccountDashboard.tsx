@@ -108,7 +108,14 @@ export type AccountDashboardProps = {
     phoneTel: string;
     publicEmail: string;
     address: string;
+    serviceArea: string;
     openingHours: Record<string, { open: boolean; from?: string; to?: string }> | null;
+    tagline: string;
+    aboutBlurb: string;
+    services: Array<{ name: string; description: string; longDescription: string; pricingNotes: string; priceFrom: number | null }>;
+    faq: Array<{ question: string; answer: string }>;
+    testimonials: Array<{ name: string; quote: string; rating: number | null }>;
+    trust: { yearsExperience: number | null; associations: string; awards: string };
     locations: Array<{
       name: string;
       phoneDisplay: string;
@@ -1137,23 +1144,85 @@ function NextStepCard({
 
 type SiteDataProp = NonNullable<AccountDashboardProps["siteData"]>;
 
-type QuickEditField = "phone" | "email" | "address" | "openingHours" | "photo";
-const QUICK_EDIT_FIELDS: { value: QuickEditField; label: string }[] = [
-  { value: "phone", label: "Phone number" },
-  { value: "email", label: "Email address" },
-  { value: "address", label: "Address" },
-  { value: "openingHours", label: "Opening hours" },
-  { value: "photo", label: "Swap a photo" },
+type QuickEditCategory = "contact" | "copy" | "service" | "faq" | "testimonial" | "trust" | "photo";
+type QuickEditField =
+  | "phone" | "email" | "address" | "serviceArea" | "openingHours"
+  | "tagline" | "aboutBlurb"
+  | "serviceDesc" | "serviceLongDesc" | "servicePricing" | "servicePrice"
+  | "faqAnswer" | "faqQuestion"
+  | "testimonialQuote" | "testimonialRating"
+  | "trustYears" | "trustAssociations" | "trustAwards"
+  | "photoLogo" | "photoHero" | "photoAbout" | "photoService" | "photoGallery" | "photoBackground";
+
+const QE_CATEGORIES: { value: QuickEditCategory; label: string }[] = [
+  { value: "contact", label: "Contact & hours" },
+  { value: "copy", label: "Tagline & about" },
+  { value: "service", label: "Services" },
+  { value: "faq", label: "FAQ" },
+  { value: "testimonial", label: "Testimonials" },
+  { value: "trust", label: "Trust signals" },
+  { value: "photo", label: "Photos" },
 ];
-const PHOTO_SLOTS = [
-  { value: "logo", label: "Logo" },
-  { value: "hero", label: "Hero image" },
-  { value: "about", label: "About photo" },
-  { value: "service", label: "Service photo" },
-  { value: "gallery", label: "Gallery" },
-  { value: "background", label: "Background" },
-] as const;
+
+const QE_CONTACT_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "phone", label: "Phone" },
+  { value: "email", label: "Email" },
+  { value: "address", label: "Address" },
+  { value: "serviceArea", label: "Service area" },
+  { value: "openingHours", label: "Opening hours" },
+];
+const QE_COPY_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "tagline", label: "Tagline" },
+  { value: "aboutBlurb", label: "About blurb" },
+];
+const QE_SERVICE_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "serviceDesc", label: "Short description" },
+  { value: "serviceLongDesc", label: "Long description" },
+  { value: "servicePricing", label: "Pricing notes" },
+  { value: "servicePrice", label: "Price from" },
+];
+const QE_FAQ_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "faqQuestion", label: "Question" },
+  { value: "faqAnswer", label: "Answer" },
+];
+const QE_TESTIMONIAL_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "testimonialQuote", label: "Quote" },
+  { value: "testimonialRating", label: "Rating" },
+];
+const QE_TRUST_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "trustYears", label: "Years experience" },
+  { value: "trustAssociations", label: "Associations" },
+  { value: "trustAwards", label: "Awards" },
+];
+const QE_PHOTO_FIELDS: { value: QuickEditField; label: string }[] = [
+  { value: "photoLogo", label: "Logo" },
+  { value: "photoHero", label: "Hero image" },
+  { value: "photoAbout", label: "About photo" },
+  { value: "photoService", label: "Service photo" },
+  { value: "photoGallery", label: "Gallery" },
+  { value: "photoBackground", label: "Background" },
+];
+const QE_PHOTO_SLOT_MAP: Record<string, string> = {
+  photoLogo: "logo", photoHero: "hero", photoAbout: "about",
+  photoService: "service", photoGallery: "gallery", photoBackground: "background",
+};
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+
+function Pill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${active ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function truncateStr(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
 
 function QuickEditForm({
   token,
@@ -1164,7 +1233,6 @@ function QuickEditForm({
   setSuccess,
   onSubmitted,
   remaining,
-  submitDialogRef,
 }: {
   token: string;
   siteData: SiteDataProp;
@@ -1174,27 +1242,104 @@ function QuickEditForm({
   setSuccess: (v: string | null) => void;
   onSubmitted: (req: ChangeRequest) => void;
   remaining: number;
-  submitDialogRef: React.RefObject<HTMLDialogElement | null>;
 }) {
+  const [category, setCategory] = useState<QuickEditCategory>("contact");
   const [field, setField] = useState<QuickEditField>("phone");
+  const [action, setAction] = useState<"edit" | "add" | "remove">("edit");
   const hasLocations = siteData.locations.length > 0;
   const [locationIdx, setLocationIdx] = useState(-1);
+  const [itemIdx, setItemIdx] = useState(0);
   const [newValue, setNewValue] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [hours, setHours] = useState<Record<string, { open: boolean; from: string; to: string }>>(() =>
     Object.fromEntries(DAYS.map((d) => [d, { open: true, from: "09:00", to: "17:00" }])),
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [photoSlot, setPhotoSlot] = useState("hero");
-  const [uploading, setUploading] = useState(false);
+
+  // Multi-field state for "Add new" forms
+  const [addService, setAddService] = useState({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+  const [addFaq, setAddFaq] = useState({ question: "", answer: "" });
+  const [addTestimonial, setAddTestimonial] = useState({ name: "", quote: "", rating: "" });
+
+  const isListCategory = category === "service" || category === "faq" || category === "testimonial";
+
+  function selectCategory(cat: QuickEditCategory) {
+    setCategory(cat);
+    setItemIdx(0);
+    setNewValue("");
+    setSelectedFile(null);
+    setAction("edit");
+    setError(null);
+    setAddService({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+    setAddFaq({ question: "", answer: "" });
+    setAddTestimonial({ name: "", quote: "", rating: "" });
+    if (cat === "contact") setField("phone");
+    else if (cat === "copy") setField("tagline");
+    else if (cat === "service") setField("serviceDesc");
+    else if (cat === "faq") setField("faqAnswer");
+    else if (cat === "testimonial") setField("testimonialQuote");
+    else if (cat === "trust") setField("trustYears");
+    else if (cat === "photo") setField("photoHero");
+  }
+
+  function selectField(f: QuickEditField) {
+    setField(f);
+    setNewValue("");
+    setSelectedFile(null);
+    setError(null);
+  }
+
+  function selectAction(a: "edit" | "add" | "remove") {
+    setAction(a);
+    setNewValue("");
+    setError(null);
+    setAddService({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+    setAddFaq({ question: "", answer: "" });
+    setAddTestimonial({ name: "", quote: "", rating: "" });
+  }
 
   const currentSource = locationIdx < 0 ? siteData : siteData.locations[locationIdx];
-  const currentVal = currentSource
-    ? field === "phone" ? currentSource.phoneDisplay
-      : field === "email" ? currentSource.publicEmail
-      : field === "address" ? currentSource.address
-      : ""
-    : "";
+
+  const currentVal = (() => {
+    if (action !== "edit") return "";
+    if (category === "contact" && currentSource) {
+      if (field === "phone") return currentSource.phoneDisplay;
+      if (field === "email") return currentSource.publicEmail;
+      if (field === "address") return currentSource.address;
+      if (field === "serviceArea") return "serviceArea" in currentSource ? (currentSource as SiteDataProp).serviceArea : "";
+    }
+    if (category === "copy") {
+      if (field === "tagline") return siteData.tagline;
+      if (field === "aboutBlurb") return siteData.aboutBlurb;
+    }
+    if (category === "service") {
+      const svc = siteData.services[itemIdx];
+      if (!svc) return "";
+      if (field === "serviceDesc") return svc.description;
+      if (field === "serviceLongDesc") return svc.longDescription;
+      if (field === "servicePricing") return svc.pricingNotes;
+      if (field === "servicePrice") return svc.priceFrom != null ? String(svc.priceFrom) : "";
+    }
+    if (category === "faq") {
+      const faqItem = siteData.faq[itemIdx];
+      if (!faqItem) return "";
+      if (field === "faqQuestion") return faqItem.question;
+      if (field === "faqAnswer") return faqItem.answer;
+    }
+    if (category === "testimonial") {
+      const t = siteData.testimonials[itemIdx];
+      if (!t) return "";
+      if (field === "testimonialQuote") return t.quote;
+      if (field === "testimonialRating") return t.rating != null ? String(t.rating) : "";
+    }
+    if (category === "trust") {
+      if (field === "trustYears") return siteData.trust.yearsExperience != null ? String(siteData.trust.yearsExperience) : "";
+      if (field === "trustAssociations") return siteData.trust.associations;
+      if (field === "trustAwards") return siteData.trust.awards;
+    }
+    return "";
+  })();
 
   useEffect(() => {
     if (field === "openingHours" && currentSource?.openingHours) {
@@ -1210,41 +1355,120 @@ function QuickEditForm({
   }, [field, locationIdx, currentSource]);
 
   function buildMessage(uploadUrl?: string): string {
-    const loc = locationIdx >= 0 ? siteData.locations[locationIdx]?.name : null;
-    const prefix = loc ? `For ${loc}: ` : "";
-    if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
-    if (field === "email") return `${prefix}Change email to: ${newValue}`;
-    if (field === "address") return `${prefix}Change address to: "${newValue}"`;
-    if (field === "photo" && uploadUrl) {
-      const slotLabel = PHOTO_SLOTS.find((s) => s.value === photoSlot)?.label ?? photoSlot;
-      return `Replace ${slotLabel} with uploaded image: ${uploadUrl}`;
+    // --- Add new ---
+    if (action === "add") {
+      if (category === "service") {
+        const parts = [`Add new service: "${addService.name}"`];
+        if (addService.description) parts.push(`Description: "${addService.description}"`);
+        if (addService.pricingNotes) parts.push(`Pricing notes: "${addService.pricingNotes}"`);
+        if (addService.priceFrom) parts.push(`Price from: ${addService.priceFrom}`);
+        return parts.join("\n");
+      }
+      if (category === "faq") return `Add new FAQ:\nQuestion: "${addFaq.question}"\nAnswer: "${addFaq.answer}"`;
+      if (category === "testimonial") {
+        const parts = [`Add new testimonial by "${addTestimonial.name}"`];
+        parts.push(`Quote: "${addTestimonial.quote}"`);
+        if (addTestimonial.rating) parts.push(`Rating: ${addTestimonial.rating}`);
+        return parts.join("\n");
+      }
     }
-    const parts = DAYS.map((d) => {
-      const h = hours[d]!;
-      return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
-    });
-    return `${prefix}Change opening hours to:\n${parts.join("\n")}`;
+
+    // --- Remove ---
+    if (action === "remove") {
+      if (category === "service") {
+        const svc = siteData.services[itemIdx];
+        return `Remove service: "${svc?.name ?? "Unknown"}"`;
+      }
+      if (category === "faq") {
+        const faq = siteData.faq[itemIdx];
+        return `Remove FAQ: "${faq?.question ?? "Unknown"}"`;
+      }
+      if (category === "testimonial") {
+        const t = siteData.testimonials[itemIdx];
+        return `Remove testimonial by "${t?.name ?? "Unknown"}"`;
+      }
+    }
+
+    // --- Edit (existing logic) ---
+    const loc = locationIdx >= 0 && category === "contact" ? siteData.locations[locationIdx]?.name : null;
+    const prefix = loc ? `For ${loc}: ` : "";
+
+    if (field === "phone") return `${prefix}Change phone number to: ${newValue}`;
+    if (field === "email") return `${prefix}Change email address to: ${newValue}`;
+    if (field === "address") return `${prefix}Change address to: "${newValue}"`;
+    if (field === "serviceArea") return `Change service area to: "${newValue}"`;
+    if (field === "openingHours") {
+      const parts = DAYS.map((d) => {
+        const h = hours[d]!;
+        return `${d}: ${h.open ? `${h.from}–${h.to}` : "Closed"}`;
+      });
+      return `${prefix}Change opening hours to:\n${parts.join("\n")}`;
+    }
+    if (field === "tagline") return `Change tagline to: "${newValue}"`;
+    if (field === "aboutBlurb") return `Change about blurb to: "${newValue}"`;
+
+    if (category === "service") {
+      const svc = siteData.services[itemIdx];
+      const svcName = svc?.name ?? "Unknown";
+      if (field === "serviceDesc") return `For service "${svcName}": Change short description to: "${newValue}"`;
+      if (field === "serviceLongDesc") return `For service "${svcName}": Change long description to: "${newValue}"`;
+      if (field === "servicePricing") return `For service "${svcName}": Change pricing notes to: "${newValue}"`;
+      if (field === "servicePrice") return `For service "${svcName}": Change price from to: ${newValue}`;
+    }
+    if (category === "faq") {
+      const faqItem = siteData.faq[itemIdx];
+      const q = faqItem?.question ?? "Unknown";
+      if (field === "faqQuestion") return `For FAQ "${q}": Change question to: "${newValue}"`;
+      if (field === "faqAnswer") return `For FAQ "${q}": Change answer to: "${newValue}"`;
+    }
+    if (category === "testimonial") {
+      const t = siteData.testimonials[itemIdx];
+      const tName = t?.name ?? "Unknown";
+      if (field === "testimonialQuote") return `For testimonial by "${tName}": Change quote to: "${newValue}"`;
+      if (field === "testimonialRating") return `For testimonial by "${tName}": Change rating to: ${newValue}`;
+    }
+    if (field === "trustYears") return `Change years of experience to: ${newValue}`;
+    if (field === "trustAssociations") return `Change associations/memberships to: "${newValue}"`;
+    if (field === "trustAwards") return `Change awards/accreditations to: "${newValue}"`;
+    if (category === "photo" && uploadUrl) {
+      const slotLabel = QE_PHOTO_FIELDS.find((f) => f.value === field)?.label ?? field;
+      const svcNote = field === "photoService" && siteData.services[itemIdx]
+        ? ` for service "${siteData.services[itemIdx]!.name}"`
+        : "";
+      return `Replace ${slotLabel}${svcNote} with uploaded image: ${uploadUrl}`;
+    }
+    return newValue;
   }
+
+  function validateSubmit(): string | null {
+    if (remaining <= 0) return "No requests remaining this month.";
+    if (action === "add") {
+      if (category === "service" && !addService.name.trim()) return "Please enter a service name.";
+      if (category === "faq" && (!addFaq.question.trim() || !addFaq.answer.trim())) return "Please fill in both the question and answer.";
+      if (category === "testimonial" && (!addTestimonial.name.trim() || !addTestimonial.quote.trim())) return "Please enter a name and quote.";
+      return null;
+    }
+    if (action === "remove") return null;
+    // Edit validation
+    if (isPhotoField && !selectedFile) return "Please select an image file.";
+    if (!noValueNeeded && newValue.trim().length === 0) return "Please enter a new value.";
+    return null;
+  }
+
+  const needsTextarea = field === "aboutBlurb" || field === "serviceLongDesc" || field === "serviceDesc" || field === "testimonialQuote";
+  const isPhotoField = category === "photo";
+  const noValueNeeded = field === "openingHours" || isPhotoField;
 
   async function handleQuickSubmit() {
     setError(null);
     setSuccess(null);
-    if (field === "photo" && !selectedFile) {
-      setError("Please select an image file.");
-      return;
-    }
-    if (field !== "openingHours" && field !== "photo" && newValue.trim().length === 0) {
-      setError("Please enter a new value.");
-      return;
-    }
-    if (remaining <= 0) {
-      setError("No requests remaining this month.");
-      return;
-    }
+    const err = validateSubmit();
+    if (err) { setError(err); return; }
+
     setPending(true);
     try {
       let uploadUrl: string | undefined;
-      if (field === "photo" && selectedFile) {
+      if (action === "edit" && isPhotoField && selectedFile) {
         setUploading(true);
         const form = new FormData();
         form.append("token", token);
@@ -1281,6 +1505,9 @@ function QuickEditForm({
       onSubmitted(json.request);
       setNewValue("");
       setSelectedFile(null);
+      setAddService({ name: "", description: "", pricingNotes: "", priceFrom: "" });
+      setAddFaq({ question: "", answer: "" });
+      setAddTestimonial({ name: "", quote: "", rating: "" });
       if (fileInputRef.current) fileInputRef.current.value = "";
       const r = json.remaining ?? remaining - 1;
       setSuccess(`Got it — ${r} request${r === 1 ? "" : "s"} remaining this month.`);
@@ -1293,158 +1520,284 @@ function QuickEditForm({
     }
   }
 
+  const busy = pending || uploading;
+  const fieldPills = category === "contact" ? QE_CONTACT_FIELDS
+    : category === "copy" ? QE_COPY_FIELDS
+    : category === "service" ? QE_SERVICE_FIELDS
+    : category === "faq" ? QE_FAQ_FIELDS
+    : category === "testimonial" ? QE_TESTIMONIAL_FIELDS
+    : category === "photo" ? QE_PHOTO_FIELDS
+    : QE_TRUST_FIELDS;
+
+  const items = category === "service" ? siteData.services
+    : category === "faq" ? siteData.faq
+    : category === "testimonial" ? siteData.testimonials
+    : null;
+
+  const itemLabel = (idx: number) => {
+    if (category === "service") return siteData.services[idx]?.name ?? `Service ${idx + 1}`;
+    if (category === "faq") return siteData.faq[idx]?.question ? truncateStr(siteData.faq[idx]!.question, 30) : `FAQ ${idx + 1}`;
+    if (category === "testimonial") return siteData.testimonials[idx]?.name ?? `Testimonial ${idx + 1}`;
+    return "";
+  };
+
+  const inputCls = "w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50";
+  const textareaCls = `${inputCls} resize-y`;
+
   return (
     <div className="mt-4 space-y-4">
-      {/* Field picker */}
+      {/* Category picker */}
       <div>
-        <span className="block text-sm font-semibold text-navy-900">What do you want to change?</span>
+        <span className="block text-sm font-semibold text-navy-900">Category</span>
         <div className="mt-2 flex flex-wrap gap-2">
-          {QUICK_EDIT_FIELDS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => { setField(f.value); setNewValue(""); setError(null); }}
-              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${field === f.value ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-            >
-              {f.label}
-            </button>
+          {QE_CATEGORIES.map((c) => (
+            <Pill key={c.value} label={c.label} active={category === c.value} onClick={() => selectCategory(c.value)} />
           ))}
         </div>
       </div>
 
-      {/* Location picker (if multi-location, not for photos) */}
-      {hasLocations && field !== "photo" && (
+      {/* Action picker for list categories */}
+      {isListCategory && (
         <div>
-          <span className="block text-sm font-semibold text-navy-900">Which location?</span>
+          <span className="block text-sm font-semibold text-navy-900">What would you like to do?</span>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setLocationIdx(-1)}
-              className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === -1 ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-            >
-              Main / HQ
-            </button>
-            {siteData.locations.map((loc, i) => (
-              <button
-                key={loc.name}
-                type="button"
-                onClick={() => setLocationIdx(i)}
-                className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${locationIdx === i ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-              >
-                {loc.name}
-              </button>
+            <Pill label="Edit existing" active={action === "edit"} onClick={() => selectAction("edit")} />
+            <Pill label="+ Add new" active={action === "add"} onClick={() => selectAction("add")} />
+            {items && items.length > 0 && (
+              <Pill label="Remove" active={action === "remove"} onClick={() => selectAction("remove")} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ---- ADD NEW forms ---- */}
+      {action === "add" && category === "service" && (
+        <div className="space-y-3 rounded-xl border-2 border-green-200 bg-green-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-green-800">New service</p>
+          <input value={addService.name} onChange={(e) => setAddService((p) => ({ ...p, name: e.target.value }))} disabled={busy} placeholder="Service name (required)" maxLength={200} className={inputCls} />
+          <textarea value={addService.description} onChange={(e) => setAddService((p) => ({ ...p, description: e.target.value }))} disabled={busy} placeholder="Short description (optional)" rows={3} maxLength={2000} className={textareaCls} />
+          <input value={addService.pricingNotes} onChange={(e) => setAddService((p) => ({ ...p, pricingNotes: e.target.value }))} disabled={busy} placeholder="Pricing notes, e.g. 'From £500' (optional)" maxLength={500} className={inputCls} />
+          <input type="number" value={addService.priceFrom} onChange={(e) => setAddService((p) => ({ ...p, priceFrom: e.target.value }))} disabled={busy} placeholder="Price from, e.g. 500 (optional)" className={inputCls} />
+          <button type="button" onClick={handleQuickSubmit} disabled={busy || !addService.name.trim()} className="btn-primary">
+            {busy ? "Submitting…" : "Submit new service"}
+          </button>
+        </div>
+      )}
+
+      {action === "add" && category === "faq" && (
+        <div className="space-y-3 rounded-xl border-2 border-green-200 bg-green-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-green-800">New FAQ</p>
+          <input value={addFaq.question} onChange={(e) => setAddFaq((p) => ({ ...p, question: e.target.value }))} disabled={busy} placeholder="Question (required)" maxLength={500} className={inputCls} />
+          <textarea value={addFaq.answer} onChange={(e) => setAddFaq((p) => ({ ...p, answer: e.target.value }))} disabled={busy} placeholder="Answer (required)" rows={4} maxLength={2000} className={textareaCls} />
+          <button type="button" onClick={handleQuickSubmit} disabled={busy || !addFaq.question.trim() || !addFaq.answer.trim()} className="btn-primary">
+            {busy ? "Submitting…" : "Submit new FAQ"}
+          </button>
+        </div>
+      )}
+
+      {action === "add" && category === "testimonial" && (
+        <div className="space-y-3 rounded-xl border-2 border-green-200 bg-green-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-green-800">New testimonial</p>
+          <input value={addTestimonial.name} onChange={(e) => setAddTestimonial((p) => ({ ...p, name: e.target.value }))} disabled={busy} placeholder="Customer name (required)" maxLength={200} className={inputCls} />
+          <textarea value={addTestimonial.quote} onChange={(e) => setAddTestimonial((p) => ({ ...p, quote: e.target.value }))} disabled={busy} placeholder="Their quote (required)" rows={4} maxLength={2000} className={textareaCls} />
+          <input type="number" min={1} max={5} value={addTestimonial.rating} onChange={(e) => setAddTestimonial((p) => ({ ...p, rating: e.target.value }))} disabled={busy} placeholder="Rating 1–5 (optional)" className={inputCls} />
+          <button type="button" onClick={handleQuickSubmit} disabled={busy || !addTestimonial.name.trim() || !addTestimonial.quote.trim()} className="btn-primary">
+            {busy ? "Submitting…" : "Submit new testimonial"}
+          </button>
+        </div>
+      )}
+
+      {/* ---- REMOVE picker ---- */}
+      {action === "remove" && items && items.length > 0 && (
+        <div className="space-y-3 rounded-xl border-2 border-ember-200 bg-ember-50/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-ember-800">
+            Remove {category === "service" ? "a service" : category === "faq" ? "an FAQ" : "a testimonial"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {items.map((_, i) => (
+              <Pill key={i} label={itemLabel(i)} active={itemIdx === i} onClick={() => setItemIdx(i)} />
             ))}
           </div>
+          <button type="button" onClick={handleQuickSubmit} disabled={busy} className="rounded-lg bg-ember-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-ember-700 disabled:opacity-60">
+            {busy ? "Submitting…" : `Remove "${itemLabel(itemIdx)}"`}
+          </button>
         </div>
       )}
 
-      {/* Value input */}
-      {field === "photo" ? (
-        <div className="space-y-3">
-          <div>
-            <span className="block text-sm font-semibold text-navy-900">Which photo slot?</span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {PHOTO_SLOTS.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => { setPhotoSlot(s.value); setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
-                  className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${photoSlot === s.value ? "border-navy-900 bg-navy-900 text-white" : "border-navy-200 bg-white text-navy-700 hover:border-navy-400"}`}
-                >
-                  {s.label}
-                </button>
-              ))}
+      {/* ---- EDIT existing (original flow) ---- */}
+      {action === "edit" && (
+        <>
+          {/* Item picker (services, FAQ, testimonials) */}
+          {items && items.length > 0 && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">
+                Which {category === "service" ? "service" : category === "faq" ? "FAQ" : "testimonial"}?
+              </span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {items.map((_, i) => (
+                  <Pill key={i} label={itemLabel(i)} active={itemIdx === i} onClick={() => { setItemIdx(i); setNewValue(""); }} />
+                ))}
+              </div>
             </div>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={pending || uploading}
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setSelectedFile(f);
-              setError(null);
-              if (f && f.size > 5 * 1024 * 1024) {
-                setError("Image too large — max 5 MB.");
-                setSelectedFile(null);
-                if (fileInputRef.current) fileInputRef.current.value = "";
-              }
-            }}
-            className="w-full text-sm text-navy-700 file:mr-3 file:rounded-full file:border-2 file:border-navy-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-navy-700 hover:file:border-navy-400"
-          />
-          {selectedFile && (
-            <p className="text-xs text-navy-500">
-              Selected: <span className="font-medium text-navy-700">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)
+          )}
+          {items && items.length === 0 && (
+            <p className="text-sm text-navy-500">
+              No {category === "service" ? "services" : category === "faq" ? "FAQs" : "testimonials"} found. Use &ldquo;+ Add new&rdquo; above to create one.
             </p>
           )}
-          {uploading && <p className="text-xs text-navy-500">Uploading…</p>}
-        </div>
-      ) : field !== "openingHours" ? (
-        <div>
-          {currentVal && (
-            <p className="mb-2 text-xs text-navy-500">
-              Currently: <span className="font-medium text-navy-700">{currentVal}</span>
-            </p>
+
+          {/* Field picker */}
+          {(!items || items.length > 0) && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">What to change</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {fieldPills.map((f) => (
+                  <Pill key={f.value} label={f.label} active={field === f.value} onClick={() => selectField(f.value)} />
+                ))}
+              </div>
+            </div>
           )}
-          <input
-            type={field === "email" ? "email" : "text"}
-            value={newValue}
-            onChange={(e) => setNewValue(e.target.value)}
-            disabled={pending}
-            placeholder={
-              field === "phone" ? "07700 900 000"
-                : field === "email" ? "hello@example.com"
-                : "123 High Street, Oxford, OX1 1AA"
-            }
-            maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
-            className="w-full rounded-xl border-2 border-navy-200 bg-white px-4 py-3 text-base text-navy-900 outline-none focus:border-navy-900 disabled:bg-cream-50"
-          />
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {DAYS.map((d) => (
-            <div key={d} className="flex items-center gap-3">
-              <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={hours[d]?.open ?? false}
-                  onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
-                  className="h-4 w-4 rounded border-navy-300"
-                />
-                <span className="text-xs text-navy-600">Open</span>
-              </label>
-              {hours[d]?.open && (
-                <>
-                  <input
-                    type="time"
-                    value={hours[d]?.from ?? "09:00"}
-                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
-                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
-                  />
-                  <span className="text-navy-400">to</span>
-                  <input
-                    type="time"
-                    value={hours[d]?.to ?? "17:00"}
-                    onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
-                    className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
-                  />
-                </>
+
+          {/* Location picker (contact category only) */}
+          {category === "contact" && hasLocations && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">Which location?</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Pill label="Main / HQ" active={locationIdx === -1} onClick={() => setLocationIdx(-1)} />
+                {siteData.locations.map((loc, i) => (
+                  <Pill key={loc.name} label={loc.name} active={locationIdx === i} onClick={() => setLocationIdx(i)} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Service picker for photo-service slot */}
+          {category === "photo" && field === "photoService" && siteData.services.length > 0 && (
+            <div>
+              <span className="block text-sm font-semibold text-navy-900">Which service?</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {siteData.services.map((s, i) => (
+                  <Pill key={i} label={s.name} active={itemIdx === i} onClick={() => { setItemIdx(i); setSelectedFile(null); }} />
+                ))}
+              </div>
+            </div>
+          )}
+          {category === "photo" && field === "photoService" && siteData.services.length === 0 && (
+            <p className="text-sm text-navy-500">No services found.</p>
+          )}
+
+          {/* Value input */}
+          {(!items || items.length > 0) && (
+            <>
+              {isPhotoField ? (
+                <div className="space-y-3">
+                  {field === "photoService" && siteData.services.length === 0 ? null : (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={busy}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0] ?? null;
+                          setSelectedFile(f);
+                          setError(null);
+                          if (f && f.size > 5 * 1024 * 1024) {
+                            setError("Image too large — max 5 MB.");
+                            setSelectedFile(null);
+                            if (fileInputRef.current) fileInputRef.current.value = "";
+                          }
+                        }}
+                        className="w-full text-sm text-navy-700 file:mr-3 file:rounded-full file:border-2 file:border-navy-200 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-navy-700 hover:file:border-navy-400"
+                      />
+                      {selectedFile && (
+                        <p className="text-xs text-navy-500">
+                          Selected: <span className="font-medium text-navy-700">{selectedFile.name}</span> ({(selectedFile.size / 1024).toFixed(0)} KB)
+                        </p>
+                      )}
+                      {uploading && <p className="text-xs text-navy-500">Uploading…</p>}
+                    </>
+                  )}
+                </div>
+              ) : field === "openingHours" ? (
+                <div className="space-y-2">
+                  {DAYS.map((d) => (
+                    <div key={d} className="flex items-center gap-3">
+                      <span className="w-10 text-sm font-medium text-navy-700">{d}</span>
+                      <label className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={hours[d]?.open ?? false}
+                          onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, open: e.target.checked } }))}
+                          className="h-4 w-4 rounded border-navy-300"
+                        />
+                        <span className="text-xs text-navy-600">Open</span>
+                      </label>
+                      {hours[d]?.open && (
+                        <>
+                          <input
+                            type="time"
+                            value={hours[d]?.from ?? "09:00"}
+                            onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, from: e.target.value } }))}
+                            className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                          />
+                          <span className="text-navy-400">to</span>
+                          <input
+                            type="time"
+                            value={hours[d]?.to ?? "17:00"}
+                            onChange={(e) => setHours((prev) => ({ ...prev, [d]: { ...prev[d]!, to: e.target.value } }))}
+                            className="rounded-lg border border-navy-200 px-2 py-1 text-sm"
+                          />
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div>
+                  {currentVal && (
+                    <p className="mb-2 text-xs text-navy-500">
+                      Currently: <span className="font-medium text-navy-700">{needsTextarea ? truncateStr(currentVal, 120) : currentVal}</span>
+                    </p>
+                  )}
+                  {needsTextarea ? (
+                    <textarea value={newValue} onChange={(e) => setNewValue(e.target.value)} disabled={busy} rows={4} maxLength={2000} placeholder="Enter new text…" className={textareaCls} />
+                  ) : (
+                    <input
+                      type={field === "email" ? "email" : field === "servicePrice" || field === "trustYears" || field === "testimonialRating" ? "number" : "text"}
+                      value={newValue}
+                      onChange={(e) => setNewValue(e.target.value)}
+                      disabled={busy}
+                      placeholder={
+                        field === "phone" ? "07700 900 000"
+                          : field === "email" ? "hello@example.com"
+                          : field === "address" ? "123 High Street, Oxford, OX1 1AA"
+                          : field === "servicePrice" ? "250"
+                          : field === "trustYears" ? "10"
+                          : field === "testimonialRating" ? "5"
+                          : "Enter new value…"
+                      }
+                      min={field === "testimonialRating" ? 1 : undefined}
+                      max={field === "testimonialRating" ? 5 : undefined}
+                      maxLength={field === "phone" ? 30 : field === "email" ? 254 : 500}
+                      className={inputCls}
+                    />
+                  )}
+                </div>
               )}
-            </div>
-          ))}
-        </div>
-      )}
 
-      <button
-        type="button"
-        onClick={handleQuickSubmit}
-        disabled={pending || uploading || (field === "photo" ? !selectedFile : field !== "openingHours" && newValue.trim().length === 0)}
-        className="btn-primary"
-      >
-        {uploading ? "Uploading…" : pending ? "Submitting…" : field === "photo" ? "Upload & submit" : "Submit change"}
-      </button>
+              <button
+                type="button"
+                onClick={handleQuickSubmit}
+                disabled={busy || (isPhotoField ? !selectedFile : !noValueNeeded && newValue.trim().length === 0)}
+                className="btn-primary"
+              >
+                {uploading ? "Uploading…" : busy ? "Submitting…" : isPhotoField ? "Upload & submit" : "Submit change"}
+              </button>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -1710,7 +2063,6 @@ function ChangeRequestsBlock({
               setSuccess={setSuccess}
               onSubmitted={onSubmitted}
               remaining={remaining}
-              submitDialogRef={submitDialogRef}
             />
           ) : (
             <div className="mt-4">
@@ -1741,13 +2093,13 @@ function ChangeRequestsBlock({
         </div>
       )}
 
-      {requests.length > 0 && (
+      {requests.filter((r) => (r.kind ?? "free-text") === "free-text").length > 0 && (
         <div className="mt-7 border-t border-navy-100 pt-6">
           <h3 className="font-serif text-base font-semibold text-navy-900">
             Your requests
           </h3>
           <ul className="mt-3 space-y-3">
-            {requests.map((r) => (
+            {requests.filter((r) => (r.kind ?? "free-text") === "free-text").map((r) => (
               <li
                 key={r.id}
                 className={[
