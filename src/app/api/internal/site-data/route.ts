@@ -139,7 +139,7 @@ export async function GET(request: Request) {
     deploy: {
       cloudflareAccountId: prospect.cloudflareAccountId,
       workerName: prospect.workerName,
-      isLaunched: !!prospect.siteLiveAt,
+      isLaunched: prospect.status === "Live",
     },
   });
 }
