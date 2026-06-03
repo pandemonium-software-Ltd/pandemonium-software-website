@@ -13,6 +13,15 @@
 const GITHUB_API_BASE = "https://api.github.com";
 const TIMEOUT_MS = 10_000;
 
+// M-11: Per-tick dispatch cap — prevents a runaway tick from
+// flooding GitHub Actions with workflow runs. Reset at the start
+// of each tick via resetDispatchCounter().
+let dispatchesThisTick = 0;
+const MAX_DISPATCHES_PER_TICK = 5;
+export function resetDispatchCounter(): void {
+  dispatchesThisTick = 0;
+}
+
 export class GithubApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -38,6 +47,11 @@ export async function dispatchRepositoryEvent(args: {
   eventType: string;
   clientPayload: Record<string, unknown>;
 }): Promise<void> {
+  // M-11: Per-tick dispatch cap
+  if (dispatchesThisTick >= MAX_DISPATCHES_PER_TICK) {
+    throw new Error("dispatch cap reached for this tick");
+  }
+
   const url = `${GITHUB_API_BASE}/repos/${args.owner}/${args.repo}/dispatches`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -93,6 +107,7 @@ export async function dispatchRepositoryEvent(args: {
       }
       throw new GithubApiError(res.status, message);
     }
+    dispatchesThisTick += 1;
   } finally {
     clearTimeout(timeout);
   }

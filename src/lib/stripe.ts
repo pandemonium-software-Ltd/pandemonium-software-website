@@ -49,7 +49,7 @@ export function getStripe(): Stripe | null {
   const env = getServerEnvOptional();
   if (!env.STRIPE_SECRET_KEY) return null;
   cachedStripe = new Stripe(env.STRIPE_SECRET_KEY, {
-    apiVersion: "2025-08-27.basil",
+    apiVersion: "2026-05-27.dahlia",
     httpClient: Stripe.createFetchHttpClient(),
     timeout: 8_000,
   });
@@ -383,10 +383,11 @@ export async function cancelSubscription(args: {
   const stripe = getStripe();
   if (!stripe) throw new Error("Stripe not configured.");
   if (args.mode === "immediate") {
-    return stripe.subscriptions.cancel(args.subscriptionId, {
-      invoice_now: false,
-      prorate: false,
-    });
+    return stripe.subscriptions.cancel(
+      args.subscriptionId,
+      { invoice_now: false, prorate: false },
+      { idempotencyKey: args.idempotencyKey },
+    );
   }
   return stripe.subscriptions.update(
     args.subscriptionId,

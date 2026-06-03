@@ -35,11 +35,20 @@ const SAFE_CHARS =
  * set. Cryptographically random via Web Crypto.
  */
 export function generatePassword(length = 10): string {
-  const arr = new Uint8Array(length);
-  crypto.getRandomValues(arr);
+  // Rejection sampling to eliminate modular bias. For SAFE_CHARS.length=55,
+  // any byte >= 220 (Math.floor(256/55)*55) would bias toward early chars.
+  const limit = Math.floor(256 / SAFE_CHARS.length) * SAFE_CHARS.length;
   let out = "";
-  for (let i = 0; i < length; i++) {
-    out += SAFE_CHARS[arr[i]! % SAFE_CHARS.length];
+  while (out.length < length) {
+    // Request extra bytes to compensate for expected rejections (~14%).
+    const needed = length - out.length;
+    const arr = new Uint8Array(needed + Math.ceil(needed * 0.2) + 2);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < arr.length && out.length < length; i++) {
+      if (arr[i]! < limit) {
+        out += SAFE_CHARS[arr[i]! % SAFE_CHARS.length];
+      }
+    }
   }
   return out;
 }

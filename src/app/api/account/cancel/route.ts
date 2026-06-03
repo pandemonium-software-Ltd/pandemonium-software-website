@@ -53,7 +53,6 @@ const TOKEN_RE =
 const requestSchema = z.object({
   token: z.string().regex(TOKEN_RE),
   mode: z.enum(["end-of-period", "immediate-prorated"]),
-  lastChargedAt: z.string().datetime().optional(),
 });
 
 export async function POST(request: Request) {
@@ -73,7 +72,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { token, mode, lastChargedAt } = parsed.data;
+  const { token, mode } = parsed.data;
 
   const auth = await requireCustomerSession(request, token);
   if (!auth.ok) return auth.response;
@@ -113,11 +112,19 @@ export async function POST(request: Request) {
   }
 
   const monthlyFee = prospect.monthlyFeeCalculated ?? 0;
+  // Compute lastChargedAt server-side: approximate as the 1st of
+  // the current month UTC. Never trust a client-supplied date for
+  // refund calculations — the operator confirms the exact figure
+  // from Stripe when issuing the actual refund.
+  const now = new Date();
+  const lastChargedAtServer = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+  ).toISOString();
   const proratedRefund =
-    mode === "immediate-prorated" && lastChargedAt
+    mode === "immediate-prorated"
       ? proratedRefundPounds({
           monthlyFeePounds: monthlyFee,
-          lastChargedAt,
+          lastChargedAt: lastChargedAtServer,
         })
       : undefined;
 

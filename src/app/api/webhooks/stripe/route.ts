@@ -39,8 +39,11 @@ import {
   appendProspectNote,
   clearProspectStripeSubscription,
   getProspectByToken,
+  getProspectByStripeSubscriptionId,
+  getProspectByStripeCustomerId,
   listAllProspects,
   markCancelled,
+  markCancelledAndClearSubscription,
   markProspectPaidViaStripe,
   resolveModuleChange,
   type ProspectRecord,
@@ -216,11 +219,8 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   }
   if (!subscriptionId) return;
 
-  // Find the prospect by stripeSubscriptionId — scan all prospects
-  // since we don't have a Notion query by that field. Small total
-  // customer count makes this fine; revisit if we cross ~500.
-  const all = await listAllProspects();
-  const prospect = all.find((p) => p.stripeSubscriptionId === subscriptionId);
+  // Find the prospect by stripeSubscriptionId — targeted Notion query.
+  const prospect = await getProspectByStripeSubscriptionId(subscriptionId);
   if (!prospect) {
     console.warn(
       `[webhooks/stripe] invoice.paid for unknown subscription=${subscriptionId}`,
@@ -253,11 +253,10 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
 }
 
 async function handleSubscriptionDeleted(sub: Stripe.Subscription) {
-  const all = await listAllProspects();
-  const prospect = all.find((p) => p.stripeSubscriptionId === sub.id);
+  const prospect = await getProspectByStripeSubscriptionId(sub.id);
   if (!prospect) return;
-  await markCancelled(prospect.pageId);
-  await clearProspectStripeSubscription(prospect.pageId);
+  // Atomic: cancel status + GDPR dates + clear subscription ID in one PATCH.
+  await markCancelledAndClearSubscription(prospect.pageId);
   console.log(
     `[webhooks/stripe] customer.subscription.deleted — ${prospect.name} cancelled, retention countdown started`,
   );
@@ -269,8 +268,7 @@ async function handlePaymentFailed(invoice: Stripe.Invoice) {
       ? invoice.customer
       : invoice.customer?.id;
   if (!customerId) return;
-  const all = await listAllProspects();
-  const prospect = all.find((p) => p.stripeCustomerId === customerId);
+  const prospect = await getProspectByStripeCustomerId(customerId);
   if (!prospect) return;
 
   const line = `[${new Date().toISOString()}] Stripe invoice payment_failed (invoice=${invoice.id}). Customer likely needs to update card.`;
@@ -346,8 +344,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
 
   let prospect: ProspectRecord | undefined;
   if (customerId) {
-    const all = await listAllProspects();
-    prospect = all.find((p) => p.stripeCustomerId === customerId);
+    prospect = await getProspectByStripeCustomerId(customerId) ?? undefined;
   }
 
   if (prospect) {

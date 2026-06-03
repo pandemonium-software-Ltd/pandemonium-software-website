@@ -655,6 +655,7 @@ function multiSelectProp(names: string[]) {
 type NotionPage = {
   id: string;
   url?: string;
+  last_edited_time: string;
   properties: Record<string, unknown>;
 };
 
@@ -1227,6 +1228,21 @@ export async function markNameserversEmailed(
   });
 }
 
+/** Clear the Nameservers Email Sent At latch — used by step2-domain
+ *  when a latch-before-send email fails and we need to allow retry. */
+export async function clearNameserversEmailed(
+  pageId: string,
+): Promise<void> {
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        "Nameservers Email Sent At": { date: null },
+      },
+    },
+  });
+}
+
 /**
  * Stamp the per-customer Worker name — the latch that step2 uses
  * to skip Worker upload on subsequent ticks. Set once after
@@ -1497,6 +1513,85 @@ export async function clearProspectStripeSubscription(
       },
     },
   });
+}
+
+/**
+ * Atomic cancellation: flip Status to Cancelled + stamp GDPR
+ * retention dates + clear Stripe Subscription Id in ONE Notion
+ * PATCH. Avoids the race window where markCancelled and
+ * clearProspectStripeSubscription are two separate writes.
+ */
+export async function markCancelledAndClearSubscription(
+  pageId: string,
+): Promise<{ cancelledAt: string; dataRetentionUntil: string }> {
+  const now = new Date().toISOString();
+  const retentionUntil = personalDataRetentionUntil(now);
+  await notionFetch(`/pages/${pageId}`, {
+    method: "PATCH",
+    body: {
+      properties: {
+        Status: { select: { name: "Cancelled" } },
+        "Cancelled At": { date: { start: now } },
+        "Data Retention Until": { date: { start: retentionUntil } },
+        "Stripe Subscription Id": rt(""),
+      },
+    },
+  });
+  return { cancelledAt: now, dataRetentionUntil: retentionUntil };
+}
+
+/**
+ * Targeted lookup: find a prospect by their Stripe Subscription Id.
+ * Uses a Notion database query with a filter instead of fetching ALL
+ * prospects and scanning in JS. Much more efficient at scale.
+ */
+export async function getProspectByStripeSubscriptionId(
+  subscriptionId: string,
+): Promise<ProspectRecord | null> {
+  const env = getServerEnv();
+  const result = await notionFetch<NotionQueryResponse>(
+    `/databases/${env.NOTION_PROSPECTS_DB_ID}/query`,
+    {
+      method: "POST",
+      body: {
+        filter: {
+          property: "Stripe Subscription Id",
+          rich_text: { equals: subscriptionId },
+        },
+        page_size: 1,
+      },
+    },
+  );
+  const page = result.results[0];
+  if (!page) return null;
+  return pageToProspect(page);
+}
+
+/**
+ * Targeted lookup: find a prospect by their Stripe Customer Id.
+ * Uses a Notion database query with a filter instead of fetching ALL
+ * prospects and scanning in JS.
+ */
+export async function getProspectByStripeCustomerId(
+  customerId: string,
+): Promise<ProspectRecord | null> {
+  const env = getServerEnv();
+  const result = await notionFetch<NotionQueryResponse>(
+    `/databases/${env.NOTION_PROSPECTS_DB_ID}/query`,
+    {
+      method: "POST",
+      body: {
+        filter: {
+          property: "Stripe Customer Id",
+          rich_text: { equals: customerId },
+        },
+        page_size: 1,
+      },
+    },
+  );
+  const page = result.results[0];
+  if (!page) return null;
+  return pageToProspect(page);
 }
 
 /**
@@ -1789,11 +1884,17 @@ export async function scrubPersonalDataFields(
     method: "PATCH",
     body: {
       properties: {
-        // Personal contact + identity slots
+        // Core PII
+        Name: { title: [{ text: { content: "[scrubbed]" } }] },
+        Email: { email: null },
+        Phone: { phone_number: null },
+        "UK Location": rt("[scrubbed]"),
+        Notes: rt(""),
+        // Data blobs that carry PII
         "Onboarding Data": rt("[scrubbed]"),
         "Phase 2 Data": rt("[scrubbed]"),
         "Phase 3 Data": rt("[scrubbed]"),
-        "Customer Change Requests": rt("[scrubbed]"),
+        "Change Requests Inbox": rt("[scrubbed]"),
         "Haiku Cache": rt(""),
         "Password Hash": rt(""),
         // Onboarding latches that carry contact-adjacent state
@@ -1819,46 +1920,76 @@ export async function markScrubbed(pageId: string): Promise<void> {
 
 // --- Change requests inbox ---
 
+function parseInbox(page: NotionPage): ChangeRequest[] {
+  const props = page.properties as Record<string, unknown>;
+  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
+    ?.rich_text;
+  if (!Array.isArray(rawTextArr) || rawTextArr.length === 0) return [];
+  const text = rawTextArr
+    .map((t) => (t as { plain_text?: string }).plain_text ?? "")
+    .join("");
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+const RMW_MAX_ATTEMPTS = 3;
+
 /**
- * Append a new change request to the customer's inbox. The inbox is
- * a JSON array stored in a single rich_text field on the Prospects
- * page. We read-modify-write because Notion has no native list-
- * append for rich_text. Race conditions on concurrent submits are
- * extremely unlikely (one customer, one form) and would just lose
- * one entry — Cowork's audit log catches anything that mattered.
+ * Optimistic-concurrency wrapper for Change Requests Inbox mutations.
+ * Reads the page (capturing `last_edited_time`), applies `mutate`,
+ * then re-reads to verify no concurrent write occurred before
+ * committing. Retries up to 3 times on conflict.
  */
+async function readModifyWriteInbox<T>(
+  pageId: string,
+  mutate: (current: ChangeRequest[]) => { result: T; next: ChangeRequest[] },
+): Promise<T> {
+  for (let attempt = 0; attempt < RMW_MAX_ATTEMPTS; attempt++) {
+    const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
+    const readTime = page.last_edited_time;
+    const current = parseInbox(page);
+    const { result, next } = mutate(current);
+
+    // Before writing, verify the page hasn't been modified since our read.
+    // Skip on the final attempt — accept the narrow remaining window rather
+    // than failing outright.
+    if (attempt < RMW_MAX_ATTEMPTS - 1) {
+      const check = await notionFetch<NotionPage>(`/pages/${pageId}`);
+      if (check.last_edited_time !== readTime) {
+        console.warn(
+          `[notion] conflict on ${pageId} — retrying inbox write (${attempt + 1}/${RMW_MAX_ATTEMPTS})`,
+        );
+        continue;
+      }
+    }
+
+    await notionFetch(`/pages/${pageId}`, {
+      method: "PATCH",
+      body: {
+        properties: {
+          "Change Requests Inbox": rt(JSON.stringify(next)),
+        },
+      },
+    });
+    return result;
+  }
+
+  throw new Error(`readModifyWriteInbox: exhausted ${RMW_MAX_ATTEMPTS} attempts on ${pageId}`);
+}
+
 export async function appendChangeRequest(
   pageId: string,
   request: ChangeRequest,
 ): Promise<void> {
-  // Read current inbox.
-  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
-  const props = page.properties as Record<string, unknown>;
-  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
-    ?.rich_text;
-  let current: ChangeRequest[] = [];
-  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
-    const text = rawTextArr
-      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
-      .join("");
-    if (text) {
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) current = parsed;
-      } catch {
-        // ignore malformed; we'll overwrite
-      }
-    }
-  }
-  const next = [request, ...current]; // newest first
-  await notionFetch(`/pages/${pageId}`, {
-    method: "PATCH",
-    body: {
-      properties: {
-        "Change Requests Inbox": rt(JSON.stringify(next)),
-      },
-    },
-  });
+  await readModifyWriteInbox(pageId, (current) => ({
+    result: undefined,
+    next: [request, ...current],
+  }));
 }
 
 /**
@@ -1898,67 +2029,44 @@ export async function updateChangeRequest(
   updated: ChangeRequest;
   transitionedToTerminal: boolean;
 }> {
-  // Read current inbox.
-  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
-  const props = page.properties as Record<string, unknown>;
-  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
-    ?.rich_text;
-  let current: ChangeRequest[] = [];
-  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
-    const text = rawTextArr
-      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
-      .join("");
-    if (text) {
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) current = parsed;
-      } catch {
-        // ignore malformed; treat as empty
-      }
+  return readModifyWriteInbox(pageId, (current) => {
+    const idx = current.findIndex((r) => r.id === changeRequestId);
+    if (idx < 0) {
+      throw new Error(`Change request ${changeRequestId} not found.`);
     }
-  }
 
-  const idx = current.findIndex((r) => r.id === changeRequestId);
-  if (idx < 0) {
-    throw new Error(`Change request ${changeRequestId} not found.`);
-  }
+    const previous = current[idx];
+    const wasTerminal =
+      previous.status === "resolved" ||
+      previous.status === "rejected" ||
+      previous.status === "retracted";
 
-  const previous = current[idx];
-  const wasTerminal =
-    previous.status === "resolved" ||
-    previous.status === "rejected" ||
-    previous.status === "retracted";
+    const entry: ChangeRequest = {
+      ...previous,
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.reply !== undefined ? { reply: patch.reply } : {}),
+    };
 
-  const next: ChangeRequest = {
-    ...previous,
-    ...(patch.status !== undefined ? { status: patch.status } : {}),
-    ...(patch.reply !== undefined ? { reply: patch.reply } : {}),
-  };
+    const isTerminal =
+      entry.status === "resolved" ||
+      entry.status === "rejected" ||
+      entry.status === "retracted";
 
-  const isTerminal =
-    next.status === "resolved" ||
-    next.status === "rejected" ||
-    next.status === "retracted";
+    if (isTerminal && !wasTerminal) {
+      entry.resolvedAt = new Date().toISOString();
+    }
 
-  // Stamp resolvedAt the first time we cross into a terminal state.
-  if (isTerminal && !wasTerminal) {
-    next.resolvedAt = new Date().toISOString();
-  }
+    const next = [...current];
+    next[idx] = entry;
 
-  current[idx] = next;
-  await notionFetch(`/pages/${pageId}`, {
-    method: "PATCH",
-    body: {
-      properties: {
-        "Change Requests Inbox": rt(JSON.stringify(current)),
+    return {
+      result: {
+        updated: entry,
+        transitionedToTerminal: isTerminal && !wasTerminal,
       },
-    },
+      next,
+    };
   });
-
-  return {
-    updated: next,
-    transitionedToTerminal: isTerminal && !wasTerminal,
-  };
 }
 
 /**
@@ -1977,37 +2085,14 @@ export async function patchChangeRequest(
   changeRequestId: string,
   patch: Partial<ChangeRequest>,
 ): Promise<ChangeRequest | null> {
-  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
-  const props = page.properties as Record<string, unknown>;
-  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
-    ?.rich_text;
-  let current: ChangeRequest[] = [];
-  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
-    const text = rawTextArr
-      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
-      .join("");
-    if (text) {
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) current = parsed;
-      } catch {
-        /* ignore malformed; treat as empty */
-      }
-    }
-  }
-  const idx = current.findIndex((r) => r.id === changeRequestId);
-  if (idx < 0) return null;
-  const merged: ChangeRequest = { ...current[idx]!, ...patch };
-  current[idx] = merged;
-  await notionFetch(`/pages/${pageId}`, {
-    method: "PATCH",
-    body: {
-      properties: {
-        "Change Requests Inbox": rt(JSON.stringify(current)),
-      },
-    },
+  return readModifyWriteInbox(pageId, (current) => {
+    const idx = current.findIndex((r) => r.id === changeRequestId);
+    if (idx < 0) return { result: null, next: current };
+    const merged: ChangeRequest = { ...current[idx]!, ...patch };
+    const next = [...current];
+    next[idx] = merged;
+    return { result: merged, next };
   });
-  return merged;
 }
 
 /**
@@ -2110,39 +2195,16 @@ export async function markChangeRequestEscalated(
   pageId: string,
   changeRequestId: string,
 ): Promise<boolean> {
-  const page = await notionFetch<NotionPage>(`/pages/${pageId}`);
-  const props = page.properties as Record<string, unknown>;
-  const rawTextArr = (props["Change Requests Inbox"] as { rich_text?: unknown[] })
-    ?.rich_text;
-  let current: ChangeRequest[] = [];
-  if (Array.isArray(rawTextArr) && rawTextArr.length > 0) {
-    const text = rawTextArr
-      .map((t) => (t as { plain_text?: string }).plain_text ?? "")
-      .join("");
-    if (text) {
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) current = parsed;
-      } catch {
-        /* ignore malformed; treat as empty */
-      }
-    }
-  }
-  const idx = current.findIndex((r) => r.id === changeRequestId);
-  if (idx < 0) return false;
-  current[idx] = {
-    ...current[idx]!,
-    coworkEscalatedAt: new Date().toISOString(),
-  };
-  await notionFetch(`/pages/${pageId}`, {
-    method: "PATCH",
-    body: {
-      properties: {
-        "Change Requests Inbox": rt(JSON.stringify(current)),
-      },
-    },
+  return readModifyWriteInbox(pageId, (current) => {
+    const idx = current.findIndex((r) => r.id === changeRequestId);
+    if (idx < 0) return { result: false, next: current };
+    const next = [...current];
+    next[idx] = {
+      ...current[idx]!,
+      coworkEscalatedAt: new Date().toISOString(),
+    };
+    return { result: true, next };
   });
-  return true;
 }
 
 // --- Update Onboarding (partial saves + per-step done flag + status flips) ---

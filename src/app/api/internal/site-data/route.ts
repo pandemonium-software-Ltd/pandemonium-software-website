@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error:
-          "INTERNAL_BUILD_SECRET not configured on this deployment.",
+          "Server configuration error.",
         code: "secret_unconfigured",
       },
       { status: 503 },
@@ -145,12 +145,15 @@ export async function GET(request: Request) {
 }
 
 // Constant-time string compare to dodge timing-attack risk on the
-// secret check.
+// secret check. Iterates to maxLen and OR-in a length flag so
+// mismatched lengths don't short-circuit (leaking length info).
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  const maxLen = Math.max(a.length, b.length);
+  let mismatch = a.length === b.length ? 0 : 1;
+  for (let i = 0; i < maxLen; i++) {
+    const ca = i < a.length ? a.charCodeAt(i) : 0;
+    const cb = i < b.length ? b.charCodeAt(i) : 0;
+    mismatch |= ca ^ cb;
   }
   return mismatch === 0;
 }

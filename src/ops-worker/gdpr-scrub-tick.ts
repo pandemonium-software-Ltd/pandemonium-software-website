@@ -107,12 +107,12 @@ export async function runGdprScrubTick(args: {
       await markScrubbed(prospect.pageId);
 
       console.log(
-        `[gdpr-scrub:${tickId}] ${prospect.token} (${prospect.name}) — scrubbed Notion + D1 + R2 (${r2Deleted} objects deleted).`,
+        `[gdpr-scrub:${tickId}] ${prospect.token.slice(0, 8)} — scrubbed Notion + D1 + R2 (${r2Deleted} objects deleted).`,
       );
       ok++;
     } catch (e) {
       console.error(
-        `[gdpr-scrub:${tickId}] ${prospect.token} (${prospect.name}) FAILED: ${e instanceof Error ? e.message : String(e)}`,
+        `[gdpr-scrub:${tickId}] ${prospect.token.slice(0, 8)} FAILED: ${e instanceof Error ? e.message : String(e)}`,
       );
       failed++;
     }

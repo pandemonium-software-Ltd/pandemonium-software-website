@@ -26,6 +26,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getProspectByToken } from "@/lib/notion-prospects";
 import { updateProspectOnboarding } from "@/lib/notion-prospects";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getServerEnv } from "@/lib/env";
 import { sendCustomerEmail } from "@/ops-worker/notify";
 import { customerSenderBrand } from "@/lib/email-branding";
@@ -83,6 +84,15 @@ export async function POST(request: Request) {
   } catch {
     return jsonError(400, "Invalid request body.");
   }
+  const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit("pub-subscribe", ip, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests. Please try again shortly." },
+      { status: 429, headers: { ...corsHeaders(), "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) {
     return jsonError(

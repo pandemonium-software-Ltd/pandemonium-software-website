@@ -16,6 +16,14 @@ import { listProspectsNeedingOps } from "../lib/notion-prospects";
 import type { ServerEnv } from "../lib/env";
 import { dispatchProspect, type DispatchDeps } from "./dispatch";
 import type { StepCtx } from "./types";
+import { resetEmailCounter } from "./notify";
+import { resetDispatchCounter } from "../lib/github";
+
+/** M-08: Hard cap on prospects processed per tick. Prevents a
+ *  sudden spike in onboarding prospects from causing a single
+ *  tick to exceed the Workers cron budget or generate runaway
+ *  API / email / dispatch costs. */
+const MAX_PROSPECTS_PER_TICK = 20;
 
 export async function runOpsTick(
   env: ServerEnv,
@@ -25,6 +33,10 @@ export async function runOpsTick(
   const tickId = new Date().toISOString();
   console.log(`[tick:${tickId}] starting`);
 
+  // M-10 + M-11: Reset per-tick counters so caps apply fresh each tick.
+  resetEmailCounter();
+  resetDispatchCounter();
+
   let prospects;
   try {
     prospects = await listProspectsNeedingOps();
@@ -33,6 +45,14 @@ export async function runOpsTick(
       `[tick:${tickId}] failed to list prospects: ${e instanceof Error ? e.message : String(e)}`,
     );
     return;
+  }
+
+  // M-08: Cap prospects per tick to prevent runaway cost/time.
+  if (prospects.length > MAX_PROSPECTS_PER_TICK) {
+    console.warn(
+      `[tick:${tickId}] ${prospects.length} prospects exceeds cap of ${MAX_PROSPECTS_PER_TICK} — processing first ${MAX_PROSPECTS_PER_TICK} only`,
+    );
+    prospects = prospects.slice(0, MAX_PROSPECTS_PER_TICK);
   }
 
   console.log(

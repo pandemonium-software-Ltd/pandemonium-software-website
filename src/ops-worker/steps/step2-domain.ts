@@ -45,6 +45,7 @@ import {
   updateZoneStatus,
   markDomainVerified,
   markNameserversEmailed,
+  clearNameserversEmailed,
   recordWorkerName,
   markSiteLive,
 } from "../../lib/notion-prospects";
@@ -176,11 +177,24 @@ export const step2Domain: Step = {
         (config.registrar === "already-have" && zone.status === "active");
 
       if (noNameserverSwapNeeded) {
-        await sendCustomerEmail(env, prospect.email, "domain-no-action-needed", {
-          customerName: prospect.name,
-          domain: config.domain,
-        });
+        // M-13: Stamp latch BEFORE email send to prevent duplicate
+        // emails if the send succeeds but the latch write fails.
+        // If the email fails, clear the latch so the next tick retries.
         await markNameserversEmailed(prospect.pageId);
+        try {
+          await sendCustomerEmail(env, prospect.email, "domain-no-action-needed", {
+            customerName: prospect.name,
+            domain: config.domain,
+          });
+        } catch (e) {
+          // Email failed — clear latch so next tick retries
+          try {
+            await clearNameserversEmailed(prospect.pageId);
+          } catch {
+            console.error(`[step2] email failed AND couldn't clear nameserversEmailed latch`);
+          }
+          throw e;
+        }
         sentNoActionEmail = true;
         // The no-action email already says "we'll email you again
         // when it goes live". Stamp domainVerifiedAt so section C
@@ -201,20 +215,30 @@ export const step2Domain: Step = {
             `Cloudflare returned zone ${zone.id} without 2 nameservers (got ${zone.name_servers?.length ?? 0}); can't email customer`,
           );
         }
-        await sendCustomerEmail(
-          env,
-          prospect.email,
-          "domain-nameservers-pending",
-          {
-            customerName: prospect.name,
-            domain: config.domain,
-            ns1,
-            ns2,
-            confirmUrl: `${baseUrl}/api/onboarding/dns-confirm/${prospect.token}`,
-            hubUrl: `${baseUrl}/onboarding/${prospect.token}`,
-          },
-        );
+        // M-13: Stamp latch BEFORE email send (same pattern as above).
         await markNameserversEmailed(prospect.pageId);
+        try {
+          await sendCustomerEmail(
+            env,
+            prospect.email,
+            "domain-nameservers-pending",
+            {
+              customerName: prospect.name,
+              domain: config.domain,
+              ns1,
+              ns2,
+              confirmUrl: `${baseUrl}/api/onboarding/dns-confirm/${prospect.token}`,
+              hubUrl: `${baseUrl}/onboarding/${prospect.token}`,
+            },
+          );
+        } catch (e) {
+          try {
+            await clearNameserversEmailed(prospect.pageId);
+          } catch {
+            console.error(`[step2] email failed AND couldn't clear nameserversEmailed latch`);
+          }
+          throw e;
+        }
         sentNameserversEmail = true;
       }
     }

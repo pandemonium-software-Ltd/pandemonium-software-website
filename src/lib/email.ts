@@ -20,6 +20,16 @@
 import { Resend } from "resend";
 import { getServerEnv } from "./env";
 
+/** Race a promise against a 10s timeout. */
+function withTimeout<T>(promise: Promise<T>, ms = 10_000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Resend call timed out after ${ms}ms`)), ms),
+    ),
+  ]);
+}
+
 /**
  * Operational inbox: where Ben reads and replies. Used as the
  * recipient for internal notifications AND the reply-to on every
@@ -70,7 +80,7 @@ export async function sendInternalNotification(
 ): Promise<string | null> {
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({
+    const { error } = await withTimeout(resend.emails.send({
       from: FROM_INTERNAL,
       to: TO_BEN,
       // Reply-to lands in the same gmail inbox so a hit-Reply on any
@@ -88,7 +98,7 @@ export async function sendInternalNotification(
             })),
           }
         : {}),
-    });
+    }));
     if (error) {
       console.error("[email] Resend error:", error);
       return error.message ?? "Unknown Resend error";
@@ -350,13 +360,13 @@ export async function sendCustomerNotification(args: {
 }): Promise<string | null> {
   try {
     const resend = getResend();
-    const { error } = await resend.emails.send({
+    const { error } = await withTimeout(resend.emails.send({
       from: FROM_INTERNAL, // Stage 3 swaps to notifications@moduforge.co.uk
       to: `${args.toName} <${args.toEmail}>`,
       replyTo: OPS_EMAIL,
       subject: args.subject,
       text: args.body,
-    });
+    }));
     if (error) {
       console.error("[email] customer notification error:", error);
       return error.message ?? "Unknown Resend error";

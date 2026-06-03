@@ -34,6 +34,7 @@
 import type { Step } from "../types";
 import {
   markFinalLaunchTriggered,
+  clearFinalLaunchTriggered,
   type ProspectRecord,
 } from "../../lib/notion-prospects";
 import { dispatchRepositoryEvent, GithubApiError } from "../../lib/github";
@@ -77,6 +78,19 @@ export const step7GoLive: Step = {
       };
     }
 
+    // M-12: Stamp latch BEFORE dispatch so a crash between dispatch
+    // and latch-write doesn't cause re-triggers every tick. If
+    // dispatch fails, clear the latch so the next tick retries.
+    try {
+      await markFinalLaunchTriggered(prospect.pageId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `[step7-go-live] couldn't stamp Final Launch Triggered At (pre-dispatch): ${msg}. ` +
+          `Aborting dispatch to prevent re-trigger loop.`,
+      );
+    }
+
     try {
       await dispatchRepositoryEvent({
         token: env.GITHUB_TOKEN,
@@ -88,14 +102,18 @@ export const step7GoLive: Step = {
           prospectName: prospect.name,
           businessName: prospect.business ?? "",
           mode: "live",
-          // The build-callback uses this flag to decide whether to
-          // flip status to "Live" + send the "you're live" email.
-          // Without it, a normal live-mode build (e.g. a review-edit
-          // rebuild during onboarding) would NOT flip the status.
           finalLaunch: true,
         },
       });
     } catch (e) {
+      // Dispatch failed — clear the latch so the next tick retries.
+      try {
+        await clearFinalLaunchTriggered(prospect.pageId);
+      } catch {
+        console.error(
+          `[step7-go-live] dispatch failed AND couldn't clear latch — may need manual intervention`,
+        );
+      }
       const msg =
         e instanceof GithubApiError
           ? `${e.message} (HTTP ${e.status})`
@@ -108,16 +126,6 @@ export const step7GoLive: Step = {
           `Owner=${env.GITHUB_OWNER} Repo=${env.GITHUB_REPO}`,
       );
       throw new Error(`go-live dispatch failed: ${msg}`);
-    }
-
-    try {
-      await markFinalLaunchTriggered(prospect.pageId);
-    } catch (e) {
-      // The dispatch already fired — the Action will run regardless.
-      // Same trade-off as step5-review's latch write.
-      console.error(
-        `[step7-go-live] dispatch fired but couldn't stamp Final Launch Triggered At: ${e instanceof Error ? e.message : String(e)}`,
-      );
     }
 
     return {

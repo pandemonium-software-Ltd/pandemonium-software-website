@@ -58,6 +58,7 @@ import {
 } from "../../lib/haiku/classify-change-request";
 import { applyChangeRequestPatches } from "../../lib/change-requests/apply-patch";
 import { parseFormMessage } from "../../lib/change-requests/build-form-patches";
+import { looksLikeMultipleItems } from "../../lib/multi-item-detector";
 import { buildSiteSnapshot } from "../../lib/change-requests/site-snapshot";
 import { dispatchRepositoryEvent, GithubApiError } from "../../lib/github";
 import { notifyAdmin, adminFooter } from "../../lib/admin-notify";
@@ -81,6 +82,16 @@ const MAX_CLASSIFICATIONS_PER_DAY = 5;
 
 /** Cap escalations per cron tick to prevent inbox flooding. */
 const MAX_ESCALATIONS_PER_TICK = 5;
+
+// ---- M-09: Per-tick Haiku call counter ----
+// Prevents runaway API costs if a single tick has many free-text
+// change requests queued up. After 10 Haiku calls in one tick,
+// remaining items escalate to Ben instead of classifying.
+let haikuCallsThisTick = 0;
+const MAX_HAIKU_CALLS_PER_TICK = 10;
+export function resetHaikuCounter(): void {
+  haikuCallsThisTick = 0;
+}
 
 /** Discriminated union — step6 handles both kinds uniformly. */
 type Actionable =
@@ -122,6 +133,11 @@ export const step6ChangeRequests: Step = {
     return actionable.length > 0;
   },
   async run(prospect, env) {
+    // M-09: reset per-tick Haiku call counter at the start of each
+    // prospect's step6 run (counter is module-level, shared across
+    // prospects within the same tick — reset once per step6 entry).
+    resetHaikuCounter();
+
     const actionable = findActionable(prospect).slice(
       0,
       MAX_ESCALATIONS_PER_TICK,
@@ -196,7 +212,7 @@ export const step6ChangeRequests: Step = {
             rebuildOnly: isRebuildOnlyDeterministic || undefined,
           },
           isRetry: false,
-        }).catch(() => { /* best-effort */ });
+        }).catch((e) => { console.error(`[step6] stampClassification (deterministic) failed: ${e instanceof Error ? e.message : String(e)}`); });
 
         const result = await tryAutoApply({
           prospect,
@@ -221,7 +237,7 @@ export const step6ChangeRequests: Step = {
                 : "Pure asset rebuild.\n") +
               `\nCustomer's message:\n  "${itemMessage}"\n\n` +
               adminFooter({ prospectName: prospect.name, prospectToken: prospect.token, anchor: item.kind === "post-commit" ? `cr-${item.request.id.slice(0, 8)}` : `re-${item.edit.id.slice(0, 8)}` }),
-          }).catch(() => { /* best-effort */ });
+          }).catch((e) => { console.error(`[step6] notifyAdmin (deterministic) failed: ${e instanceof Error ? e.message : String(e)}`); });
         } else {
           failures.push(`${tag} deterministic-apply-failed: ${result.reason}`);
           await escalateOnly({
@@ -229,10 +245,26 @@ export const step6ChangeRequests: Step = {
             item,
             baseUrl,
             reasonForBen: `Cowork parsed the form message deterministically but apply failed: ${result.reason}. Please review manually.`,
-          }).catch(() => { /* nothing more we can do */ });
+          }).catch((e) => { console.error(`[step6] escalateOnly (deterministic-apply-failed) failed: ${e instanceof Error ? e.message : String(e)}`); });
           summary.push(`${tag} escalated (deterministic-apply-failed)`);
         }
         void itemSubmitted;
+        continue;
+      }
+
+      // ---- L-15: Multi-item escalation guard ----
+      // Free-text messages that look like multiple distinct items are
+      // too risky for single-shot Haiku classification. Escalate to
+      // Ben so he can break them into individual requests.
+      if (looksLikeMultipleItems(itemMessage)) {
+        await escalateOnly({
+          prospect,
+          item,
+          baseUrl,
+          reasonForBen:
+            "Message appears to contain multiple distinct change requests. Please break into separate items or apply manually.",
+        }).catch((e) => failures.push(`${tag} multi-item-escalate failed: ${e}`));
+        summary.push(`${tag} escalated (multi-item)`);
         continue;
       }
 
@@ -243,10 +275,25 @@ export const step6ChangeRequests: Step = {
           : item.edit.coworkClassification && item.edit.coworkEscalatedAt
       );
 
+      // M-09: Per-tick Haiku call cap — escalate instead of classifying
+      // if we've already used the budget for this tick.
+      if (haikuCallsThisTick >= MAX_HAIKU_CALLS_PER_TICK) {
+        await escalateOnly({
+          prospect,
+          item,
+          baseUrl,
+          reasonForBen:
+            "Per-tick Haiku call cap reached (10 calls). Escalating remaining items — please review.",
+        }).catch((e) => failures.push(`${tag} haiku-cap-escalate failed: ${e}`));
+        summary.push(`${tag} haiku-cap-escalated`);
+        continue;
+      }
+
       const classification = await classifyChangeRequest({
         message: itemMessage,
         snapshot: buildSiteSnapshot(prospect),
       });
+      haikuCallsThisTick += 1;
       remainingBudget -= 1;
 
       await stampClassification({
@@ -326,9 +373,9 @@ export const step6ChangeRequests: Step = {
         if (isRetry) {
           const retryStamp = { coworkRetriedAt: new Date().toISOString() };
           if (item.kind === "post-commit") {
-            await patchChangeRequest(prospect.pageId, item.request.id, retryStamp).catch(() => {});
+            await patchChangeRequest(prospect.pageId, item.request.id, retryStamp).catch((e) => { console.error(`[step6] retryStamp failed: ${e instanceof Error ? e.message : String(e)}`); });
           } else {
-            await patchReviewEdit(prospect.pageId, item.edit.id, retryStamp).catch(() => {});
+            await patchReviewEdit(prospect.pageId, item.edit.id, retryStamp).catch((e) => { console.error(`[step6] retryStamp failed: ${e instanceof Error ? e.message : String(e)}`); });
           }
         }
         await escalateOnly({
@@ -340,6 +387,36 @@ export const step6ChangeRequests: Step = {
         summary.push(
           `${tag} escalated (${classification?.classification ?? "no-classify"})`,
         );
+        continue;
+      }
+
+      // HIGH-5: Admin-approval gate for multi-field free-text changes.
+      // Single-field free-text patches can auto-apply (low blast radius),
+      // but multi-field patches from Haiku classification are escalated
+      // to admin for review. This limits the damage if Haiku
+      // misinterprets a complex request — the customer won't end up
+      // with multiple wrong fields changed at once. Deterministic
+      // (form-parsed) patches bypass this gate because they don't
+      // rely on Haiku's judgement.
+      if (
+        isHighConfidenceInScopePatches &&
+        classification.patches &&
+        classification.patches.length > 1
+      ) {
+        const patchesPreview = classification.patches
+          .map((p) => `  - ${p.target} → "${p.newValue}"`)
+          .join("\n");
+        await escalateOnly({
+          prospect,
+          item,
+          baseUrl,
+          reasonForBen:
+            `Cowork classified as in_scope (confidence ${classification.confidence.toFixed(2)}) with ${classification.patches.length} patches, ` +
+            `but multi-field free-text changes require admin approval.\n\n` +
+            `Suggested patches:\n${patchesPreview}\n\n` +
+            `Reasoning: ${classification.reasoning}`,
+        }).catch((e) => failures.push(`${tag} multi-field-escalate failed: ${e}`));
+        summary.push(`${tag} escalated (multi-field free-text gate)`);
         continue;
       }
 
@@ -416,9 +493,9 @@ export const step6ChangeRequests: Step = {
         if (isRetry) {
           const retryStamp = { coworkRetriedAt: new Date().toISOString() };
           if (item.kind === "post-commit") {
-            await patchChangeRequest(prospect.pageId, item.request.id, retryStamp).catch(() => {});
+            await patchChangeRequest(prospect.pageId, item.request.id, retryStamp).catch((e) => { console.error(`[step6] retryStamp failed: ${e instanceof Error ? e.message : String(e)}`); });
           } else {
-            await patchReviewEdit(prospect.pageId, item.edit.id, retryStamp).catch(() => {});
+            await patchReviewEdit(prospect.pageId, item.edit.id, retryStamp).catch((e) => { console.error(`[step6] retryStamp failed: ${e instanceof Error ? e.message : String(e)}`); });
           }
         }
         await escalateOnly({
@@ -426,8 +503,8 @@ export const step6ChangeRequests: Step = {
           item,
           baseUrl,
           reasonForBen: `Cowork tried to auto-apply but failed: ${result.reason}. Please review + decide manually.`,
-        }).catch(() => {
-          /* nothing more we can do */
+        }).catch((e) => {
+          console.error(`[step6] escalateOnly (apply-failed) failed: ${e instanceof Error ? e.message : String(e)}`);
         });
         summary.push(`${tag} escalated (apply-failed)`);
       }

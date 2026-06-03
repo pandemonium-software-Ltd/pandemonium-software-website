@@ -30,7 +30,7 @@ export const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
  *  — the cookie value carries the token, so a Bob session on
  *  /account/<bob>/* will not work on /account/<alice>/* (verify
  *  rejects token mismatch). */
-export const SESSION_COOKIE_NAME = "pf_session";
+export const SESSION_COOKIE_NAME = "__Host-pf_session";
 
 export type SessionPayload = {
   /** Prospect token this session authenticates. */

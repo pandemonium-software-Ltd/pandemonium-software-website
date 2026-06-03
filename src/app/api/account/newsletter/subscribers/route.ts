@@ -141,8 +141,11 @@ export async function POST(request: Request) {
       data: updatedOb as Parameters<typeof updateProspectOnboarding>[1]["data"],
     });
   } catch (e) {
+    console.error(
+      `[api/account/newsletter/subscribers POST] Notion write failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return NextResponse.json(
-      { error: `Notion write failed: ${e instanceof Error ? e.message : String(e)}` },
+      { error: "Something went wrong. Please try again." },
       { status: 500 },
     );
   }
@@ -203,8 +206,11 @@ export async function DELETE(request: Request) {
       data: updatedOb as Parameters<typeof updateProspectOnboarding>[1]["data"],
     });
   } catch (e) {
+    console.error(
+      `[api/account/newsletter/subscribers DELETE] Notion write failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return NextResponse.json(
-      { error: `Notion write failed: ${e instanceof Error ? e.message : String(e)}` },
+      { error: "Something went wrong. Please try again." },
       { status: 500 },
     );
   }

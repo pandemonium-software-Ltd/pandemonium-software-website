@@ -39,7 +39,7 @@ export async function writeException(
   const dbId = env.NOTION_EXCEPTIONS_DB_ID;
   if (!dbId) {
     console.error(
-      `[exception:no-db] ${entry.timestamp} ${entry.step} prospect=${entry.prospect.name} (${entry.prospect.token}): ${entry.errorMessage}`,
+      `[exception:no-db] ${entry.timestamp} ${entry.step} prospect=${entry.prospect.token.slice(0, 8)}: ${entry.errorMessage}`,
     );
   } else {
     try {

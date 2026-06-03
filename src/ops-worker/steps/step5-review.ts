@@ -25,6 +25,7 @@
 import type { Step } from "../types";
 import {
   markPreviewBuildTriggered,
+  clearPreviewBuildTriggered,
   type ProspectRecord,
 } from "../../lib/notion-prospects";
 import { dispatchRepositoryEvent, GithubApiError } from "../../lib/github";
@@ -75,6 +76,21 @@ export const step5Review: Step = {
       };
     }
 
+    // M-12: Stamp latch BEFORE dispatch so a crash between dispatch
+    // and latch-write doesn't cause re-triggers every tick. If
+    // dispatch fails, we clear the latch so the next tick retries.
+    try {
+      await markPreviewBuildTriggered(prospect.pageId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      // Can't stamp the latch — abort before dispatching to avoid
+      // an un-latched dispatch that would re-trigger every tick.
+      throw new Error(
+        `[step5-review] couldn't stamp Preview Build Triggered At (pre-dispatch): ${msg}. ` +
+          `Aborting dispatch to prevent re-trigger loop.`,
+      );
+    }
+
     // Fire the dispatch event. The workflow's `event_type` filter
     // must match exactly — see .github/workflows/customer-site-build.yml.
     try {
@@ -92,6 +108,14 @@ export const step5Review: Step = {
         },
       });
     } catch (e) {
+      // Dispatch failed — clear the latch so the next tick retries.
+      try {
+        await clearPreviewBuildTriggered(prospect.pageId);
+      } catch {
+        console.error(
+          `[step5-review] dispatch failed AND couldn't clear latch — may need manual intervention`,
+        );
+      }
       const msg =
         e instanceof GithubApiError
           ? e.message
@@ -103,21 +127,6 @@ export const step5Review: Step = {
           `Check GITHUB_TOKEN scope (needs repo or workflow), ` +
           `GITHUB_OWNER (${env.GITHUB_OWNER}), GITHUB_REPO (${env.GITHUB_REPO}), ` +
           `and that .github/workflows/customer-site-build.yml exists on the default branch.`,
-      );
-    }
-
-    // Stamp the latch so we don't re-trigger every minute while
-    // the Action runs.
-    try {
-      await markPreviewBuildTriggered(prospect.pageId);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      // The dispatch already fired — the Action will run regardless.
-      // The risk here is we re-trigger on the next tick (4-5 of them
-      // before the Action completes). Log it loudly so the operator
-      // sees the duplicate runs in GitHub.
-      console.error(
-        `[step5-review] dispatch fired but couldn't stamp Preview Build Triggered At: ${msg}`,
       );
     }
 

@@ -42,6 +42,7 @@ import { z } from "zod";
 import { Resend } from "resend";
 import { getProspectByToken } from "@/lib/notion-prospects";
 import { getServerEnv } from "@/lib/env";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -109,11 +110,20 @@ export async function POST(request: Request) {
   } catch {
     return jsonError(400, "Invalid request body.");
   }
+  const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit("pub-enquiry", ip, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { success: false, error: "Too many requests. Please try again shortly." },
+      { status: 429, headers: { ...corsHeaders(), "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) {
     return jsonError(
       400,
-      parsed.error.issues[0]?.message ?? "Invalid request.",
+      "Please check your input and try again.",
     );
   }
   const { customerToken, name, email, phone, message, hp } = parsed.data;

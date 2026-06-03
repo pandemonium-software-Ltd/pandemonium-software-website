@@ -35,7 +35,7 @@ export async function writeAudit(
     // Graceful degradation: log to stdout so wrangler tail shows it.
     // Ben sees the message and knows to set NOTION_AUDIT_LOG_DB_ID.
     console.log(
-      `[audit:no-db] ${entry.timestamp} ${entry.step} ${entry.result.status} prospect=${entry.prospect.name} (${entry.prospect.token}): ${noteFromResult(entry.result)} (${entry.durationMs}ms)`,
+      `[audit:no-db] ${entry.timestamp} ${entry.step} ${entry.result.status} prospect=${entry.prospect.token.slice(0, 8)} (${entry.prospect.token}): ${noteFromResult(entry.result)} (${entry.durationMs}ms)`,
     );
     return;
   }

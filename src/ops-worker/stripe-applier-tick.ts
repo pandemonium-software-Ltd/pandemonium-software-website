@@ -56,7 +56,7 @@ export async function runStripeApplierTick(args: {
     // pre-Stripe legacy customers fall here.
     if (!prospect.stripeSubscriptionId || !prospect.stripeCustomerId) {
       console.log(
-        `[stripe-applier] ${prospect.name} has ${due.length} pending change(s) but no Stripe subscription — skipped`,
+        `[stripe-applier] ${prospect.token.slice(0, 8)} has ${due.length} pending change(s) but no Stripe subscription — skipped`,
       );
       continue;
     }
@@ -65,13 +65,13 @@ export async function runStripeApplierTick(args: {
         await applyPendingChange(prospect, entry);
         applied += 1;
         console.log(
-          `[stripe-applier] ${prospect.name} — applied ${entry.kind} ${entry.id} (effective ${entry.effectiveDate})`,
+          `[stripe-applier] ${prospect.token.slice(0, 8)} — applied ${entry.kind} ${entry.id} (effective ${entry.effectiveDate})`,
         );
       } catch (e) {
         failed += 1;
         const msg = e instanceof Error ? e.message : String(e);
         console.error(
-          `[stripe-applier] ${prospect.name} — ${entry.id} FAILED: ${msg}`,
+          `[stripe-applier] ${prospect.token.slice(0, 8)} — ${entry.id} FAILED: ${msg}`,
         );
       }
     }

@@ -78,6 +78,25 @@ export type MapsUrlHints = {
  * One HEAD fetch with redirect: "manual" per hop so we can chain
  * up to 3 redirects without burning Workers CPU on a large body.
  */
+/** Allowlist of Google-owned hostnames we accept after resolving a
+ *  short URL. Prevents SSRF — if a redirect lands outside these
+ *  domains we bail and return the original input. */
+const ALLOWED_GOOGLE_HOSTS = [
+  "google.com",
+  "google.co.uk",
+  "maps.google.com",
+  "www.google.com",
+  "www.google.co.uk",
+  "maps.app.goo.gl",
+];
+
+function isAllowedGoogleHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return ALLOWED_GOOGLE_HOSTS.some(
+    (allowed) => h === allowed || h.endsWith(`.${allowed}`),
+  );
+}
+
 export async function resolveMapsShortUrl(raw: string): Promise<string> {
   if (!raw) return raw;
   if (!isMapsShortUrl(raw)) return raw;
@@ -93,6 +112,13 @@ export async function resolveMapsShortUrl(raw: string): Promise<string> {
     if (!loc) return current;
     // Resolve relative redirects against the previous URL.
     current = new URL(loc, current).toString();
+    // SSRF guard: validate the resolved hostname against allowlist.
+    try {
+      const resolved = new URL(current);
+      if (!isAllowedGoogleHost(resolved.hostname)) return raw;
+    } catch {
+      return raw;
+    }
     if (!isMapsShortUrl(current)) return current;
   }
   return current;
@@ -201,17 +227,25 @@ export async function findPlaceByQuery(
       },
     };
   }
-  const res = await fetch("https://places.googleapis.com/v1/places:searchText", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      // Field mask is REQUIRED for Places API v1 — empty mask = 400.
-      // We only need the id from this call.
-      "X-Goog-FieldMask": "places.id",
-    },
-    body: JSON.stringify(body),
-  });
+  const ac = new AbortController();
+  const tid = setTimeout(() => ac.abort(), 10_000);
+  let res: Response;
+  try {
+    res = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        // Field mask is REQUIRED for Places API v1 — empty mask = 400.
+        // We only need the id from this call.
+        "X-Goog-FieldMask": "places.id",
+      },
+      body: JSON.stringify(body),
+      signal: ac.signal,
+    });
+  } finally {
+    clearTimeout(tid);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "(no body)");
     throw new PlacesApiError(
@@ -241,17 +275,25 @@ export async function fetchPlaceDetails(
   apiKey: string,
 ): Promise<PlaceDetailsSnapshot> {
   const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "X-Goog-Api-Key": apiKey,
-      // displayName + formattedAddress are captured so we can prove
-      // we resolved the right listing (admin panel + customer email).
-      // rating + userRatingCount + reviews are the actual payload.
-      "X-Goog-FieldMask":
-        "displayName,formattedAddress,rating,userRatingCount,reviews",
-    },
-  });
+  const ac2 = new AbortController();
+  const tid2 = setTimeout(() => ac2.abort(), 10_000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        // displayName + formattedAddress are captured so we can prove
+        // we resolved the right listing (admin panel + customer email).
+        // rating + userRatingCount + reviews are the actual payload.
+        "X-Goog-FieldMask":
+          "displayName,formattedAddress,rating,userRatingCount,reviews",
+      },
+      signal: ac2.signal,
+    });
+  } finally {
+    clearTimeout(tid2);
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "(no body)");
     throw new PlacesApiError(
@@ -320,11 +362,15 @@ export async function fetchPlaceDetailsForAudit(
   apiKey: string,
 ): Promise<PlaceAuditSnapshot> {
   const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": [
+  const ac3 = new AbortController();
+  const tid3 = setTimeout(() => ac3.abort(), 10_000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": [
         "displayName",
         "formattedAddress",
         "rating",
@@ -339,8 +385,12 @@ export async function fetchPlaceDetailsForAudit(
         "photos",
         "googleMapsUri",
       ].join(","),
-    },
-  });
+      },
+      signal: ac3.signal,
+    });
+  } finally {
+    clearTimeout(tid3);
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "(no body)");
     throw new PlacesApiError(

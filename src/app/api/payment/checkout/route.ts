@@ -34,6 +34,7 @@ import {
 } from "@/lib/stripe";
 import { site } from "@/lib/site";
 import { reportError } from "@/lib/sentry";
+import { requireCustomerSession } from "@/lib/auth/require-customer-session";
 
 export const runtime = "nodejs";
 
@@ -75,6 +76,9 @@ export async function POST(request: Request) {
     );
   }
   const { token, expressRequest } = parsed.data;
+
+  const auth = await requireCustomerSession(request, token);
+  if (!auth.ok) return auth.response;
 
   const prospect = await getProspectByToken(token).catch(() => null);
   if (!prospect) {

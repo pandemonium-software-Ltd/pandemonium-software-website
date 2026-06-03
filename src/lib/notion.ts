@@ -12,6 +12,16 @@ import { getServerEnv } from "./env";
 const NOTION_API_BASE = "https://api.notion.com/v1";
 const NOTION_VERSION = "2022-06-28";
 const TIMEOUT_MS = 8_000;
+const MAX_RETRIES = 2;
+const RETRY_BASE_MS = 500;
+
+function isRetryable(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 export class NotionApiError extends Error {
   status: number;
@@ -36,42 +46,69 @@ export async function notionFetch<T = unknown>(
   init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const env = getServerEnv();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  try {
-    const res = await fetch(`${NOTION_API_BASE}${path}`, {
-      method: init.method ?? "GET",
-      headers: {
-        Authorization: `Bearer ${env.NOTION_API_KEY}`,
-        "Notion-Version": NOTION_VERSION,
-        "Content-Type": "application/json",
-      },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-      signal: controller.signal,
-    });
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    if (!res.ok) {
-      // Notion error responses are JSON: { object: "error", status, code, message }
-      let code: string | undefined;
-      let message = res.statusText;
-      try {
-        const errBody = (await res.json()) as {
-          message?: string;
-          code?: string;
-        };
-        if (errBody?.message) message = errBody.message;
-        if (errBody?.code) code = errBody.code;
-      } catch {
-        // body wasn't JSON — keep the statusText
+    try {
+      const res = await fetch(`${NOTION_API_BASE}${path}`, {
+        method: init.method ?? "GET",
+        headers: {
+          Authorization: `Bearer ${env.NOTION_API_KEY}`,
+          "Notion-Version": NOTION_VERSION,
+          "Content-Type": "application/json",
+        },
+        body: init.body ? JSON.stringify(init.body) : undefined,
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        let code: string | undefined;
+        let message = res.statusText;
+        try {
+          const errBody = (await res.json()) as {
+            message?: string;
+            code?: string;
+          };
+          if (errBody?.message) message = errBody.message;
+          if (errBody?.code) code = errBody.code;
+        } catch {
+          // body wasn't JSON — keep the statusText
+        }
+
+        if (isRetryable(res.status) && attempt < MAX_RETRIES) {
+          const retryAfter = res.headers.get("Retry-After");
+          const delayMs = retryAfter
+            ? Math.min(Number(retryAfter) * 1000, 5000)
+            : RETRY_BASE_MS * 2 ** attempt;
+          console.warn(
+            `[notion] ${res.status} on ${init.method ?? "GET"} ${path} — retry ${attempt + 1}/${MAX_RETRIES} in ${delayMs}ms`,
+          );
+          await sleep(delayMs);
+          continue;
+        }
+
+        throw new NotionApiError(res.status, message, code);
       }
-      throw new NotionApiError(res.status, message, code);
-    }
 
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timeout);
+      return (await res.json()) as T;
+    } catch (e) {
+      if (e instanceof NotionApiError) throw e;
+      if (attempt < MAX_RETRIES && !(e instanceof DOMException)) {
+        console.warn(
+          `[notion] network error on ${init.method ?? "GET"} ${path} — retry ${attempt + 1}/${MAX_RETRIES}`,
+        );
+        await sleep(RETRY_BASE_MS * 2 ** attempt);
+        continue;
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  throw new Error("notionFetch: exhausted retries (unreachable)");
 }
 
 // ---------- Database verification ----------

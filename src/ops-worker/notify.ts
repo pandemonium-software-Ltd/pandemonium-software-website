@@ -40,6 +40,15 @@ import type { ServerEnv } from "../lib/env";
 const FROM_NOTIFICATIONS = "Ben @ ModuForge <ben@modu-forge.co.uk>";
 const FROM_SENDER_EMAIL = "ben@modu-forge.co.uk";
 
+// M-10: Per-tick email cap — prevents a runaway tick from blasting
+// customers with emails (e.g. if a bug causes every prospect to
+// trigger a send). Reset at the start of each tick via resetEmailCounter().
+let emailsSentThisTick = 0;
+const MAX_EMAILS_PER_TICK = 15;
+export function resetEmailCounter(): void {
+  emailsSentThisTick = 0;
+}
+
 /**
  * Sender brand identity used to render the email's HTML header
  * and footer. ModuForge is the default — used for any email about
@@ -94,6 +103,14 @@ export async function sendCustomerEmail(
     senderBrand?: SenderBrand;
   },
 ): Promise<SendResult> {
+  // M-10: Per-tick email cap check
+  if (emailsSentThisTick >= MAX_EMAILS_PER_TICK) {
+    console.warn(
+      `[notify] Per-tick email cap (${MAX_EMAILS_PER_TICK}) reached — skipping '${templateId}' to ${recipientEmail}`,
+    );
+    return { messageId: "(skipped — email cap reached)" };
+  }
+
   const template = getTemplate(templateId);
   const rendered = renderTemplate(template, values);
   const senderBrand: SenderBrand = options?.senderBrand ?? { kind: "moduforge" };
@@ -142,21 +159,29 @@ export async function sendCustomerEmail(
     senderBrand.kind === "customer" && senderBrand.replyTo
       ? senderBrand.replyTo
       : opsEmail;
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: fromHeader,
-      to: recipientEmail,
-      reply_to: replyTo,
-      subject: rendered.subject,
-      text,
-      html,
-    }),
-  });
+  const ac = new AbortController();
+  const timeoutId = setTimeout(() => ac.abort(), 10_000);
+  let res: Response;
+  try {
+    res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromHeader,
+        to: recipientEmail,
+        reply_to: replyTo,
+        subject: rendered.subject,
+        text,
+        html,
+      }),
+      signal: ac.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => "(no body)");
@@ -166,6 +191,7 @@ export async function sendCustomerEmail(
   }
 
   const json = (await res.json().catch(() => ({}))) as { id?: string };
+  emailsSentThisTick += 1;
   return { messageId: json.id ?? "(no id)" };
 }
 

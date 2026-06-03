@@ -30,6 +30,7 @@
 //      to onboarding, skipping the /payment placeholder
 
 import { NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import {
   phase3Schema,
   phase3PartialSchema,
@@ -90,6 +91,15 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "Invalid request body." },
       { status: 400 },
+    );
+  }
+
+  const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit("intake", ip, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } },
     );
   }
 

@@ -23,6 +23,7 @@
 // case email delivery is delayed.
 
 import { NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { phase2Schema, type Phase1Data } from "@/lib/schemas";
 import {
   getProspectByToken,
@@ -83,6 +84,15 @@ export async function POST(request: Request) {
     );
   }
 
+  const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit("qualify", ip, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   const token = typeof raw.token === "string" ? raw.token : "";
   if (!TOKEN_RE.test(token)) {
     return NextResponse.json(
@@ -100,11 +110,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Some of your answers didn't validate. Please review and try again.",
-        issues: parsed.error.issues.map((i) => ({
-          path: i.path.join("."),
-          message: i.message,
-        })),
+          "Please check your input and try again.",
       },
       { status: 400 },
     );

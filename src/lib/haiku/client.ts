@@ -43,7 +43,7 @@ function getClient(): Anthropic | null {
     return null;
   }
   if (!apiKey) return null;
-  cachedClient = new Anthropic({ apiKey });
+  cachedClient = new Anthropic({ apiKey, timeout: 15_000 });
   return cachedClient;
 }
 

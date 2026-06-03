@@ -157,10 +157,7 @@ function addPreviewHeaders(res: NextResponse): void {
     "Content-Security-Policy",
     "frame-ancestors https://modu-forge.co.uk https://*.modu-forge.co.uk",
   );
-  res.headers.set(
-    "X-Frame-Options",
-    "ALLOW-FROM https://modu-forge.co.uk",
-  );
+  res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Robots-Tag", "noindex, nofollow");
 }
 

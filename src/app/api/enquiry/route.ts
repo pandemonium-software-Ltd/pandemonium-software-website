@@ -14,6 +14,7 @@
 // the customer's email + Ben's notification.
 
 import { NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { phase1Schema } from "@/lib/schemas";
 import { createProspect } from "@/lib/notion-prospects";
 import {
@@ -43,6 +44,15 @@ export async function POST(request: Request) {
     );
   }
 
+  const ip = request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const rl = checkRateLimit("enquiry", ip, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many requests. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } },
+    );
+  }
+
   // Honeypot check — silently accept-and-discard so bots don't learn.
   if (typeof raw.company_website === "string" && raw.company_website.length > 0) {
     return NextResponse.json({ success: true });
@@ -53,11 +63,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Some details didn't validate. Please check the form and try again.",
-        issues: parsed.error.issues.map((i) => ({
-          path: i.path.join("."),
-          message: i.message,
-        })),
+          "Please check your input and try again.",
       },
       { status: 400 },
     );

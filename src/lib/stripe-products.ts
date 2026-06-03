@@ -1,3 +1,4 @@
+// TODO(go-live): Create live price ID mapping and switch by STRIPE_MODE env var
 // Stripe product + price IDs — SANDBOX (acct_1TEXIxDbGtXpxoDr).
 //
 // Created via the Stripe MCP on 2026-05-25 against the sandbox

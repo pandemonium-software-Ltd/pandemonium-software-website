@@ -124,7 +124,7 @@ export async function runGbpAuditTick(): Promise<void> {
       }
     } catch (e) {
       const msg = e instanceof PlacesApiError ? e.message : String(e);
-      console.error(`[gbp-audit:${tickId}] ${prospect.name} — ${msg}`);
+      console.error(`[gbp-audit:${tickId}] ${prospect.token.slice(0, 8)} — ${msg}`);
       reports.push(`## ${biz}\n\n❌ Audit failed: ${msg}`);
       failed++;
     }

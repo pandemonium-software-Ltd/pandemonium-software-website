@@ -25,7 +25,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifySession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 const REALM = "Pandemonium Admin";
-const ADMIN_USER = "ben";
+const ADMIN_USER = process.env.ADMIN_USER ?? "ben";
+
+const adminFailures = new Map<string, { count: number; resetAt: number }>();
 
 const TOKEN_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -123,6 +125,21 @@ function adminBasicAuth(req: NextRequest): Response | undefined {
     );
   }
   if (user !== ADMIN_USER || !timingSafeEqual(pass, expected)) {
+    const ip = req.headers.get("cf-connecting-ip") ?? req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+    const now = Date.now();
+    const entry = adminFailures.get(ip);
+    if (entry && now < entry.resetAt) {
+      entry.count++;
+      if (entry.count > 5) {
+        const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+        return new Response("Too many failed attempts. Try again later.", {
+          status: 429,
+          headers: { "Retry-After": String(retryAfter), "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+    } else {
+      adminFailures.set(ip, { count: 1, resetAt: now + 5 * 60_000 });
+    }
     return basicAuthUnauthorised();
   }
   return undefined; // means "let through" — caller `return NextResponse.next()`

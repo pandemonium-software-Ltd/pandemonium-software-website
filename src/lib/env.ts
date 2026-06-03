@@ -16,7 +16,9 @@ const serverEnvSchema = z.object({
   NOTION_PROSPECTS_DB_ID: z
     .string()
     .min(1, "NOTION_PROSPECTS_DB_ID is required"),
+  // Unused at runtime — retained for admin DB verification only
   NOTION_CLIENTS_DB_ID: z.string().optional(),
+  // Unused at runtime — retained for admin DB verification only
   NOTION_ASSETS_DB_ID: z.string().optional(),
   NOTION_EXCEPTIONS_DB_ID: z.string().optional(),
   // Cowork Ops audit log — Stage 2C C1. Each Step result (per
