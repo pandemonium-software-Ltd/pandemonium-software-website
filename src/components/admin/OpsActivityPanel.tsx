@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import type { OpsException, OpsAuditEntry, PendingAdminAction } from "@/lib/notion-ops";
 import ResolveExceptionButton from "./ResolveExceptionButton";
@@ -23,6 +24,99 @@ export default function OpsActivityPanel({
 }: Props) {
   const totalAttention = pendingActions.length + unresolvedCount;
 
+  // Multi-select state
+  const [selectedPending, setSelectedPending] = useState<Set<string>>(new Set());
+  const [selectedIncidents, setSelectedIncidents] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ ok: number; fail: number } | null>(null);
+
+  const togglePending = useCallback((id: string) => {
+    setSelectedPending((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAllPending = useCallback(() => {
+    setSelectedPending((prev) =>
+      prev.size === pendingActions.length
+        ? new Set()
+        : new Set(pendingActions.map((a) => a.id)),
+    );
+  }, [pendingActions]);
+
+  const toggleIncident = useCallback((id: string) => {
+    setSelectedIncidents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAllIncidents = useCallback(() => {
+    setSelectedIncidents((prev) =>
+      prev.size === exceptions.length
+        ? new Set()
+        : new Set(exceptions.map((e) => e.id)),
+    );
+  }, [exceptions]);
+
+  async function bulkRetryPending() {
+    const items = pendingActions.filter((a) => selectedPending.has(a.id));
+    if (items.length === 0) return;
+    setBulkBusy(true);
+    setBulkResult(null);
+    let ok = 0;
+    let fail = 0;
+    for (const a of items) {
+      try {
+        const res = await fetch("/api/admin/cowork-retry", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: a.prospectToken,
+            itemId: a.id,
+            itemKind: a.type === "change-request" ? "cr" : "re",
+          }),
+        });
+        if (res.ok) ok++; else fail++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkResult({ ok, fail });
+    setBulkBusy(false);
+    if (fail === 0) setSelectedPending(new Set());
+  }
+
+  async function bulkResolveIncidents() {
+    const items = exceptions.filter((e) => selectedIncidents.has(e.id));
+    if (items.length === 0) return;
+    setBulkBusy(true);
+    setBulkResult(null);
+    let ok = 0;
+    let fail = 0;
+    for (const ex of items) {
+      try {
+        const res = await fetch("/api/admin/resolve-exception", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            exceptionId: ex.id,
+            resolutionNotes: "Bulk resolved from dashboard",
+          }),
+        });
+        if (res.ok) ok++; else fail++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkResult({ ok, fail });
+    setBulkBusy(false);
+    if (fail === 0) setSelectedIncidents(new Set());
+  }
+
   return (
     <details className="group scroll-mt-24 rounded-2xl bg-white p-6 shadow-card md:p-7 [&_summary::-webkit-details-marker]:hidden [&_summary]:list-none" open={totalAttention > 0}>
       <summary className="flex cursor-pointer select-none items-center justify-between gap-3">
@@ -44,34 +138,73 @@ export default function OpsActivityPanel({
       </summary>
 
       <div className="mt-5">
+        {/* Bulk result banner */}
+        {bulkResult && (
+          <div className={`mb-4 rounded-lg px-4 py-2 text-xs font-semibold ${bulkResult.fail === 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+            Bulk action: {bulkResult.ok} succeeded{bulkResult.fail > 0 ? `, ${bulkResult.fail} failed` : ""}
+          </div>
+        )}
+
         {/* Pending admin actions */}
         {pendingActions.length > 0 && (
           <>
-            <h3 className="text-sm font-semibold text-amber-900">
-              Requires your action
-              <span className="ml-2 text-xs font-normal text-amber-700">
-                {pendingActions.length} pending
-              </span>
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-amber-900">
+                Requires your action
+                <span className="ml-2 text-xs font-normal text-amber-700">
+                  {pendingActions.length} pending
+                </span>
+              </h3>
+              {selectedPending.size > 0 && (
+                <button
+                  type="button"
+                  onClick={bulkRetryPending}
+                  disabled={bulkBusy}
+                  className="rounded-md bg-amber-600 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {bulkBusy ? "Retrying..." : `Retry ${selectedPending.size} selected`}
+                </button>
+              )}
+            </div>
             <div className="mt-2 divide-y divide-amber-100 rounded-lg border border-amber-200 bg-amber-50/50">
+              {/* Select all header */}
+              <div className="flex items-center gap-3 px-4 py-2">
+                <input
+                  type="checkbox"
+                  checked={selectedPending.size === pendingActions.length && pendingActions.length > 0}
+                  onChange={toggleAllPending}
+                  className="h-3.5 w-3.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600">
+                  {selectedPending.size > 0 ? `${selectedPending.size} selected` : "Select all"}
+                </span>
+              </div>
               {pendingActions.map((a) => (
-                <div key={a.id} className="px-4 py-3">
+                <div key={a.id} className={`px-4 py-3 ${selectedPending.has(a.id) ? "bg-amber-100/60" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${a.type === "change-request" ? "bg-amber-200 text-amber-900" : "bg-navy-100 text-navy-700"}`}>
-                          {a.type === "change-request" ? "Change req" : "Review edit"}
-                        </span>
-                        <Link
-                          href={`/admin/${a.prospectToken}#${a.type === "change-request" ? "cr" : "re"}-${a.id.slice(0, 8)}`}
-                          className="truncate text-sm font-medium text-navy-900 underline hover:text-amber-700"
-                        >
-                          {a.prospectName}
-                        </Link>
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedPending.has(a.id)}
+                        onChange={() => togglePending(a.id)}
+                        className="mt-0.5 h-3.5 w-3.5 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold ${a.type === "change-request" ? "bg-amber-200 text-amber-900" : "bg-navy-100 text-navy-700"}`}>
+                            {a.type === "change-request" ? "Change req" : "Review edit"}
+                          </span>
+                          <Link
+                            href={`/admin/${a.prospectToken}#${a.type === "change-request" ? "cr" : "re"}-${a.id.slice(0, 8)}`}
+                            className="truncate text-sm font-medium text-navy-900 underline hover:text-amber-700"
+                          >
+                            {a.prospectName}
+                          </Link>
+                        </div>
+                        <p className="mt-0.5 truncate text-xs text-navy-600">
+                          {a.message}
+                        </p>
                       </div>
-                      <p className="mt-0.5 truncate text-xs text-navy-600">
-                        {a.message}
-                      </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {a.type === "change-request" && (
@@ -99,31 +232,63 @@ export default function OpsActivityPanel({
         )}
 
         {/* Unresolved incidents */}
-        <h3 className={`text-sm font-semibold text-navy-900 ${pendingActions.length > 0 ? "mt-6" : ""}`}>
-          Open incidents
-          {unresolvedCount > 0 && (
-            <span className="ml-2 text-xs font-normal text-red-700">
-              {unresolvedCount} unresolved
-            </span>
+        <div className={`flex items-center justify-between ${pendingActions.length > 0 ? "mt-6" : ""}`}>
+          <h3 className="text-sm font-semibold text-navy-900">
+            Open incidents
+            {unresolvedCount > 0 && (
+              <span className="ml-2 text-xs font-normal text-red-700">
+                {unresolvedCount} unresolved
+              </span>
+            )}
+          </h3>
+          {selectedIncidents.size > 0 && (
+            <button
+              type="button"
+              onClick={bulkResolveIncidents}
+              disabled={bulkBusy}
+              className="rounded-md bg-green-600 px-3 py-1 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {bulkBusy ? "Resolving..." : `Resolve ${selectedIncidents.size} selected`}
+            </button>
           )}
-        </h3>
+        </div>
         {exceptions.length === 0 ? (
           <p className="mt-2 text-xs text-navy-500">No open incidents.</p>
         ) : (
           <div className="mt-2 divide-y divide-navy-100">
+            {/* Select all header */}
+            <div className="flex items-center gap-3 py-2">
+              <input
+                type="checkbox"
+                checked={selectedIncidents.size === exceptions.length && exceptions.length > 0}
+                onChange={toggleAllIncidents}
+                className="h-3.5 w-3.5 rounded border-navy-300 text-green-600 focus:ring-green-500"
+              />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-navy-500">
+                {selectedIncidents.size > 0 ? `${selectedIncidents.size} selected` : "Select all"}
+              </span>
+            </div>
             {exceptions.map((ex) => (
-              <div key={ex.id} className="py-2.5 first:pt-0 last:pb-0">
+              <div key={ex.id} className={`py-2.5 ${selectedIncidents.has(ex.id) ? "bg-green-50/50" : ""}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <StepBadge step={ex.step} />
-                      <span className="truncate text-sm font-medium text-navy-900">
-                        {ex.prospectName}
-                      </span>
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIncidents.has(ex.id)}
+                      onChange={() => toggleIncident(ex.id)}
+                      className="mt-0.5 h-3.5 w-3.5 rounded border-navy-300 text-green-600 focus:ring-green-500"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <StepBadge step={ex.step} />
+                        <span className="truncate text-sm font-medium text-navy-900">
+                          {ex.prospectName}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-navy-600">
+                        {ex.errorMessage}
+                      </p>
                     </div>
-                    <p className="mt-0.5 truncate text-xs text-navy-600">
-                      {ex.errorMessage}
-                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <ResolveExceptionButton exceptionId={ex.id} />
