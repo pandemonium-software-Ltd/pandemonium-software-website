@@ -53,7 +53,6 @@ export async function GET(
   // their name/business in the header.
   return NextResponse.json({
     name: prospect.name,
-    email: prospect.email,
     business: prospect.business,
     businessType: prospect.businessType,
     status: prospect.status,
