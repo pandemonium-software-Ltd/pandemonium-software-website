@@ -1,0 +1,136 @@
+name: Security & health check
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Every Monday at 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    name: Audit + typecheck + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (production)
+        id: audit
+        continue-on-error: true
+        run: |
+          set +e
+          OUTPUT=$(npm audit --omit=dev --json 2>&1)
+          EXIT_CODE=$?
+          echo "$OUTPUT" > audit-results.json
+
+          # Count HIGH + CRITICAL
+          HIGH=$(echo "$OUTPUT" | jq '[.vulnerabilities // {} | to_entries[] | select(.value.severity == "high")] | length' 2>/dev/null || echo 0)
+          CRITICAL=$(echo "$OUTPUT" | jq '[.vulnerabilities // {} | to_entries[] | select(.value.severity == "critical")] | length' 2>/dev/null || echo 0)
+          TOTAL=$((HIGH + CRITICAL))
+
+          echo "high=$HIGH" >> "$GITHUB_OUTPUT"
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "total_high_critical=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+          elif [ "$HIGH" -gt 0 ]; then
+            echo "status=warn" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=pass" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: TypeScript typecheck
+        id: typecheck
+        continue-on-error: true
+        run: |
+          set +e
+          npx tsc --noEmit 2>&1
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "status=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run test suite
+        id: tests
+        continue-on-error: true
+        run: |
+          set +e
+          RESULT=$(npm test 2>&1)
+          EXIT_CODE=$?
+          echo "$RESULT"
+
+          PASSED=$(echo "$RESULT" | grep -oP '\d+ passed' | grep -oP '\d+' || echo 0)
+          FAILED=$(echo "$RESULT" | grep -oP '\d+ failed' | grep -oP '\d+' || echo 0)
+
+          echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
+          echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "status=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "status=fail" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check outdated packages
+        id: outdated
+        continue-on-error: true
+        run: |
+          set +e
+          OUTPUT=$(npm outdated --json 2>&1)
+          MAJOR=$(echo "$OUTPUT" | jq '[to_entries[] | select(.value.current != .value.latest) | select((.value.current | split(".")[0]) != (.value.latest | split(".")[0]))] | length' 2>/dev/null || echo 0)
+          echo "major_outdated=$MAJOR" >> "$GITHUB_OUTPUT"
+
+      - name: Post results to admin dashboard
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        env:
+          CALLBACK_URL: ${{ secrets.SITE_URL }}/api/internal/health-callback
+          CALLBACK_SECRET: ${{ secrets.INTERNAL_BUILD_SECRET }}
+        run: |
+          curl -sf -X POST "$CALLBACK_URL" \
+            -H "Content-Type: application/json" \
+            -H "x-internal-secret: $CALLBACK_SECRET" \
+            -d '{
+              "checks": {
+                "npm_audit": {
+                  "status": "${{ steps.audit.outputs.status }}",
+                  "high": ${{ steps.audit.outputs.high }},
+                  "critical": ${{ steps.audit.outputs.critical }}
+                },
+                "typecheck": {
+                  "status": "${{ steps.typecheck.outputs.status }}"
+                },
+                "tests": {
+                  "status": "${{ steps.tests.outputs.status }}",
+                  "passed": ${{ steps.tests.outputs.passed }},
+                  "failed": ${{ steps.tests.outputs.failed }}
+                },
+                "outdated": {
+                  "major_behind": ${{ steps.outdated.outputs.major_outdated }}
+                }
+              }
+            }'
+
+      - name: Fail on critical issues
+        if: steps.audit.outputs.critical != '0' || steps.typecheck.outputs.status == 'fail' || steps.tests.outputs.status == 'fail'
+        run: |
+          echo "::error::Security check failed:"
+          echo "  npm audit critical: ${{ steps.audit.outputs.critical }}"
+          echo "  typecheck: ${{ steps.typecheck.outputs.status }}"
+          echo "  tests: ${{ steps.tests.outputs.status }}"
+          exit 1

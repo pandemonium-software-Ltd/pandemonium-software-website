@@ -9,6 +9,7 @@ import SentryAlertsPanel from "@/components/admin/SentryAlertsPanel";
 import BuildMonitorPanel from "@/components/admin/BuildMonitorPanel";
 import CustomerInsightPanel from "@/components/admin/CustomerInsightPanel";
 import RunMonitorPanel from "@/components/admin/RunMonitorPanel";
+import BusinessHealthPanel from "@/components/admin/BusinessHealthPanel";
 import OpsActivityPanel from "@/components/admin/OpsActivityPanel";
 import {
   listSentryAlerts,
@@ -31,9 +32,11 @@ import {
   computeBuildMetrics,
   computeInsightMetrics,
   computeRunMetrics,
+  computeBusinessHealth,
   cronHealthStatus,
   type CronHealthEntry,
   type GbpIssue,
+  type HealthCheckRow,
 } from "@/lib/admin-metrics";
 
 export const metadata: Metadata = {
@@ -62,6 +65,7 @@ export default async function AdminPage() {
   let analyticsLastRan: string | null = null;
   let gbpLastFetched: string | null = null;
   let gbpIssues: GbpIssue[] = [];
+  let healthCheckRows: HealthCheckRow[] = [];
 
   try {
     const cfCtx = getCloudflareContext();
@@ -70,7 +74,7 @@ export default async function AdminPage() {
     };
     const d1 = cfEnv.pandemonium_analytics;
     if (d1) {
-      const [alerts, openCount, resolvedAlerts, analyticsRow, gbpFreshness, gbpErrors] =
+      const [alerts, openCount, resolvedAlerts, analyticsRow, gbpFreshness, gbpErrors, healthRows] =
         await Promise.all([
           listSentryAlerts(d1, { status: "open", limit: 20 }),
           countOpenSentryAlerts(d1),
@@ -90,6 +94,16 @@ export default async function AdminPage() {
               `SELECT token, last_error, fetched_at FROM gbp_reviews WHERE last_error IS NOT NULL`,
             )
             .all<{ token: string; last_error: string; fetched_at: string }>(),
+          d1
+            .prepare(
+              `SELECT check_type, check_key, status, detail, checked_at
+               FROM business_health_checks
+               ORDER BY checked_at DESC
+               LIMIT 100`,
+            )
+            .all<HealthCheckRow>()
+            .then((r) => r.results ?? [])
+            .catch(() => [] as HealthCheckRow[]),
         ]);
 
       sentryAlerts = alerts;
@@ -100,6 +114,7 @@ export default async function AdminPage() {
 
       const gbpErrorRows = gbpErrors.results ?? [];
       const prospectMap = new Map(prospects.map((p) => [p.token, p]));
+      healthCheckRows = healthRows;
       gbpIssues = gbpErrorRows.map((r) => ({
         token: r.token,
         name: prospectMap.get(r.token)?.name ?? r.token,
@@ -208,6 +223,8 @@ export default async function AdminPage() {
     sentryResolvedCount,
   );
 
+  const businessHealth = computeBusinessHealth(prospects, healthCheckRows);
+
   return (
     <section className="bg-white py-10 md:py-14">
       <div className="container-content">
@@ -308,6 +325,7 @@ export default async function AdminPage() {
           <BuildMonitorPanel metrics={buildMetrics} />
           <CustomerInsightPanel metrics={insightMetrics} />
           <RunMonitorPanel metrics={runMetrics} />
+          <BusinessHealthPanel health={businessHealth} />
         </div>
 
         {/* Marketing-site analytics */}

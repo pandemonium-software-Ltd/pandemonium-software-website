@@ -445,6 +445,190 @@ export function computeRunMetrics(
   };
 }
 
+// --------------- Business Health ---------------
+
+export type SecretHealth = {
+  key: string;
+  lastRotated: string;
+  daysAgo: number;
+  status: "ok" | "warn" | "error";
+};
+
+export type GdprHealth = {
+  activeDataSubjects: number;
+  pendingScrubs: { token: string; name: string; retentionUntil: string; daysUntil: number }[];
+  overdueScrubs: { token: string; name: string; retentionUntil: string; daysOverdue: number }[];
+  completedScrubs: number;
+};
+
+export type CiHealth = {
+  lastRan: string | null;
+  status: "pass" | "warn" | "fail" | "unknown";
+  npmAudit: { status: string; high: number; critical: number } | null;
+  typecheck: { status: string } | null;
+  tests: { status: string; passed: number; failed: number } | null;
+  majorOutdated: number;
+};
+
+export type AuditHealth = {
+  lastAuditDate: string | null;
+  daysSinceAudit: number | null;
+  status: "ok" | "warn" | "error";
+  findings: number;
+  fixed: number;
+  accepted: number;
+};
+
+export type BusinessHealth = {
+  gdpr: GdprHealth;
+  ci: CiHealth;
+  audit: AuditHealth;
+  secrets: SecretHealth[];
+  overallStatus: "ok" | "warn" | "error";
+};
+
+export type HealthCheckRow = {
+  check_type: string;
+  check_key: string;
+  status: string;
+  detail: string | null;
+  checked_at: string;
+};
+
+export function computeBusinessHealth(
+  prospects: ProspectRecord[],
+  healthRows: HealthCheckRow[],
+): BusinessHealth {
+  const now = new Date();
+
+  // --- GDPR ---
+  let activeDataSubjects = 0;
+  let completedScrubs = 0;
+  const pendingScrubs: GdprHealth["pendingScrubs"] = [];
+  const overdueScrubs: GdprHealth["overdueScrubs"] = [];
+
+  for (const p of prospects) {
+    if (p.dataScrubbedAt) {
+      completedScrubs++;
+      continue;
+    }
+    if (p.status !== "Cancelled") {
+      activeDataSubjects++;
+      continue;
+    }
+    if (p.dataRetentionUntil) {
+      const retDate = new Date(p.dataRetentionUntil);
+      const diffDays = Math.ceil((retDate.getTime() - now.getTime()) / 86_400_000);
+      if (diffDays < 0) {
+        overdueScrubs.push({ token: p.token, name: p.name, retentionUntil: p.dataRetentionUntil, daysOverdue: Math.abs(diffDays) });
+      } else {
+        pendingScrubs.push({ token: p.token, name: p.name, retentionUntil: p.dataRetentionUntil, daysUntil: diffDays });
+      }
+    }
+  }
+
+  // --- CI ---
+  const latestCi = healthRows
+    .filter((r) => r.check_type === "ci_run")
+    .sort((a, b) => b.checked_at.localeCompare(a.checked_at))[0];
+
+  let ciHealth: CiHealth = {
+    lastRan: null,
+    status: "unknown",
+    npmAudit: null,
+    typecheck: null,
+    tests: null,
+    majorOutdated: 0,
+  };
+
+  if (latestCi) {
+    let detail: Record<string, unknown> = {};
+    try { detail = JSON.parse(latestCi.detail ?? "{}"); } catch { /* */ }
+    const npm = detail.npm_audit as { status?: string; high?: number; critical?: number } | undefined;
+    const tc = detail.typecheck as { status?: string } | undefined;
+    const tests = detail.tests as { status?: string; passed?: number; failed?: number } | undefined;
+    const outdated = detail.outdated as { major_behind?: number } | undefined;
+
+    ciHealth = {
+      lastRan: latestCi.checked_at,
+      status: latestCi.status as CiHealth["status"],
+      npmAudit: npm ? { status: npm.status ?? "unknown", high: npm.high ?? 0, critical: npm.critical ?? 0 } : null,
+      typecheck: tc ? { status: tc.status ?? "unknown" } : null,
+      tests: tests ? { status: tests.status ?? "unknown", passed: tests.passed ?? 0, failed: tests.failed ?? 0 } : null,
+      majorOutdated: outdated?.major_behind ?? 0,
+    };
+  }
+
+  // --- Security audit ---
+  const latestAudit = healthRows
+    .filter((r) => r.check_type === "security_audit")
+    .sort((a, b) => b.checked_at.localeCompare(a.checked_at))[0];
+
+  let auditHealth: AuditHealth = {
+    lastAuditDate: null, daysSinceAudit: null,
+    status: "error", findings: 0, fixed: 0, accepted: 0,
+  };
+
+  if (latestAudit) {
+    const days = daysBetween(latestAudit.checked_at, now);
+    let detail: Record<string, number> = {};
+    try { detail = JSON.parse(latestAudit.detail ?? "{}"); } catch { /* */ }
+    auditHealth = {
+      lastAuditDate: latestAudit.checked_at,
+      daysSinceAudit: days,
+      status: days < 95 ? "ok" : days < 180 ? "warn" : "error",
+      findings: detail.findings ?? 0,
+      fixed: detail.fixed ?? 0,
+      accepted: detail.accepted ?? 0,
+    };
+  }
+
+  // --- Secrets ---
+  const SECRET_KEYS = [
+    "NOTION_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+    "RESEND_API_KEY", "SESSION_SECRET", "INTERNAL_BUILD_SECRET", "GITHUB_TOKEN",
+  ];
+  const secretMap = new Map<string, HealthCheckRow>();
+  for (const r of healthRows) {
+    if (r.check_type !== "secret_rotation") continue;
+    const existing = secretMap.get(r.check_key);
+    if (!existing || r.checked_at > existing.checked_at) {
+      secretMap.set(r.check_key, r);
+    }
+  }
+  const secrets: SecretHealth[] = SECRET_KEYS.map((key) => {
+    const row = secretMap.get(key);
+    if (!row) return { key, lastRotated: "unknown", daysAgo: 999, status: "error" as const };
+    const days = daysBetween(row.checked_at, now);
+    return {
+      key,
+      lastRotated: row.checked_at,
+      daysAgo: days,
+      status: days < 180 ? "ok" as const : days < 365 ? "warn" as const : "error" as const,
+    };
+  });
+
+  // --- Overall ---
+  const hasError =
+    overdueScrubs.length > 0 ||
+    ciHealth.status === "fail" ||
+    auditHealth.status === "error" ||
+    secrets.some((s) => s.status === "error");
+  const hasWarn =
+    pendingScrubs.some((s) => s.daysUntil < 7) ||
+    ciHealth.status === "warn" ||
+    auditHealth.status === "warn" ||
+    secrets.some((s) => s.status === "warn");
+
+  return {
+    gdpr: { activeDataSubjects, pendingScrubs, overdueScrubs, completedScrubs },
+    ci: ciHealth,
+    audit: auditHealth,
+    secrets,
+    overallStatus: hasError ? "error" : hasWarn ? "warn" : "ok",
+  };
+}
+
 // --------------- cronHealthStatus ---------------
 
 export function cronHealthStatus(

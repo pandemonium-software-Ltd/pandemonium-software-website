@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      # Bundle minor/patch bumps into a single PR per group to reduce noise.
+      stripe:
+        patterns: ["stripe", "@stripe/*"]
+      resend:
+        patterns: ["resend"]
+      next:
+        patterns: ["next", "@next/*", "eslint-config-next"]
+      cloudflare:
+        patterns: ["wrangler", "@cloudflare/*", "@opennextjs/*"]
+      expo-tools:
+        patterns: ["expo", "expo-*"]
+      testing:
+        patterns: ["vitest", "@vitest/*", "playwright", "@playwright/*"]
+      types:
+        patterns: ["@types/*"]
+    ignore:
+      # Don't auto-PR major version bumps — those need manual migration.
+      # Dependabot will still flag them in the security tab.
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "stripe"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "resend"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
