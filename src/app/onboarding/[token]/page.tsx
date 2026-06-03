@@ -27,6 +27,7 @@ import OnboardingHub from "@/components/OnboardingHub";
 import { canChangeModules } from "@/lib/billing/module-policy";
 import { effectiveMonthlyCap } from "@/lib/admin-grants";
 import { site } from "@/lib/site";
+import { getTutorialVideos } from "@/lib/onboarding-guides";
 
 export const metadata: Metadata = {
   title: "Onboarding Hub",
@@ -233,6 +234,7 @@ export default async function OnboardingPage({
         kind: "reviewEdits",
       })}
       siteData={siteData}
+      tutorialVideos={getTutorialVideos(r2PublicUrlBase)}
     />
   );
 }

@@ -34,6 +34,7 @@ import Step4Assets from "@/components/onboarding/Step4Assets";
 import Step5Review from "@/components/onboarding/Step5Review";
 import type { ChangeEligibility } from "@/lib/billing/module-policy";
 import type { ModuleChangeLogEntry } from "@/lib/notion-prospects";
+import type { VideoTutorialConfig } from "@/lib/onboarding-guides";
 
 export type OnboardingHubProps = {
   token: string;
@@ -85,6 +86,9 @@ export type OnboardingHubProps = {
    *  whole section. */
   extraLocations: number;
   reviewEditCap?: number;
+  /** Tutorial video configs — keyed by video slug. Empty object when
+   *  R2 base isn't configured or no videos uploaded yet. */
+  tutorialVideos?: Record<string, VideoTutorialConfig>;
   siteData?: {
     phoneDisplay: string;
     phoneTel: string;
@@ -460,6 +464,7 @@ export default function OnboardingHub(props: OnboardingHubProps) {
                     focusModule={searchParams?.get("focus") ?? undefined}
                     reviewEditCap={props.reviewEditCap}
                     siteData={props.siteData}
+                    tutorialVideos={props.tutorialVideos}
                   />
                 </>
               )}
@@ -495,6 +500,7 @@ function StepRenderer({
   focusModule,
   reviewEditCap,
   siteData,
+  tutorialVideos,
 }: {
   step: StepDef;
   data: OnboardingData;
@@ -527,6 +533,7 @@ function StepRenderer({
   focusModule?: string;
   reviewEditCap?: number;
   siteData?: OnboardingHubProps["siteData"];
+  tutorialVideos?: Record<string, VideoTutorialConfig>;
 }) {
   const slice = (data[step.id] ?? {}) as Record<string, unknown>;
   const done = doneFlags[step.id];
@@ -541,6 +548,7 @@ function StepRenderer({
           benEmail={benEmail}
           savePartial={(patch) => savePartial("cloudflare", patch)}
           markDone={(patch) => markDone("cloudflare", patch)}
+          video={tutorialVideos?.["cloudflare-signup"]}
         />
       );
     case "domain":
@@ -553,6 +561,7 @@ function StepRenderer({
           customerConfirmedNameserversAt={customerConfirmedNameserversAt}
           savePartial={(patch) => savePartial("domain", patch)}
           markDone={(patch) => markDone("domain", patch)}
+          videos={tutorialVideos}
         />
       );
     case "tools": {
@@ -584,6 +593,7 @@ function StepRenderer({
           markDone={(patch) => markDone("tools", patch)}
           saveContentPartial={(patch) => savePartial("content", patch)}
           focusModule={focusModule}
+          gbpVideos={tutorialVideos}
         />
       );
     }

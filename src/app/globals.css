@@ -126,6 +126,42 @@ body {
   @apply font-semibold text-navy-900;
 }
 
+/* driver.js guide popover — match ModuForge design system */
+.moduforge-guide-popover {
+  font-family: var(--font-sans) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+}
+.moduforge-guide-popover .driver-popover-title {
+  font-family: var(--font-serif) !important;
+  font-weight: 600 !important;
+  font-size: 1rem !important;
+}
+.moduforge-guide-popover .driver-popover-description {
+  font-size: 0.875rem !important;
+  line-height: 1.6 !important;
+  color: theme("colors.navy.700") !important;
+}
+.moduforge-guide-popover .driver-popover-progress-text {
+  font-size: 0.65rem !important;
+  color: theme("colors.navy.400") !important;
+}
+.moduforge-guide-popover .driver-popover-next-btn,
+.moduforge-guide-popover .driver-popover-prev-btn {
+  border-radius: 0.5rem !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  padding: 0.375rem 0.75rem !important;
+}
+.moduforge-guide-popover .driver-popover-next-btn {
+  background: theme("colors.navy.900") !important;
+  color: white !important;
+}
+.moduforge-guide-popover .driver-popover-prev-btn {
+  color: theme("colors.navy.600") !important;
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   *,

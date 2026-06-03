@@ -18,6 +18,9 @@
 // own dashboard.
 
 import { useState } from "react";
+import StepGuideButton from "./StepGuide";
+import VideoTutorial from "./VideoTutorial";
+import { STEP1_GUIDE, type VideoTutorialConfig } from "@/lib/onboarding-guides";
 
 type Props = {
   data: Record<string, unknown>;
@@ -27,6 +30,8 @@ type Props = {
   benEmail: string;
   savePartial: (patch: Record<string, unknown>) => Promise<boolean>;
   markDone: (patch: Record<string, unknown>) => Promise<boolean>;
+  /** Video tutorial config — undefined if R2 base not configured. */
+  video?: VideoTutorialConfig;
 };
 
 const SIGNUP_URL = "https://dash.cloudflare.com/sign-up";
@@ -40,6 +45,7 @@ export default function Step1Cloudflare({
   benEmail,
   savePartial,
   markDone,
+  video,
 }: Props) {
   const initialEmail =
     typeof data.cloudflareEmail === "string" ? data.cloudflareEmail : "";
@@ -141,9 +147,12 @@ export default function Step1Cloudflare({
           Then you&apos;ll add me as a team member so I can deploy your
           site to it.
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <StepGuideButton steps={STEP1_GUIDE} label="Walk me through it" />
+        </div>
       </header>
 
-      <section className="mt-7">
+      <section className="mt-7" data-guide="step1-instructions">
         <h3 className="font-serif text-lg font-semibold text-navy-900">
           What to do
         </h3>
@@ -199,11 +208,13 @@ export default function Step1Cloudflare({
                 Enter this email address into the invite form:
               </span>
             </div>
-            <InviteCallout
-              email={benEmail}
-              copied={copied}
-              onCopy={handleCopyEmail}
-            />
+            <div data-guide="step1-invite-email">
+              <InviteCallout
+                email={benEmail}
+                copied={copied}
+                onCopy={handleCopyEmail}
+              />
+            </div>
           </li>
           <li className="flex gap-3">
             <Bullet n={6} />
@@ -243,6 +254,15 @@ export default function Step1Cloudflare({
           </a>{" "}
           or hit reply to my last email and I&apos;ll walk you through.
         </p>
+
+        {video && (
+          <VideoTutorial
+            src={video.src}
+            poster={video.poster}
+            title={video.title}
+            caption={video.caption}
+          />
+        )}
       </section>
 
       <section className="mt-8 rounded-2xl bg-cream-50 p-5">
@@ -260,7 +280,7 @@ export default function Step1Cloudflare({
       </section>
 
       <section className="mt-8 grid gap-5">
-        <label className="block">
+        <label className="block" data-guide="step1-your-email">
           <span className="block text-sm font-semibold text-navy-900">
             Your Cloudflare signup email
           </span>
@@ -301,7 +321,7 @@ export default function Step1Cloudflare({
         )}
       </section>
 
-      <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
+      <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6" data-guide="step1-done-btn">
         {done ? (
           <>
             <p className="text-sm text-green-700" role="status">

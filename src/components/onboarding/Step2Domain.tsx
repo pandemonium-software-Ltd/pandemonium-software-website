@@ -13,6 +13,9 @@
 // — those are customer-purchased modules, not universal infrastructure.
 
 import { useState } from "react";
+import StepGuideButton from "./StepGuide";
+import VideoTutorial from "./VideoTutorial";
+import { STEP2_GUIDE, type VideoTutorialConfig } from "@/lib/onboarding-guides";
 
 type Props = {
   data: Record<string, unknown>;
@@ -26,6 +29,8 @@ type Props = {
   /** ISO-8601 if the customer has already clicked confirm
    *  (in email or here). undefined if they haven't yet. */
   customerConfirmedNameserversAt?: string;
+  /** Per-registrar video tutorials — keyed by registrar slug. */
+  videos?: Record<string, VideoTutorialConfig>;
 };
 
 const CLOUDFLARE_REGISTRAR_URL =
@@ -41,6 +46,7 @@ export default function Step2Domain({
   markDone,
   token,
   customerConfirmedNameserversAt,
+  videos,
 }: Props) {
   const initialDomain = typeof data.domain === "string" ? data.domain : "";
   const initialRegistrar =
@@ -133,10 +139,13 @@ export default function Step2Domain({
           Module-specific setup (sender email, booking page,
           Google Business Profile) happens in Step 3.
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <StepGuideButton steps={STEP2_GUIDE} label="Walk me through it" />
+        </div>
       </header>
 
       <section className="mt-7">
-        <label className="block">
+        <label className="block" data-guide="step2-domain-input">
           <span className="block text-sm font-semibold text-navy-900">
             Domain name
           </span>
@@ -155,7 +164,7 @@ export default function Step2Domain({
           </span>
         </label>
 
-        <fieldset className="mt-5">
+        <fieldset className="mt-5" data-guide="step2-registrar-options">
           <legend className="mb-2 block text-sm font-semibold text-navy-900">
             Where is it (or where will it be) registered?
           </legend>
@@ -364,7 +373,7 @@ export default function Step2Domain({
                   "Replace the two nameserver values with the ones I emailed you",
                   'Click "Update nameservers" and confirm. Changes propagate within 1-2 hours typically (max 48).',
                 ]}
-              />
+              video={videos?.["123reg-nameservers"]} />
               <RegistrarGuide
                 name="GoDaddy"
                 steps={[
@@ -375,7 +384,7 @@ export default function Step2Domain({
                   "Paste the two nameservers I emailed you (one per line)",
                   '"Save" and confirm any 2FA prompts. Changes propagate within 1-2 hours typically (max 48).',
                 ]}
-              />
+              video={videos?.["godaddy-nameservers"]} />
               <RegistrarGuide
                 name="Namecheap"
                 steps={[
@@ -386,7 +395,7 @@ export default function Step2Domain({
                   "Enter the two nameservers I emailed you",
                   "Click the green tick to save. Propagation usually takes 30 min to 2 hours.",
                 ]}
-              />
+              video={videos?.["namecheap-nameservers"]} />
               <RegistrarGuide
                 name="IONOS (1&1)"
                 steps={[
@@ -429,11 +438,17 @@ export default function Step2Domain({
                 ]}
               />
             </div>
-            <p className="mt-4 text-xs text-navy-500">
-              Heads up: video walkthroughs are coming soon. For now,
-              if anything in the steps above doesn&apos;t match what
-              you see on screen, reply to my email with a screenshot.
-            </p>
+            {videos && Object.keys(videos).length > 0 ? (
+              <p className="mt-4 text-xs font-semibold text-navy-600">
+                Video walkthroughs are available inside each registrar guide above.
+              </p>
+            ) : (
+              <p className="mt-4 text-xs text-navy-500">
+                Video walkthroughs are coming soon. For now,
+                if anything in the steps above doesn&apos;t match what
+                you see on screen, reply to my email with a screenshot.
+              </p>
+            )}
           </div>
         )}
 
@@ -480,7 +495,7 @@ export default function Step2Domain({
         )}
       </section>
 
-      <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
+      <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6" data-guide="step2-done-btn">
         {done ? (
           <>
             <p className="text-sm text-green-700" role="status">
@@ -610,9 +625,11 @@ function formatConfirmedAt(iso: string): string {
 function RegistrarGuide({
   name,
   steps,
+  video,
 }: {
   name: string;
   steps: readonly string[];
+  video?: VideoTutorialConfig;
 }) {
   return (
     <details className="rounded-lg border border-navy-100 bg-cream-50 p-3 text-sm text-navy-700 [&_summary]:cursor-pointer">
@@ -622,6 +639,14 @@ function RegistrarGuide({
           <li key={i}>{step}</li>
         ))}
       </ol>
+      {video && (
+        <VideoTutorial
+          src={video.src}
+          poster={video.poster}
+          title={video.title}
+          caption={video.caption}
+        />
+      )}
     </details>
   );
 }

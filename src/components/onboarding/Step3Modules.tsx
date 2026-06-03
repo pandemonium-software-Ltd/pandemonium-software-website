@@ -26,6 +26,9 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import StepGuideButton from "./StepGuide";
+import VideoTutorial from "./VideoTutorial";
+import { STEP3_GUIDE, type VideoTutorialConfig } from "@/lib/onboarding-guides";
 import {
   calculateModuleDelta,
   MODULE_OPTIONS,
@@ -76,6 +79,8 @@ type Props = {
    *  query param on the URL — used when the post-launch dashboard
    *  routes a customer here to set up one newly-added module. */
   focusModule?: string;
+  /** GBP video tutorials — keyed by tutorial slug. */
+  gbpVideos?: Record<string, VideoTutorialConfig>;
 };
 
 const RESEND_SIGNUP_URL = "https://resend.com/signup";
@@ -135,6 +140,7 @@ export default function Step3Modules({
   markDone,
   saveContentPartial,
   focusModule,
+  gbpVideos,
 }: Props) {
   // ---------- Initial state from saved data ----------
 
@@ -392,6 +398,9 @@ export default function Step3Modules({
           started yet, amber if there&apos;s some way to go. Click a
           card&apos;s header to expand or collapse.
         </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <StepGuideButton steps={STEP3_GUIDE} label="Walk me through it" />
+        </div>
       </header>
 
       {/* Module re-selector — replaces the old "email me to change
@@ -412,7 +421,7 @@ export default function Step3Modules({
        *  which sibling to scroll to. Computed from the customer's
        *  actual module selection (Cal.com only renders if they bought
        *  Online Booking, etc.) so the chain skips absent modules. */}
-      <section className="mt-7 space-y-4">
+      <section className="mt-7 space-y-4" data-guide="step3-modules">
         {(() => {
           const renderedIds: string[] = [];
           if (hasCalcom) renderedIds.push("module-calcom");
@@ -528,6 +537,7 @@ export default function Step3Modules({
                     onInvitedChange={setGbpInvited}
                     benEmail={benEmail}
                     disabled={gbpDisabled}
+                    videos={gbpVideos}
                   />
                 </ModuleCard>
               )}
@@ -634,7 +644,7 @@ export default function Step3Modules({
         )}
       </section>
 
-      <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6">
+      <footer className="mt-7 flex flex-wrap items-center gap-3 border-t border-navy-100 pt-6" data-guide="step3-done-btn">
         {done ? (
           <>
             <p className="text-sm text-green-700" role="status">
@@ -1271,6 +1281,7 @@ function ModuleGbp({
   isConfirmed,
   onConfirmListing,
   onRejectListing,
+  videos,
 }: {
   url: string;
   invited: boolean;
@@ -1284,6 +1295,7 @@ function ModuleGbp({
   isConfirmed: boolean;
   onConfirmListing: () => void;
   onRejectListing: () => void;
+  videos?: Record<string, VideoTutorialConfig>;
 }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
@@ -1376,6 +1388,24 @@ function ModuleGbp({
           </span>
         </li>
       </ol>
+
+      {videos?.["gbp-share-link"] && (
+        <VideoTutorial
+          src={videos["gbp-share-link"].src}
+          poster={videos["gbp-share-link"].poster}
+          title={videos["gbp-share-link"].title}
+          caption={videos["gbp-share-link"].caption}
+        />
+      )}
+      {videos?.["gbp-add-manager"] && (
+        <VideoTutorial
+          src={videos["gbp-add-manager"].src}
+          poster={videos["gbp-add-manager"].poster}
+          title={videos["gbp-add-manager"].title}
+          caption={videos["gbp-add-manager"].caption}
+        />
+      )}
+
       <div className="mt-4 rounded-xl bg-cream-50 p-4 text-xs leading-relaxed text-navy-600">
         <p className="font-semibold text-navy-900">
           Pick Manager, not Owner.
