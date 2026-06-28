@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HeroIllustration from "@/components/HeroIllustration";
+import PuzzleAssembly from "@/components/PuzzleAssembly";
 import { VibePreviewCard, type Structure } from "@/components/VibePreview";
 import {
   STRUCTURE_BEST_FOR,
@@ -83,6 +84,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Scroll-driven puzzle assembly */}
+      <PuzzleAssembly />
 
       {/* What you get */}
       <section className="section bg-white">
