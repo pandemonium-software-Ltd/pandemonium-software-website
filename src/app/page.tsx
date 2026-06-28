@@ -1,6 +1,7 @@
 import Link from "next/link";
 import HeroIllustration from "@/components/HeroIllustration";
 import PuzzleAssembly from "@/components/PuzzleAssembly";
+import TemplateCarousel from "@/components/TemplateCarousel";
 import { VibePreviewCard, type Structure } from "@/components/VibePreview";
 import {
   STRUCTURE_BEST_FOR,
@@ -227,18 +228,21 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-12 grid gap-8 md:grid-cols-2">
-            {HOMEPAGE_COMBOS.map((combo) => (
-              <VibePreviewCard
-                key={`${combo.structure}-${combo.vibe}`}
-                vibe={combo.vibe}
-                structure={combo.structure}
-                businessName={combo.businessName}
-                size="full"
-                features={STRUCTURE_FEATURES[combo.structure]}
-                bestFor={STRUCTURE_BEST_FOR[combo.structure]}
-              />
-            ))}
+          <div className="mt-12">
+            <TemplateCarousel
+              labels={HOMEPAGE_COMBOS.map((c) => c.structure)}
+              items={HOMEPAGE_COMBOS.map((combo) => (
+                <VibePreviewCard
+                  key={`${combo.structure}-${combo.vibe}`}
+                  vibe={combo.vibe}
+                  structure={combo.structure}
+                  businessName={combo.businessName}
+                  size="full"
+                  features={STRUCTURE_FEATURES[combo.structure]}
+                  bestFor={STRUCTURE_BEST_FOR[combo.structure]}
+                />
+              ))}
+            />
           </div>
 
           <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-navy-600">
