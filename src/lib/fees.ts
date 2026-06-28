@@ -59,7 +59,11 @@ export const MODULE_SETUP_PENCE: Readonly<Record<string, number>> = {
   "Google Business Profile Setup/Audit": GBP_ADDON_ONE_OFF_GBP * 100,
 };
 
-export const FOUNDING_MEMBER_SETUP_GBP = 99;
+// Founding setup raised £99 → £199 on 2026-06-03 (Ben). Better covers
+// onboarding effort for the 3 founding spots; £15/mo 5-yr lock unchanged.
+// No founding customers signed yet, so safe. Setup is charged inline
+// (Stripe price_data), so no Stripe price needs creating.
+export const FOUNDING_MEMBER_SETUP_GBP = 199;
 export const FOUNDING_MEMBER_MONTHLY_GBP = 15;
 
 export type ModuleSelection = {

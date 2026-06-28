@@ -138,9 +138,9 @@ describe("calculateFees — locked 2026-05-25 prices", () => {
     expect(fees.founding).toBe(false);
   });
 
-  test("founding base = 99 setup, 15 monthly", () => {
+  test("founding base = 199 setup, 15 monthly", () => {
     const fees = calculateFees(modulesToSelection([]), true);
-    expect(fees.setup).toBe(99);
+    expect(fees.setup).toBe(199);
     expect(fees.monthly).toBe(15);
     expect(fees.founding).toBe(true);
   });

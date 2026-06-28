@@ -634,9 +634,12 @@ transfer-on-exit documented + doesn't break ownership.
   - *Guards:* **sends rate-limited + deduped + capped** (SMS costs money, Twilio); per-customer
     frequency cap so we never spam. Draft-and-approve first cohort → graduate.
   - Live-reviews *display* already exists; this adds *collection*.
-- **Loyalty platform** (wallet-pass, no app) — **Proposed £12/mo, £49 setup** (market £9.49–29). 🔴
-  **Ben wants to own the platform** (own data + points logic + branding), ideally in Apple
-  Wallet + Google Wallet, email-QR as fallback. Research findings (2026-06-03):
+- **Loyalty platform** (wallet-pass, no app) — **Proposed £39/mo, £149 setup** (Ben: £12 was
+  far too low). Priced as a **flagship retention module**, not a commodity: it's bespoke-built,
+  drives high switching cost (the tradesperson's customers carry the card in their wallet), and
+  sits above standalone comps (Loopy £25/mo, Stamp Me £49/mo) because it's done-for-you and
+  integrated into their site. Floor ~£29/mo; could push £49/mo. **Decision: build our own.**
+  Research findings (2026-06-03):
   - **Tech reality:** Apple Wallet = signed `.pkpass` files (needs Apple Developer acct + Pass
     Type ID cert + APNs to push updates). Google Wallet = cloud Wallet Objects API (Class
     template + per-member Object; patch the Object to update points across all passes). The
@@ -802,16 +805,20 @@ F. **3.1 Premium + 3.2 Retention → 3.3 Upsell + 3.4 Win-back + 3.5 Annual revi
 - Apply target pricing to new sign-ups after 2–3 testimonials; founding cohort keeps current.
 - Annual = **"pay 10, get 12", billed upfront**, no mid-term refund — confirmed.
 - Referral = **£50 referrer account credit + £50 off referee setup**, Stripe-managed — confirmed.
-- Module prices: review-automation **£8/£25**, loyalty **£12/£49** — confirmed.
+- Module prices: review-automation **£8/£25**; **loyalty £39/£149** (was £12/£49 — raised as a
+  flagship retention module) — confirmed.
 - Review-collection trigger = **dashboard "job done" button** — confirmed.
 - **Premium listed as a visible anchor now** (overrides ROADMAP "defer until 5–10 ask") — confirmed.
-- Loyalty = **build our own platform, hybrid approach** (own D1 + per-pass wallet provider to
-  start, email-QR fallback, full bespoke at scale) — confirmed.
+- Loyalty = **build our own platform** — confirmed. (Smart "build own" path still uses a per-pass
+  provider for the wallet layer initially to skip Apple cert/APNs; full bespoke at scale.)
+- **`fees.ts` founding setup 99 → 199 — DONE** (2026-06-03, test updated, 290 pass).
 
 **Still open (not blockers):**
-1. Confirm the loyalty **hybrid** (own D1 + per-pass provider like PassKit/PassNinja) vs insisting
-   on fully-bespoke Apple/Google Wallet plumbing from day one (~3–4 wk extra).
-2. Approve the `fees.ts` founding-setup one-liner (99 → 199) as a follow-up code change.
+1. **Stripe reprice scope** — apply the full target structure (Standard £45, new Premium £149,
+   nudged modules) to code + Stripe **now**, or hold the broader public reprice until 2–3
+   testimonials (founding £199 already done either way)? See note below.
+2. Loyalty: confirm the per-pass-provider-first "build own" vs fully-bespoke wallet from day one
+   (~3–4 wk extra).
 
 > **On the confidence worry:** you don't reach certainty in a lab — probabilistic automation
 > can't. You prove the journey synthetically (T.1), instrument friction (T.2–T.3), run three
