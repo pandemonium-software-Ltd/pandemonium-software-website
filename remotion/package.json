@@ -1,0 +1,27 @@
+{
+  "name": "moduforge-tutorials",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts",
+    "render:all": "node scripts/render-all.mjs"
+  },
+  "dependencies": {
+    "@remotion/animation-utils": "4.0.275",
+    "@remotion/captions": "4.0.275",
+    "@remotion/cli": "4.0.275",
+    "@remotion/fonts": "4.0.275",
+    "@remotion/layout-utils": "4.0.275",
+    "@remotion/mcp": "4.0.275",
+    "@remotion/motion-blur": "4.0.275",
+    "@remotion/player": "4.0.275",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.275"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

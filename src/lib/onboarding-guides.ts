@@ -127,7 +127,7 @@ export const STEP5_GUIDE: GuideStep[] = [
  * Video tutorial configuration. Keys map to R2 paths.
  *
  * To add a video:
- * 1. Upload to R2: `wrangler r2 object put pandemonium-assets/tutorials/<key>.mp4 --file <path>`
+ * 1. Upload to R2: `wrangler r2 object put moduforge-customer-assets/tutorials/<key>.mp4 --file <path> --remote`
  * 2. Set the URL here using R2_PUBLIC_URL_BASE + path
  *
  * Poster images are optional — the player shows a gradient placeholder
