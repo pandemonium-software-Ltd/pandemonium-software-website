@@ -4,6 +4,11 @@
 > canonical priority list. README, PLAYBOOK and ARCHITECTURE all link
 > back here. Update this file (not the others) when a priority lands
 > or a new one surfaces.
+>
+> **Strategic layer:** `docs/MASTER-PLAN.md` is the build-to-sell master
+> plan (Phases 0/T/1/2/3/4) that this tactical list feeds into. Items
+> here are mapped into phases there; when they disagree, MASTER-PLAN's
+> status annotations win (reconciled against code 2026-06-03).
 
 **Last updated:** 2026-06-03
 
