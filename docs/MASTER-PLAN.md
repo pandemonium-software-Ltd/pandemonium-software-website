@@ -262,6 +262,39 @@ retries then escalates, nothing lost · force a `notifyAdmin` failure → it app
 audit log · simulate a 60s Haiku outage with 10 pending CRs → they retry, don't all escalate ·
 a recurring step error re-alerts, not just once.
 
+## 0.6 — Data-layer consolidation: Notion → D1 — 🔴 Not started · runs in parallel
+
+**Objective (Ben's call):** move the system-of-record off Notion onto **Cloudflare D1**, keep
+both **running in parallel (dual-write)**, then **retire Notion** once D1 is proven. Notion's
+limits (≈3 req/s rate limit, API latency, no transactions/relational integrity, the 502s seen
+in the audit) make it a resilience risk as source-of-truth, and a buyer prefers a real DB —
+so this serves both 0.5 resilience and saleability.
+
+**D1 limits (researched 2026-06-03) — comfortably fine for ModuForge:**
+- **10 GB per database** (hard cap; can't raise — but per-account up to 1 TB, and sharding is
+  possible). Customer records are tiny; the only growth risk is analytics, which already prunes.
+- **Single-threaded writes** (~1,000 q/s at 1 ms/query, serialized) — ModuForge's write volume
+  (a minutely cron + occasional customer actions) is nowhere near this.
+- **Rows-read metered** for billing; **Time Travel** gives 30-day point-in-time restore (a plus).
+- SQLite, not Postgres — no stored procedures / rich extensions, but we don't need them.
+- *Verdict:* D1 is the right system-of-record for ModuForge on Workers. (Don't add Supabase
+  here just for parity with the other apps.)
+
+**Approach (phased, non-breaking):**
+1. **Dual-write:** mirror every prospect/customer write to a D1 schema alongside Notion
+   (`prospects`, `change_requests`, `module_change_log`, `ops_audit`, …). Notion stays
+   authoritative; D1 shadows it.
+2. **Switch reads to D1** (D1 becomes source-of-truth); Notion becomes a mirror. Repoint the
+   ops worker (`notion-prospects.ts`, `notion-ops.ts`) + `/admin` reads.
+3. **Retire Notion writes**; keep Notion as an optional export/admin-view, or drop it entirely
+   in favour of the `/admin` control centre (already the real admin UI).
+
+**Not a gate for 0.1–0.5 or Phase A** — it's an independent infra track Ben wants in parallel.
+
+**DoD:** dual-write verified (a write lands in both, identical) · reads served from D1 with
+Notion mirror in sync · a Notion outage no longer blocks the system (the resilience win) ·
+documented cutover so Notion can be switched off.
+
 ---
 
 # MODULE T — Onboarding Test Flow & Feedback Loop
@@ -812,13 +845,20 @@ F. **3.1 Premium + 3.2 Retention → 3.3 Upsell + 3.4 Win-back + 3.5 Annual revi
 - Loyalty = **build our own platform** — confirmed. (Smart "build own" path still uses a per-pass
   provider for the wallet layer initially to skip Apple cert/APNs; full bespoke at scale.)
 - **`fees.ts` founding setup 99 → 199 — DONE** (2026-06-03, test updated, 290 pass).
+- **Stripe reprice (option A) — DONE in code + Stripe sandbox** (2026-06-03): new sandbox
+  prices created (Standard £45 `price_1TnPMh…`, Premium £149 `price_1TnPN9…` new product
+  `prod_UmzLIB…`, modules £8/£8/£12/£8/£5); `fees.ts` setups+monthlies bumped to target;
+  `stripe-products.ts` repointed; 290 tests pass. **Not deployed** — public site still shows
+  old prices until `npm run deploy`; live Stripe prices created at the Stripe-LIVE toggle.
+- **Notion → D1 consolidation added as 0.6** (dual-write → switch → retire; D1 limits fine).
 
 **Still open (not blockers):**
-1. **Stripe reprice scope** — apply the full target structure (Standard £45, new Premium £149,
-   nudged modules) to code + Stripe **now**, or hold the broader public reprice until 2–3
-   testimonials (founding £199 already done either way)? See note below.
-2. Loyalty: confirm the per-pass-provider-first "build own" vs fully-bespoke wallet from day one
-   (~3–4 wk extra).
+1. **When to deploy the new public pricing** — code/Stripe-sandbox are ready; deploy makes the
+   marketing site show £45/£149/etc. Recommend deploying alongside the first new Standard
+   sign-up or the Stripe-LIVE toggle.
+2. **Premium checkout/entitlements** — the £149 price exists but Premium isn't buyable yet
+   (needs the Notion `Tier` field + checkout wiring = workstream 3.1).
+3. Loyalty: per-pass-provider-first "build own" vs fully-bespoke wallet from day one (~3–4 wk extra).
 
 > **On the confidence worry:** you don't reach certainty in a lab — probabilistic automation
 > can't. You prove the journey synthetically (T.1), instrument friction (T.2–T.3), run three

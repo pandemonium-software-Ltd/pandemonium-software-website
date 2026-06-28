@@ -11,42 +11,47 @@
 // reflects actual operator time per module (GBP audit 1-3h,
 // Newsletter setup 45-90 min, etc.).
 
-export const BASE_SETUP_GBP = 299;
-export const BASE_MONTHLY_GBP = 29;
+// Target (premium-anchored) pricing applied 2026-06-03 — see
+// docs/MASTER-PLAN.md "Pricing". Standard up from £299/£29; modules
+// nudged. New Stripe prices created same day (sandbox). Founding keeps
+// its own rate (3 spots). Setup amounts are charged inline; monthly
+// amounts must stay aligned with the Stripe price IDs in stripe-products.ts.
+export const BASE_SETUP_GBP = 399;
+export const BASE_MONTHLY_GBP = 45;
 
-export const MODULE_BOOKING_SETUP_GBP = 19;
-export const MODULE_BOOKING_MONTHLY_GBP = 6;
+export const MODULE_BOOKING_SETUP_GBP = 25;
+export const MODULE_BOOKING_MONTHLY_GBP = 8;
 
-export const MODULE_ENQUIRY_SETUP_GBP = 19;
-export const MODULE_ENQUIRY_MONTHLY_GBP = 6;
+export const MODULE_ENQUIRY_SETUP_GBP = 25;
+export const MODULE_ENQUIRY_MONTHLY_GBP = 8;
 
-export const MODULE_NEWSLETTER_SETUP_GBP = 49;
-export const MODULE_NEWSLETTER_MONTHLY_GBP = 9;
+export const MODULE_NEWSLETTER_SETUP_GBP = 65;
+export const MODULE_NEWSLETTER_MONTHLY_GBP = 12;
 
 // Offers module — homepage promotional strip (headline + dates +
 // CTA) the customer manages from their dashboard. Lighter touch
 // than Newsletter (no per-customer email volume to bill), so
 // priced lower. Cowork moderates each offer before it goes live
 // to keep claims honest.
-export const MODULE_OFFERS_SETUP_GBP = 19;
-export const MODULE_OFFERS_MONTHLY_GBP = 6;
+export const MODULE_OFFERS_SETUP_GBP = 25;
+export const MODULE_OFFERS_MONTHLY_GBP = 8;
 
-export const GBP_ADDON_ONE_OFF_GBP = 59;
+export const GBP_ADDON_ONE_OFF_GBP = 79;
 // Monthly fee for the GBP module — covers the Google Places API
 // cost of refreshing the customer's reviews on their site daily.
 // Real cost is ~£0.40/month per customer (5 reviews per refresh,
-// 30 refreshes/month at $0.017 each); £3/month gives ~7x margin
+// 30 refreshes/month at $0.017 each); £5/month gives ample margin
 // for Google price increases, occasional retries on errors, and
 // the Stripe transaction fee. Stops when the monthly subscription
 // stops — see the GBP reviews cron in the ops worker.
-export const GBP_ADDON_MONTHLY_GBP = 3;
+export const GBP_ADDON_MONTHLY_GBP = 5;
 
-// Multi-location — one-off £15 per extra location. No monthly
+// Multi-location — one-off £20 per extra location. No monthly
 // contribution (single subscription regardless of location count).
-// Acknowledged under-priced vs the 2-4h of provisioning per
-// location; watch-item if customers add 5+ locations and operator
-// time becomes a real bottleneck. See ROADMAP watch-items.
-export const MODULE_MULTILOCATION_SETUP_GBP = 15;
+// Still modest vs the 2-4h of provisioning per location; watch-item
+// if customers add 5+ locations and operator time becomes a real
+// bottleneck. See ROADMAP watch-items.
+export const MODULE_MULTILOCATION_SETUP_GBP = 20;
 
 /** Per-module setup-fee map in pence. Single source of truth —
  *  used by Checkout (stripe.ts), apply-pending.ts, and the

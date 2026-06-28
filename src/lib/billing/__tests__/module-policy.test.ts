@@ -127,14 +127,15 @@ describe("proratedRefundPounds", () => {
   });
 });
 
-// Phase A pricing-lock 2026-05-25 — these tests pin the post-lock
-// numbers so an accidental constant change is caught immediately.
+// Pricing-lock — these tests pin the current numbers so an accidental
+// constant change is caught immediately. Updated 2026-06-03 to the
+// target (premium-anchored) prices; founding setup £199.
 
-describe("calculateFees — locked 2026-05-25 prices", () => {
-  test("base only (no modules, no founding) = 299 setup, 29 monthly", () => {
+describe("calculateFees — target prices (2026-06-03)", () => {
+  test("base only (no modules, no founding) = 399 setup, 45 monthly", () => {
     const fees = calculateFees(modulesToSelection([]));
-    expect(fees.setup).toBe(299);
-    expect(fees.monthly).toBe(29);
+    expect(fees.setup).toBe(399);
+    expect(fees.monthly).toBe(45);
     expect(fees.founding).toBe(false);
   });
 
@@ -145,9 +146,9 @@ describe("calculateFees — locked 2026-05-25 prices", () => {
     expect(fees.founding).toBe(true);
   });
 
-  test("every module ticked (Standard) = 424 setup, 82 monthly", () => {
-    // base 299 + booking 19 + enquiry 19 + newsletter 49 + offers 19 + GBP 59 = 464 setup
-    // base 29 + booking 6 + enquiry 6 + newsletter 9 + offers 6 + GBP 3 = 59 monthly
+  test("every module ticked (Standard) = 618 setup, 86 monthly", () => {
+    // base 399 + booking 25 + enquiry 25 + newsletter 65 + offers 25 + GBP 79 = 618 setup
+    // base 45 + booking 8 + enquiry 8 + newsletter 12 + offers 8 + GBP 5 = 86 monthly
     const allModules = [
       "Online Booking",
       "Enquiry Form",
@@ -156,27 +157,27 @@ describe("calculateFees — locked 2026-05-25 prices", () => {
       "Google Business Profile Setup/Audit",
     ];
     const fees = calculateFees(modulesToSelection(allModules));
-    expect(fees.setup).toBe(464);
-    expect(fees.monthly).toBe(59);
+    expect(fees.setup).toBe(618);
+    expect(fees.monthly).toBe(86);
   });
 
-  test("multi-location adds 15 per extra, no monthly", () => {
+  test("multi-location adds 20 per extra, no monthly", () => {
     const zero = calculateFees(modulesToSelection([], 0));
     const three = calculateFees(modulesToSelection(["Multi-location"], 3));
-    expect(three.setup - zero.setup).toBe(45);
+    expect(three.setup - zero.setup).toBe(60);
     expect(three.monthly).toBe(zero.monthly);
   });
 
-  test("multi-location flag present, counter 0 → coerces to 1 extra (£15)", () => {
+  test("multi-location flag present, counter 0 → coerces to 1 extra (£20)", () => {
     const noCounter = calculateFees(modulesToSelection(["Multi-location"], 0));
-    expect(noCounter.setup).toBe(299 + 15);
+    expect(noCounter.setup).toBe(399 + 20);
   });
 
   test("counter > 0 but flag missing → trust the counter (data-drift defence)", () => {
     // Admin grant or direct Notion edit could push extraLocations
     // without touching the multi_select. The counter is authoritative.
     const fees = calculateFees(modulesToSelection([], 3));
-    expect(fees.setup).toBe(299 + 45);
+    expect(fees.setup).toBe(399 + 60);
   });
 });
 
@@ -190,11 +191,11 @@ describe("calculateModuleDelta — multi-location counter", () => {
       toExtraLocations: 3,
     });
     expect(d.isNoOp).toBe(false);
-    expect(d.setupDelta).toBe(30); // 2 extra × £15
+    expect(d.setupDelta).toBe(40); // 2 extra × £20
     expect(d.monthlyDelta).toBe(0);
   });
 
-  test("adding the Multi-location flag with counter 2 = +£30 setup", () => {
+  test("adding the Multi-location flag with counter 2 = +£40 setup", () => {
     const d = calculateModuleDelta({
       fromModules: [],
       toModules: ["Multi-location"],
@@ -203,7 +204,7 @@ describe("calculateModuleDelta — multi-location counter", () => {
       toExtraLocations: 2,
     });
     expect(d.added).toEqual(["Multi-location"]);
-    expect(d.setupDelta).toBe(30);
+    expect(d.setupDelta).toBe(40);
   });
 
   test("identical selections = no-op even with counters provided", () => {
@@ -217,17 +218,17 @@ describe("calculateModuleDelta — multi-location counter", () => {
     expect(d.isNoOp).toBe(true);
   });
 
-  test("adding Newsletter post-launch = +£49 setup, +£9 monthly (locked-25-05 prices)", () => {
+  test("adding Newsletter post-launch = +£65 setup, +£12 monthly (target prices)", () => {
     const d = calculateModuleDelta({
       fromModules: [],
       toModules: ["Newsletter"],
       foundingMember: false,
     });
-    expect(d.setupDelta).toBe(49);
-    expect(d.monthlyDelta).toBe(9);
+    expect(d.setupDelta).toBe(65);
+    expect(d.monthlyDelta).toBe(12);
   });
 
-  test("multi-location post-launch stepper: 0 → 2 = +£30 setup, monthly unchanged, flag added", () => {
+  test("multi-location post-launch stepper: 0 → 2 = +£40 setup, monthly unchanged, flag added", () => {
     // Mirrors what /api/account/multilocation calls calculateModuleDelta
     // with when the customer bumps from 0 → 2 extras.
     const d = calculateModuleDelta({
@@ -237,15 +238,15 @@ describe("calculateModuleDelta — multi-location counter", () => {
       fromExtraLocations: 0,
       toExtraLocations: 2,
     });
-    expect(d.setupDelta).toBe(30);
+    expect(d.setupDelta).toBe(40);
     expect(d.monthlyDelta).toBe(0);
     expect(d.added).toEqual(["Multi-location"]);
   });
 
-  test("multi-location post-launch stepper: 3 → 0 = removes flag, setup change = -45", () => {
+  test("multi-location post-launch stepper: 3 → 0 = removes flag, setup change = -60", () => {
     // Setup delta is negative because we're going from a paid-for
-    // 3-extras setup (£45) to 0. NOT refundable in practice (the
-    // £15 was for past provisioning work) — the API surfaces this
+    // 3-extras setup (£60) to 0. NOT refundable in practice (the
+    // £20 was for past provisioning work) — the API surfaces this
     // negative as a "no refund — work already delivered" message
     // and the operator doesn't actually credit. Test pins the
     // arithmetic so the UI's "no refund" copy stays consistent
@@ -257,7 +258,7 @@ describe("calculateModuleDelta — multi-location counter", () => {
       fromExtraLocations: 3,
       toExtraLocations: 0,
     });
-    expect(d.setupDelta).toBe(-45);
+    expect(d.setupDelta).toBe(-60);
     expect(d.monthlyDelta).toBe(0);
     expect(d.removed).toEqual(["Multi-location"]);
   });
