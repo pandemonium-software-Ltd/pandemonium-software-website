@@ -1,17 +1,16 @@
 "use client";
 
-// Dynamic 3D coverflow for the template gallery. The active template sits
-// front-and-centre; neighbours rotate back on either side. Prev/next +
-// clickable dots + side-card click, with gentle autoplay (paused on hover,
-// focus, or reduced-motion). Pure CSS 3D transforms, no deps. Accepts the
-// existing preview cards as `items` so it stays presentation-only.
+// Template gallery: a single, full-width card on mobile (no clipping) and
+// a 3D coverflow on desktop (active centred, neighbours rotated back).
+// Prev/next + dots + side-card click; gentle autoplay paused on
+// hover/focus/reduced-motion. Pure CSS, no deps. Takes the existing
+// preview cards as `items` so it stays presentation-only.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 type Props = {
   items: ReactNode[];
   labels?: string[];
-  /** Autoplay interval (ms). 0 disables. */
   intervalMs?: number;
 };
 
@@ -23,12 +22,12 @@ export default function TemplateCarousel({
   const n = items.length;
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [stageH, setStageH] = useState(540);
   const reduced = useRef(false);
+  const activeCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    reduced.current = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
+    reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }, []);
 
   useEffect(() => {
@@ -37,9 +36,18 @@ export default function TemplateCarousel({
     return () => clearInterval(id);
   }, [intervalMs, paused, n]);
 
-  const go = (dir: number) => setActive((a) => (a + dir + n) % n);
+  // Size the desktop coverflow stage to the active card so it never clips.
+  useEffect(() => {
+    const measure = () => {
+      const h = activeCardRef.current?.offsetHeight;
+      if (h && h > 0) setStageH(h);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [active]);
 
-  // Shortest signed offset of i from active, wrapped to [-n/2, n/2].
+  const go = (d: number) => setActive((a) => (a + d + n) % n);
   const offsetOf = (i: number) => {
     let o = i - active;
     if (o > n / 2) o -= n;
@@ -55,10 +63,19 @@ export default function TemplateCarousel({
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
     >
-      {/* Stage */}
+      <style>{`@keyframes mf-slide-in {0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:none}}`}</style>
+
+      {/* Mobile: single full-width card, no clipping */}
+      <div className="md:hidden">
+        <div key={active} style={{ animation: reduced.current ? undefined : "mf-slide-in .4s ease both" }}>
+          {items[active]}
+        </div>
+      </div>
+
+      {/* Desktop: 3D coverflow */}
       <div
-        className="relative mx-auto h-[460px] w-full overflow-hidden md:h-[520px]"
-        style={{ perspective: "1600px" }}
+        className="relative mx-auto hidden w-full overflow-hidden md:block"
+        style={{ perspective: "1600px", height: stageH }}
         aria-roledescription="carousel"
       >
         {items.map((item, i) => {
@@ -73,10 +90,11 @@ export default function TemplateCarousel({
           return (
             <div
               key={i}
+              ref={o === 0 ? activeCardRef : undefined}
               aria-hidden={o !== 0}
               onClick={() => o !== 0 && setActive(i)}
               className={[
-                "absolute left-1/2 top-1/2 w-[86vw] max-w-[440px] -translate-y-1/2 transition-all duration-500 ease-out",
+                "absolute left-1/2 top-0 w-full max-w-[440px] transition-all duration-500 ease-out",
                 o !== 0 ? "cursor-pointer" : "",
               ].join(" ")}
               style={{
@@ -93,7 +111,7 @@ export default function TemplateCarousel({
         })}
       </div>
 
-      {/* Controls */}
+      {/* Controls (shared) */}
       <div className="mt-6 flex items-center justify-center gap-4">
         <button
           type="button"
@@ -103,7 +121,6 @@ export default function TemplateCarousel({
         >
           <Chevron dir="left" />
         </button>
-
         <div className="flex items-center gap-2">
           {items.map((_, i) => (
             <button
@@ -119,7 +136,6 @@ export default function TemplateCarousel({
             />
           ))}
         </div>
-
         <button
           type="button"
           onClick={() => go(1)}

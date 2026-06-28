@@ -1,10 +1,13 @@
 "use client";
 
-// Hero animation: a browser frame whose UI blocks assemble themselves on
-// load — nav, hero, feature grid, reviews strip, footer click into place
-// in sequence, then the whole frame breathes gently. Pure CSS keyframes
-// (autoplay on mount, no scroll, no deps). Reduced-motion → final state,
-// static. Mirrors what ModuForge does: builds the customer's site for them.
+// Hero animation: a browser frame whose UI blocks assemble themselves —
+// nav, hero, feature grid, reviews strip, footer click into place in
+// sequence, then the whole frame breathes gently. The build is triggered
+// when the frame scrolls INTO VIEW (so mobile users, where it sits below
+// the fold, actually see it animate), via IntersectionObserver. Pure CSS
+// keyframes, no deps. Reduced-motion → final state, static.
+
+import { useEffect, useRef, useState } from "react";
 
 const NAVY = "#0f1d30";
 const EMBER = "#f97316";
@@ -14,6 +17,29 @@ export default function SelfBuildingSite({
 }: {
   className?: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [go, setGo] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setGo(true);
+      return;
+    }
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setGo(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
     <div className={className}>
       <style>{`
@@ -25,16 +51,18 @@ export default function SelfBuildingSite({
           0%,100% { transform: translateY(0); }
           50%     { transform: translateY(-8px); }
         }
-        .mf-frame { animation: mf-float 7s ease-in-out 2s infinite; }
-        .mf-b { opacity: 0; animation: mf-build .6s cubic-bezier(.22,.9,.3,1) both; }
+        .mf-b { opacity: 0; }
+        .mf-go .mf-b { animation: mf-build .6s cubic-bezier(.22,.9,.3,1) both; }
+        .mf-go.mf-frame { animation: mf-float 7s ease-in-out 2s infinite; }
         @media (prefers-reduced-motion: reduce) {
-          .mf-frame { animation: none; }
-          .mf-b { opacity: 1; animation: none; }
+          .mf-frame { animation: none !important; }
+          .mf-b { opacity: 1 !important; animation: none !important; }
         }
       `}</style>
 
       <div
-        className="mf-frame mx-auto w-full max-w-[560px] overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-card"
+        ref={ref}
+        className={`mf-frame ${go ? "mf-go" : ""} mx-auto w-full max-w-[560px] overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-card`}
         role="img"
         aria-label="A website building itself piece by piece"
       >
