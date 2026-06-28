@@ -126,14 +126,24 @@ function makeFakeD1(): D1Database & { _rows: Map<string, FakeRow> } {
 
 const TOKEN = "abc-123";
 
+// Fixture dates MUST stay inside readWindow's rolling 30-day window,
+// so they're expressed relative to "now" rather than hardcoded —
+// otherwise the fixtures silently rot once wall-clock time advances
+// past the window (which is exactly what happened with the old
+// hardcoded May-2026 dates).
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+}
+
 describe("d1-analytics", () => {
   test("inserts then reads back a single day", async () => {
     const db = makeFakeD1();
+    const date = daysAgo(5);
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
         ...baseEmpty,
-        date: "2026-05-20",
+        date,
         pageviews: 42,
         uniques: 18,
         topPages: [{ name: "/", count: 30 }],
@@ -142,7 +152,7 @@ describe("d1-analytics", () => {
     });
     const w = await readWindow(db, { token: TOKEN, windowDays: 30 });
     expect(w.days).toHaveLength(1);
-    expect(w.days[0]).toEqual({ date: "2026-05-20", pageviews: 42, uniques: 18 });
+    expect(w.days[0]).toEqual({ date, pageviews: 42, uniques: 18 });
     expect(w.topPages).toEqual([{ name: "/", count: 30 }]);
     expect(w.topReferrers).toEqual([{ name: "google.com", count: 25 }]);
   });
@@ -151,7 +161,7 @@ describe("d1-analytics", () => {
     const db = makeFakeD1();
     const base = {
       ...baseEmpty,
-      date: "2026-05-20",
+      date: daysAgo(5),
     };
     await insertDailySnapshot(db, {
       token: TOKEN,
@@ -172,7 +182,7 @@ describe("d1-analytics", () => {
       token: TOKEN,
       snapshot: {
         ...baseEmpty,
-        date: "2026-05-18",
+        date: daysAgo(6),
         pageviews: 0,
         uniques: 0,
         topPages: [
@@ -185,7 +195,7 @@ describe("d1-analytics", () => {
       token: TOKEN,
       snapshot: {
         ...baseEmpty,
-        date: "2026-05-19",
+        date: daysAgo(5),
         pageviews: 0,
         uniques: 0,
         topPages: [
@@ -204,11 +214,12 @@ describe("d1-analytics", () => {
 
   test("readWindow ignores other customers' rows", async () => {
     const db = makeFakeD1();
+    const date = daysAgo(5);
     await insertDailySnapshot(db, {
       token: TOKEN,
       snapshot: {
         ...baseEmpty,
-        date: "2026-05-20",
+        date,
         pageviews: 10,
         uniques: 5,
       },
@@ -217,7 +228,7 @@ describe("d1-analytics", () => {
       token: "different-customer",
       snapshot: {
         ...baseEmpty,
-        date: "2026-05-20",
+        date,
         pageviews: 999,
         uniques: 500,
       },
