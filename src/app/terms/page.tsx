@@ -106,7 +106,7 @@ export default function TermsPage() {
 
           <h2>4. Setup fee and your 14-day cancellation right</h2>
           <p>
-            The £299 setup fee (or £99 for Founding Members) is payable
+            The £399 setup fee (or £199 for Founding Members) is payable
             up front, at the same time as your first monthly payment. It
             covers building your site — design, copy work, module setup,
             domain wiring, the lot.

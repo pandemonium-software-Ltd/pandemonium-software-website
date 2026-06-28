@@ -650,6 +650,20 @@ in the 10-min approval queue until graduated. Everything else is config + existi
 - **Sync:** `checkout.session.completed` webhook sets `Tier = Premium` → all downstream
   entitlement checks read it, so billing and features never drift.
 
+**Domain acquisition "on their behalf" (Ben's validate question) — recommended pricing model:**
+Domain cost varies hugely (a standard `.co.uk`/`.com` is ~£8–15/yr; an aftermarket/already-owned
+domain can be £100s–£1,000s). So **don't bundle an open-ended cost into a flat price.** Instead:
+- **Premium includes registration + annual renewal of a *standard available* domain** (bounded —
+  treat ~£20/yr of domain cost as included; £149/mo easily absorbs it).
+- **Premium/aftermarket domains are pass-through at cost + a one-off handling fee** (e.g. £25),
+  quoted case-by-case — never absorbed into the flat fee.
+- **Register under the customer's ownership** (or transfer-on-exit) so the "you own everything"
+  promise holds — managed ≠ hostage.
+- **On Standard:** offer it as an **optional paid add-on** ("Domain setup" — one-off handling +
+  pass-through registration), *not* bundled. Keeps "managed domain + renewals included" as a
+  genuine **Premium differentiator** while still serving Standard customers who have no domain.
+  Default Standard flow stays "you bring/own your domain" (current onboarding).
+
 **Transfer-on-exit path** so "you own everything" survives even though hosting/domain are managed.
 
 **DoD:** Premium purchasable (test) → sets `Tier = Premium` → entitlements unlock (templates,
@@ -852,13 +866,19 @@ F. **3.1 Premium + 3.2 Retention → 3.3 Upsell + 3.4 Win-back + 3.5 Annual revi
   old prices until `npm run deploy`; live Stripe prices created at the Stripe-LIVE toggle.
 - **Notion → D1 consolidation added as 0.6** (dual-write → switch → retire; D1 limits fine).
 
+- **Public pricing GOING LIVE (Ben, 2026-06-03):** all user-facing price displays updated to
+  target (pricing page copy/meta, calculator auto via fees.ts, Founding strip £199, terms,
+  qualification form modules). **Premium shown as a "coming soon" anchor card** on /pricing
+  (not buyable). Deploying now.
+- **Premium = COMING SOON** — listed as anchor; £149 Stripe price exists but checkout/
+  entitlements (Notion `Tier`) are workstream 3.1.
+- **Domain acquisition pricing decided** — Premium includes standard reg+renewal (bounded
+  ~£20/yr); aftermarket pass-through + £25 handling; register under customer ownership; Standard
+  gets it as an optional add-on, not bundled (keeps Premium differentiated).
+
 **Still open (not blockers):**
-1. **When to deploy the new public pricing** — code/Stripe-sandbox are ready; deploy makes the
-   marketing site show £45/£149/etc. Recommend deploying alongside the first new Standard
-   sign-up or the Stripe-LIVE toggle.
-2. **Premium checkout/entitlements** — the £149 price exists but Premium isn't buyable yet
-   (needs the Notion `Tier` field + checkout wiring = workstream 3.1).
-3. Loyalty: per-pass-provider-first "build own" vs fully-bespoke wallet from day one (~3–4 wk extra).
+1. Loyalty: per-pass-provider-first "build own" vs fully-bespoke wallet from day one (~3–4 wk extra).
+2. Premium checkout/entitlements build (3.1) when ready to actually sell it.
 
 > **On the confidence worry:** you don't reach certainty in a lab — probabilistic automation
 > can't. You prove the journey synthetically (T.1), instrument friction (T.2–T.3), run three

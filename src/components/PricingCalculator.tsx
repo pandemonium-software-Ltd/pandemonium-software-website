@@ -91,7 +91,7 @@ const MODULES: Module[] = [
 ];
 
 // Multi-location is a counter, not a boolean. Modelled as a separate
-// stepper row under the module list. £15 setup per extra location, no
+// stepper row under the module list. £20 setup per extra location, no
 // monthly contribution.
 const MULTILOCATION_SETUP = MODULE_MULTILOCATION_SETUP_GBP;
 
@@ -254,7 +254,7 @@ export default function PricingCalculator() {
                     </div>
                     <p className="mt-2 text-[0.95rem] leading-relaxed text-navy-700">
                       Each extra location gets its own contact / map / opening-hours
-                      block on the site. £15 setup per extra location — no extra
+                      block on the site. £20 setup per extra location — no extra
                       monthly. The first location is included in your base.
                     </p>
 
