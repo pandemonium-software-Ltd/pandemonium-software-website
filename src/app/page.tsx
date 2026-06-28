@@ -1,5 +1,6 @@
 import Link from "next/link";
-import HeroIllustration from "@/components/HeroIllustration";
+import SelfBuildingSite from "@/components/SelfBuildingSite";
+import AuroraBackground from "@/components/AuroraBackground";
 import PuzzleAssembly from "@/components/PuzzleAssembly";
 import TemplateCarousel from "@/components/TemplateCarousel";
 import { VibePreviewCard, type Structure } from "@/components/VibePreview";
@@ -44,6 +45,7 @@ export default function HomePage() {
           aria-hidden="true"
           className="absolute inset-x-0 top-0 -z-10 h-[520px] bg-gradient-to-b from-cream-100 via-cream-50 to-cream-50"
         />
+        <AuroraBackground />
         <div className="container-content grid items-center gap-14 lg:grid-cols-[1.15fr_1fr]">
           <div>
             <span className="eyebrow">
@@ -81,7 +83,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="relative mx-auto w-full max-w-[560px]">
-            <HeroIllustration className="h-auto w-full" />
+            <SelfBuildingSite className="h-auto w-full" />
           </div>
         </div>
       </section>
