@@ -5,7 +5,7 @@
 > back here. Update this file (not the others) when a priority lands
 > or a new one surfaces.
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-06-03
 
 ---
 
@@ -39,6 +39,12 @@
 | **Data Processing Agreement (DPA)** — GDPR Article 28 compliant `/dpa` page. 14 sections covering: definitions, scope, data categories table, processor/controller obligations, sub-processor register (Cloudflare, Notion, Resend, Stripe, Google, Anthropic, Sentry with locations), 24h breach notification, retention aligned with existing 30d/7y automation, data subject rights, audits, liability, governing law. `acceptsDpa` checkbox added to intake form. Cross-linked from /terms, /privacy, and footer. | 2026-05-28 |
 | **Professional indemnity insurance** — purchased and active. | 2026-05-28 |
 | **R2 brand-asset deletion in GDPR scrub cron** — `deleteR2Prefix()` lists + batch-deletes all objects under `assets/<token>/` during the daily 03:00 UTC scrub. R2 binding (`ASSETS_BUCKET`) added to ops worker. Handles pagination, graceful skip when binding missing. 3 new tests. | 2026-05-28 |
+| **Comprehensive admin dashboard** (#5, complete) — `/admin` renders: KPI strip (8 cards) + service-health strip; **Panel A** Marketing analytics (traffic trends, page/referrer/geo breakdown, weekday pattern, 7/30/90 window); **Panel B** Customer insight (conversion funnel with drop-off %, revenue by tier, founding/standard mix, pipeline by niche, module popularity, location spread); **Panel C** Build monitoring (per-customer 6-step progress, stuck-build detection >7d, launch-date countdown, build-failure alerts, step completion rates); **Panel D** Run monitoring — cron health + zone status + Sentry rates + GBP issues (2026-05-29) **plus deployment/build status (in-progress/failed/recent + go-live vs preview), Stripe payment health (paying/subscriptions/missing-sub/billing-failures/pending-ops/MRR), and R2 storage usage per customer (2026-06-03)**. Pure metric fns in `admin-metrics.ts` (`computeDeploymentStatus`, `computePaymentHealth`, `summariseR2Objects`) with 12 unit tests. Plus bonus panels: Business Health (GDPR/CI/audit/secret-rotation), Ops Activity (bulk retry/resolve), Sentry Alerts inbox. | 2026-06-03 |
+| **Onboarding interactive walkthroughs** (#14) — driver.js "Walk me through it" guided tours on Hub Steps 1-3 with `data-guide` selectors + ModuForge-styled popovers. VideoTutorial component + R2-backed `getTutorialVideos()` config (videos auto-appear when uploaded, gracefully hidden when not). Per-registrar video slots in Step 2, GBP video slots in Step 3. Tutorial *video files* outsourced (raw-recording quality too low). | 2026-06-03 |
+| **49-finding security audit + all fixes** — 7-agent review (`docs/SECURITY-AUDIT-2026-06-03-FULL.md`): 1 Critical, 7 High, 32 Medium, 19 Low. All actionable items fixed, incl. N1 email leak on `/api/prospect/[token]`. | 2026-06-03 |
+| **Cowork change-request automation overhaul** — two-pass Haiku classifier, partial-patch preservation, admin push-through, retry UI, inline classify+apply (no cron defer), re-escalation loop fix, multi-location patch targets, 15s dashboard polling. | 2026-05-31 |
+| **Customer-domain email verification** — auto-verify customer domains with Resend so transactional mail sends from the customer's own domain. | 2026-05-31 |
+| **Coming-soon gate + quick-edit forms** — coming-soon bypass token flow (cookie/CORS/middleware), photo upload, expanded quick-edit form (services, FAQ, testimonials, trust, copy) on Step 5 + reviewEdits admin grant. | 2026-05-31 |
 
 ---
 
@@ -113,17 +119,17 @@ asks for a second location.
 
 | # | Item | Complexity | Duration | Monthly cost | Status |
 |---|------|------------|----------|--------------|--------|
-| 5 | **Comprehensive admin dashboard** — 4-panel system extending `/admin`. **(A) Marketing analytics:** site-wide traffic trends, page performance, referrer breakdown (data already in D1 daily_analytics). **(B) Customer insight:** pipeline by niche (businessType already captured at enquiry), location heatmap, conversion funnel (Phase 1→2→3→Paid→Live), revenue by tier/module, founding vs standard mix. **(C) Build monitoring:** onboarding progress per customer (steps 1-7 status), stuck-build detection, launch date tracking, preview/go-live build failures, time-in-step alerts. **(D) Run monitoring:** live site health checks, deployment status, Sentry error rates, cron execution health, R2 storage usage, Stripe payment status. Build order: C→B→D→A. | High | 3-5 days | £0 | Recommended — NEXT |
+| ~~5~~ | ~~Comprehensive admin dashboard~~ — **COMPLETE 2026-06-03** (moved to ✅ Shipped). All 4 panels + 3 bonus panels live. Only optional polish left: Panel B location bar-list → geographic heatmap (low value at current volume). | — | — | £0 | Done |
 | 8 | **Lead inbox / mini-CRM ⭐** — structured enquiry form (project type / size / budget), pipeline (New → Quoted → Won → Lost), follow-up reminders, SMS on new lead | High | 5-7 days | £0 base · +£15-30/mo if SMS (Twilio) | Optional |
 | 9 | **Review request automation ⭐** — auto SMS/email after a job, one-click Google review link, dashboard tracks responses | Medium | 2 days | £0 · +£10-20/mo if SMS | Optional |
 | 10 | **Performance pricing tier ⭐** — base £X + £Y per qualified lead delivered, capped. Needs #1 + #8 first | Medium | 1-2 days | £0 (built on existing) | Optional |
-| 11 | **Privacy policy + cookie banner refresh** — same depth treatment as today's terms rewrite | Medium | 3-4 h | £0 | Recommended |
+| ~~11~~ | ~~Privacy policy + cookie banner refresh~~ — **effectively done.** `/privacy` already has 10 thorough sections (updated 2026-05-29, complaint process added). Cookie banner **not needed** — site uses Cloudflare edge analytics only, zero tracking cookies, so no consent mechanism legally required under GDPR/PECR. | — | — | £0 | Done / N-A |
 | 12 | **Per-recipient newsletter drill-down** — click a send → see who opened/clicked. Data already captured, UI only | Low | 4-6 h | £0 | Optional |
 | 13 | **Customer lifecycle emails** — day 1 welcome, day 30 check-in, 6-month review, anniversary stat. Cron infra ready | Medium | 1-2 days | £0 (Resend already paid) | Optional |
-| 14 | **Onboarding video walkthroughs** — replace per-registrar text walkthroughs in Hub Step 2 | Medium | 1 day + recording | £0-50 one-off | Recommended |
+| ~~14~~ | ~~Onboarding video walkthroughs~~ — **interactive walkthroughs shipped 2026-06-03** (driver.js guides on Steps 1-3 + R2-backed video infra, see ✅ Shipped). Only outstanding: produce the *video files* themselves (raw screen-recording quality too low — to be done with proper editing/Remotion elsewhere; they auto-appear in the Hub once uploaded to R2 `tutorials/`). | Low | recording only | £0-50 one-off | Walkthroughs done; videos outsourced |
 | 15 | **Founding-member landing page + hard cap** — dedicated /founding-members page, "first 50 only" pitch | Medium | 1 day | £0 | Optional |
 | 16 | **Trade body badges + verification ⭐** — Checkatrade / Trustmark / Which? badges with correct schema.org markup so Google ranks them | Low | 2-4 h | £0 | Optional |
-| 17 | **ASO/SEO pass** — metadata, OG cards, sitemap, JSON-LD, public FAQ expansion | Medium | 1-2 days | £0 | Recommended |
+| 17 | **ASO/SEO pass — FAQ page only** — **~75% done:** root-layout metadata + per-page exports, OG cards, `sitemap.ts`, `robots.ts`, LocalBusiness JSON-LD all shipped. Remaining: a dedicated public `/faq` page (Faq.tsx component exists but is only embedded on `/pricing`). | Low | 2-4 h | £0 | Recommended |
 | 18 | **Performance + accessibility audit** — CWV pass, WCAG 2.2 AA spot-check, bundle size | Medium | 1 day | £0 | Recommended |
 | 19 | **Customer support workflow (Cowork email triage)** — inbox → classify → draft from templates. Needed once volume hits | High | 2-3 days | £0 | Optional |
 | 19a | **Multi-location dashboard counter** — customer-self-serve +/- buttons in ModulesEditor. Needs new `/api/account/multilocation` endpoint, ProspectRecord.extraLocations field, Notion column. Intake captures the count today; admin endpoint can grant out-of-band — UI deferred until first 2nd-location request | Medium | 4-6 h | £0 | Trigger-based (first 2nd-location request) |
@@ -150,11 +156,11 @@ asks for a second location.
 
 ## 📋 Suggested next 3 moves
 
-1. **#5 (Admin dashboard)** — 4-panel build: build monitoring → customer insight → run monitoring → marketing analytics.
-2. **#1 (Stripe LIVE)** — final test with Lucas then flip to live keys.
-3. **#11 (Privacy/cookie refresh)** or **#17 (SEO pass)** — polish.
+1. **#1 (Stripe LIVE)** — the ONLY genuine launch blocker (~1.5-2 h). Sandbox is 100% wired; needs live products/prices, `STRIPE_MODE` env flag (`TODO(go-live)` already in `stripe-products.ts`), live webhook, `sk_live_*` secrets, deploy + smoke test.
+2. **#17 (FAQ page)** — last 25% of the SEO pass, 2-4 h.
+3. **#18 (perf/a11y audit)** — operational polish, not a launch blocker.
 
-After #5 + #1, you're production-ready with full operational visibility.
+**Reality check (2026-06-03 reassessment):** #5 (now complete — all 4 panels + 3 bonus panels), #11, #14 walkthroughs, and most of #17 are all **already shipped**. The build is much closer to launch than the tier ordering implies — **#1 Stripe LIVE is effectively the last thing between you and taking money.**
 
 ---
 

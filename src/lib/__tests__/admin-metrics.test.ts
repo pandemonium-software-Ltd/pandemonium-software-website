@@ -5,6 +5,9 @@ import {
   computeBuildMetrics,
   computeInsightMetrics,
   computeRunMetrics,
+  computeDeploymentStatus,
+  computePaymentHealth,
+  summariseR2Objects,
   cronHealthStatus,
 } from "../admin-metrics";
 
@@ -271,6 +274,191 @@ describe("computeRunMetrics", () => {
     expect(metrics.zoneStatusBreakdown).toEqual({ active: 1, pending: 1 });
     expect(metrics.sentryOpen).toBe(3);
     expect(metrics.sentryResolved).toBe(5);
+  });
+
+  test("includes deployment, payment and r2 sub-metrics", () => {
+    const metrics = computeRunMetrics(
+      [prospect({ status: "Live", stripeSubscriptionId: "sub_1" })],
+      [],
+      [],
+      0,
+      0,
+      null,
+    );
+    expect(metrics.deployment).toBeDefined();
+    expect(metrics.payment.payingCustomers).toBe(1);
+    expect(metrics.r2).toBeNull();
+  });
+});
+
+describe("computeDeploymentStatus", () => {
+  const now = new Date("2026-06-03T12:00:00Z");
+
+  test("flags in-progress, failed, live and idle states", () => {
+    const recent = new Date(now.getTime() - 5 * 60_000).toISOString();
+    const stale = new Date(now.getTime() - 60 * 60_000).toISOString();
+    const prospects = [
+      prospect({
+        token: "building",
+        status: "Build Started",
+        previewBuildTriggeredAt: recent,
+      }),
+      prospect({
+        token: "failed",
+        status: "Onboarding Complete",
+        previewBuildFailedAt: stale,
+      }),
+      prospect({ token: "live", status: "Live" }),
+      prospect({ token: "idle", status: "Paid" }),
+      // Not paid yet — excluded from the pipeline entirely.
+      prospect({ token: "enquiry", status: "Phase 1 Complete" }),
+    ];
+
+    const d = computeDeploymentStatus(prospects, now);
+
+    expect(d.inProgress.map((e) => e.token)).toEqual(["building"]);
+    expect(d.failed.map((e) => e.token)).toEqual(["failed"]);
+    expect(d.liveCount).toBe(1);
+    // recent list only contains entries with a build timestamp.
+    expect(d.recent.map((e) => e.token).sort()).toEqual(["building", "failed"]);
+  });
+
+  test("failure takes precedence over a recent trigger", () => {
+    const recent = new Date(now.getTime() - 2 * 60_000).toISOString();
+    const d = computeDeploymentStatus(
+      [
+        prospect({
+          token: "x",
+          status: "Build Started",
+          previewBuildTriggeredAt: recent,
+          previewBuildFailedAt: recent,
+        }),
+      ],
+      now,
+    );
+    expect(d.failed).toHaveLength(1);
+    expect(d.inProgress).toHaveLength(0);
+  });
+
+  test("go-live builds are labelled distinctly", () => {
+    const recent = new Date(now.getTime() - 3 * 60_000).toISOString();
+    const d = computeDeploymentStatus(
+      [
+        prospect({
+          token: "x",
+          status: "Build Started",
+          finalLaunchTriggeredAt: recent,
+        }),
+      ],
+      now,
+    );
+    expect(d.inProgress[0].kind).toBe("go-live");
+  });
+});
+
+describe("computePaymentHealth", () => {
+  test("counts subscriptions and flags missing ones", () => {
+    const p = computePaymentHealth([
+      prospect({ status: "Live", stripeSubscriptionId: "sub_1", monthlyFeeCalculated: 15 }),
+      prospect({ status: "Paid", monthlyFeeCalculated: 29 }), // no sub id
+      prospect({ status: "Phase 1 Complete" }), // not paying
+    ]);
+    expect(p.payingCustomers).toBe(2);
+    expect(p.activeSubscriptions).toBe(1);
+    expect(p.missingSubscription).toHaveLength(1);
+    expect(p.totalMrr).toBe(44);
+    expect(p.status).toBe("warn");
+  });
+
+  test("billing failures drive error status", () => {
+    const p = computePaymentHealth([
+      prospect({
+        status: "Live",
+        stripeSubscriptionId: "sub_1",
+        moduleChangeLog: [
+          {
+            id: "e1",
+            submittedAt: "2026-06-01T00:00:00Z",
+            fromModules: [],
+            toModules: ["Newsletter"],
+            setupDelta: 0,
+            monthlyDelta: 9,
+            newSetupTotal: 0,
+            newMonthlyTotal: 24,
+            status: "billing-failed",
+            resolvedAt: "2026-06-02T00:00:00Z",
+          },
+        ],
+      }),
+    ]);
+    expect(p.billingFailures).toHaveLength(1);
+    expect(p.billingFailures[0].modules).toEqual(["Newsletter"]);
+    expect(p.status).toBe("error");
+  });
+
+  test("pending stripe ops are surfaced with a summary", () => {
+    const p = computePaymentHealth([
+      prospect({
+        status: "Live",
+        stripeSubscriptionId: "sub_1",
+        moduleChangeLog: [
+          {
+            id: "e2",
+            submittedAt: "2026-06-01T00:00:00Z",
+            fromModules: ["Offers"],
+            toModules: ["Offers", "Newsletter"],
+            setupDelta: 49,
+            monthlyDelta: 9,
+            newSetupTotal: 49,
+            newMonthlyTotal: 24,
+            status: "pending-stripe",
+            effectiveDate: "2026-07-01",
+            kind: "modules-post-launch",
+          },
+        ],
+      }),
+    ]);
+    expect(p.pendingStripeOps).toHaveLength(1);
+    expect(p.pendingStripeOps[0].summary).toContain("Newsletter");
+    expect(p.pendingStripeOps[0].effectiveDate).toBe("2026-07-01");
+    expect(p.status).toBe("warn");
+  });
+});
+
+describe("summariseR2Objects", () => {
+  test("rolls up bytes per customer token from assets/<token>/ keys", () => {
+    const names = new Map([
+      ["tok-a", "Acme"],
+      ["tok-b", "Bravo"],
+    ]);
+    const usage = summariseR2Objects(
+      [
+        { key: "assets/tok-a/logo.png", size: 1000 },
+        { key: "assets/tok-a/hero.jpg", size: 2000 },
+        { key: "assets/tok-b/logo.png", size: 500 },
+      ],
+      names,
+      false,
+    );
+    expect(usage.totalBytes).toBe(3500);
+    expect(usage.objectCount).toBe(3);
+    expect(usage.perCustomer[0]).toEqual({
+      token: "tok-a",
+      name: "Acme",
+      bytes: 3000,
+      objects: 2,
+    });
+    expect(usage.truncated).toBe(false);
+  });
+
+  test("buckets unknown-shaped keys under their first segment", () => {
+    const usage = summariseR2Objects(
+      [{ key: "stray-file.txt", size: 10 }],
+      new Map(),
+      true,
+    );
+    expect(usage.perCustomer[0].token).toBe("stray-file.txt");
+    expect(usage.truncated).toBe(true);
   });
 });
 

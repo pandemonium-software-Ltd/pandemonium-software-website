@@ -34,10 +34,55 @@ import {
   computeRunMetrics,
   computeBusinessHealth,
   cronHealthStatus,
+  summariseR2Objects,
   type CronHealthEntry,
   type GbpIssue,
   type HealthCheckRow,
+  type R2Object,
+  type R2Usage,
 } from "@/lib/admin-metrics";
+
+/** Minimal R2 list surface — mirrors the binding shape used elsewhere
+ *  (see api/account/upload-photo, ops-worker/gdpr-scrub-tick). */
+type R2BucketLike = {
+  list(options?: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+  }): Promise<{
+    objects: { key: string; size: number }[];
+    truncated: boolean;
+    cursor?: string;
+  }>;
+};
+
+/** Page cap so a runaway bucket can't stall the admin render. At 1000
+ *  objects/page this lists up to 10k objects before flagging truncation. */
+const R2_MAX_PAGES = 10;
+
+async function listR2Usage(
+  bucket: R2BucketLike,
+  prospectNames: Map<string, string>,
+): Promise<R2Usage> {
+  const objects: R2Object[] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+
+  for (let page = 0; page < R2_MAX_PAGES; page++) {
+    const res = await bucket.list({ cursor, limit: 1000 });
+    for (const o of res.objects) {
+      objects.push({ key: o.key, size: o.size });
+    }
+    if (!res.truncated) {
+      cursor = undefined;
+      break;
+    }
+    cursor = res.cursor;
+    if (page === R2_MAX_PAGES - 1) truncated = true;
+  }
+
+  return summariseR2Objects(objects, prospectNames, truncated);
+}
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -66,11 +111,13 @@ export default async function AdminPage() {
   let gbpLastFetched: string | null = null;
   let gbpIssues: GbpIssue[] = [];
   let healthCheckRows: HealthCheckRow[] = [];
+  let r2Usage: R2Usage | null = null;
 
   try {
     const cfCtx = getCloudflareContext();
     const cfEnv = (cfCtx?.env ?? {}) as {
       pandemonium_analytics?: D1Database;
+      ASSETS_BUCKET?: R2BucketLike;
     };
     const d1 = cfEnv.pandemonium_analytics;
     if (d1) {
@@ -121,6 +168,18 @@ export default async function AdminPage() {
         lastError: r.last_error,
         fetchedAt: r.fetched_at,
       }));
+
+      // R2 storage usage — list the customer-assets bucket and roll
+      // up per customer. Wrapped separately so an R2 hiccup doesn't
+      // take out the Sentry/cron data above.
+      if (cfEnv.ASSETS_BUCKET) {
+        try {
+          const names = new Map(prospects.map((p) => [p.token, p.name]));
+          r2Usage = await listR2Usage(cfEnv.ASSETS_BUCKET, names);
+        } catch {
+          r2Usage = null;
+        }
+      }
     }
   } catch {
     // D1 unavailable — panels render with empty/default data.
@@ -221,6 +280,7 @@ export default async function AdminPage() {
     gbpIssues,
     sentryOpenCount,
     sentryResolvedCount,
+    r2Usage,
   );
 
   const businessHealth = computeBusinessHealth(prospects, healthCheckRows);

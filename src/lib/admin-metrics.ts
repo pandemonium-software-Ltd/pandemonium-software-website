@@ -91,6 +91,73 @@ export type GbpIssue = {
   fetchedAt: string;
 };
 
+// --- Deployment / build status ---
+
+export type DeploymentState = "in-progress" | "failed" | "live" | "idle";
+
+export type DeploymentEntry = {
+  token: string;
+  name: string;
+  business: string;
+  status: string;
+  state: DeploymentState;
+  /** Most recent build-related timestamp (triggered / failed). */
+  lastBuildAt: string | undefined;
+  /** Which pipeline the latest build belongs to. */
+  kind: "preview" | "go-live" | null;
+};
+
+export type DeploymentStatus = {
+  inProgress: DeploymentEntry[];
+  failed: DeploymentEntry[];
+  recent: DeploymentEntry[];
+  liveCount: number;
+};
+
+// --- Stripe payment health ---
+
+export type BillingFailure = {
+  token: string;
+  name: string;
+  modules: string[];
+  failedAt: string;
+};
+
+export type PendingStripeOp = {
+  token: string;
+  name: string;
+  effectiveDate: string | undefined;
+  summary: string;
+};
+
+export type PaymentHealth = {
+  payingCustomers: number;
+  activeSubscriptions: number;
+  /** Paying customers with no Stripe subscription ID recorded. */
+  missingSubscription: { token: string; name: string }[];
+  billingFailures: BillingFailure[];
+  pendingStripeOps: PendingStripeOp[];
+  totalMrr: number;
+  status: "ok" | "warn" | "error";
+};
+
+// --- R2 storage usage ---
+
+export type R2Object = { key: string; size: number };
+
+export type R2Usage = {
+  totalBytes: number;
+  objectCount: number;
+  perCustomer: {
+    token: string;
+    name: string;
+    bytes: number;
+    objects: number;
+  }[];
+  /** True if the listing hit the page cap and may be incomplete. */
+  truncated: boolean;
+};
+
 export type RunMetrics = {
   liveSites: LiveSite[];
   zoneStatusBreakdown: Record<string, number>;
@@ -98,6 +165,9 @@ export type RunMetrics = {
   gbpIssues: GbpIssue[];
   sentryOpen: number;
   sentryResolved: number;
+  deployment: DeploymentStatus;
+  payment: PaymentHealth;
+  r2: R2Usage | null;
 };
 
 // --------------- Status sets ---------------
@@ -410,12 +480,207 @@ export function computeInsightMetrics(
 
 // --------------- computeRunMetrics ---------------
 
+/** A build is considered "in progress" if its trigger latch was set
+ *  within this many minutes and hasn't reported failure. Matches the
+ *  20-min go-live anti-spam latch + headroom. */
+const BUILD_IN_PROGRESS_MINS = 30;
+
+function minutesAgo(iso: string, now: Date): number {
+  return (now.getTime() - new Date(iso).getTime()) / 60_000;
+}
+
+/** Pick the most recent of a set of optional ISO timestamps. */
+function latestTimestamp(
+  ...stamps: (string | undefined)[]
+): string | undefined {
+  let best: string | undefined;
+  for (const s of stamps) {
+    if (!s) continue;
+    if (!best || s > best) best = s;
+  }
+  return best;
+}
+
+export function computeDeploymentStatus(
+  prospects: ProspectRecord[],
+  now: Date = new Date(),
+): DeploymentStatus {
+  const all: DeploymentEntry[] = [];
+  let liveCount = 0;
+
+  for (const p of prospects) {
+    // Only paid-or-later customers have a build pipeline.
+    if (!PAID_OR_LATER.has(p.status) && p.status !== "Live") continue;
+    if (p.status === "Live") liveCount++;
+
+    const triggered = latestTimestamp(
+      p.previewBuildTriggeredAt,
+      p.finalLaunchTriggeredAt,
+    );
+    const lastBuildAt = latestTimestamp(triggered, p.previewBuildFailedAt);
+
+    const isGoLive =
+      !!p.finalLaunchTriggeredAt &&
+      p.finalLaunchTriggeredAt === triggered;
+
+    let state: DeploymentState;
+    if (p.previewBuildFailedAt) {
+      state = "failed";
+    } else if (triggered && minutesAgo(triggered, now) < BUILD_IN_PROGRESS_MINS) {
+      state = "in-progress";
+    } else if (p.status === "Live") {
+      state = "live";
+    } else {
+      state = "idle";
+    }
+
+    all.push({
+      token: p.token,
+      name: p.name,
+      business: p.business ?? "",
+      status: p.status,
+      state,
+      lastBuildAt,
+      kind: lastBuildAt ? (isGoLive ? "go-live" : "preview") : null,
+    });
+  }
+
+  const byRecency = (a: DeploymentEntry, b: DeploymentEntry) =>
+    (b.lastBuildAt ?? "").localeCompare(a.lastBuildAt ?? "");
+
+  return {
+    inProgress: all.filter((d) => d.state === "in-progress").sort(byRecency),
+    failed: all.filter((d) => d.state === "failed").sort(byRecency),
+    recent: all
+      .filter((d) => d.lastBuildAt)
+      .sort(byRecency)
+      .slice(0, 10),
+    liveCount,
+  };
+}
+
+function summariseModuleChange(e: {
+  fromModules: string[];
+  toModules: string[];
+  kind?: string;
+}): string {
+  if (e.kind === "cancel-end-of-period") return "Cancel (end of period)";
+  if (e.kind === "cancel-immediate-prorated") return "Cancel (prorated)";
+  if (e.kind === "multilocation-change") return "Multi-location change";
+  const added = e.toModules.filter((m) => !e.fromModules.includes(m));
+  const removed = e.fromModules.filter((m) => !e.toModules.includes(m));
+  const parts: string[] = [];
+  if (added.length) parts.push(`+${added.join(", ")}`);
+  if (removed.length) parts.push(`−${removed.join(", ")}`);
+  return parts.join("  ") || "Module change";
+}
+
+export function computePaymentHealth(
+  prospects: ProspectRecord[],
+): PaymentHealth {
+  let payingCustomers = 0;
+  let activeSubscriptions = 0;
+  let totalMrr = 0;
+  const missingSubscription: { token: string; name: string }[] = [];
+  const billingFailures: BillingFailure[] = [];
+  const pendingStripeOps: PendingStripeOp[] = [];
+
+  for (const p of prospects) {
+    const isPaying = PAID_OR_LATER.has(p.status) || p.status === "Live";
+    if (isPaying) {
+      payingCustomers++;
+      totalMrr += p.monthlyFeeCalculated ?? 0;
+      if (p.stripeSubscriptionId) {
+        activeSubscriptions++;
+      } else {
+        missingSubscription.push({ token: p.token, name: p.name });
+      }
+    }
+
+    for (const e of p.moduleChangeLog ?? []) {
+      if (e.status === "billing-failed") {
+        billingFailures.push({
+          token: p.token,
+          name: p.name,
+          modules: e.toModules,
+          failedAt: e.resolvedAt ?? e.submittedAt,
+        });
+      } else if (e.status === "pending-stripe") {
+        pendingStripeOps.push({
+          token: p.token,
+          name: p.name,
+          effectiveDate: e.effectiveDate,
+          summary: summariseModuleChange(e),
+        });
+      }
+    }
+  }
+
+  const status: PaymentHealth["status"] =
+    billingFailures.length > 0
+      ? "error"
+      : missingSubscription.length > 0 || pendingStripeOps.length > 0
+        ? "warn"
+        : "ok";
+
+  return {
+    payingCustomers,
+    activeSubscriptions,
+    missingSubscription,
+    billingFailures,
+    pendingStripeOps,
+    totalMrr,
+    status,
+  };
+}
+
+/** Pure summary of an R2 object listing. Keys are expected in the
+ *  shape `assets/<token>/...`; anything else is bucketed under the
+ *  first path segment so storage is never silently dropped. */
+export function summariseR2Objects(
+  objects: R2Object[],
+  prospectNames: Map<string, string>,
+  truncated: boolean,
+): R2Usage {
+  let totalBytes = 0;
+  const perToken = new Map<string, { bytes: number; objects: number }>();
+
+  for (const o of objects) {
+    totalBytes += o.size;
+    const parts = o.key.split("/");
+    // `assets/<token>/...` → token is parts[1]; fall back to parts[0].
+    const token =
+      parts[0] === "assets" && parts[1] ? parts[1] : parts[0] || "(root)";
+    const cur = perToken.get(token) ?? { bytes: 0, objects: 0 };
+    cur.bytes += o.size;
+    cur.objects += 1;
+    perToken.set(token, cur);
+  }
+
+  const perCustomer = Array.from(perToken.entries())
+    .map(([token, v]) => ({
+      token,
+      name: prospectNames.get(token) ?? token,
+      bytes: v.bytes,
+      objects: v.objects,
+    }))
+    .sort((a, b) => b.bytes - a.bytes);
+
+  return {
+    totalBytes,
+    objectCount: objects.length,
+    perCustomer,
+    truncated,
+  };
+}
+
 export function computeRunMetrics(
   prospects: ProspectRecord[],
   cronHealth: CronHealthEntry[],
   gbpIssues: GbpIssue[],
   sentryOpen: number,
   sentryResolved: number,
+  r2: R2Usage | null = null,
 ): RunMetrics {
   const liveSites: LiveSite[] = [];
   const zoneBreakdown: Record<string, number> = {};
@@ -442,6 +707,9 @@ export function computeRunMetrics(
     gbpIssues,
     sentryOpen,
     sentryResolved,
+    deployment: computeDeploymentStatus(prospects),
+    payment: computePaymentHealth(prospects),
+    r2,
   };
 }
 
