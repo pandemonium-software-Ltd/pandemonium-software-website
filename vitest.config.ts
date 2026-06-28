@@ -15,6 +15,9 @@ import path from "node:path";
 export default defineConfig({
   test: {
     include: ["src/**/__tests__/**/*.test.ts"],
+    // Standalone Remotion project has its own toolchain — never let
+    // the main suite reach into it.
+    exclude: ["node_modules/**", "remotion/**"],
     environment: "node",
   },
   resolve: {
