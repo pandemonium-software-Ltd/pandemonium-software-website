@@ -186,12 +186,12 @@ export default function PricingPuzzle() {
   const [extraLocations, setExtraLocations] = useState(0);
   const [infoId, setInfoId] = useState<ModuleId | null>(null);
 
-  // The floating total appears once the tier options have scrolled out of
-  // view (i.e. you're past Founder / Standard / Premium).
-  const tierRef = useRef<HTMLDivElement>(null);
+  // The floating total appears as soon as you scroll below the founding
+  // member offer section (a sentinel sits at the very top of the puzzle).
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [showFloat, setShowFloat] = useState(false);
   useEffect(() => {
-    const el = tierRef.current;
+    const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
@@ -246,8 +246,12 @@ export default function PricingPuzzle() {
 
   return (
     <div>
+      {/* Sentinel — when this passes the top of the viewport (i.e. you're
+          below the founding offer), the floating total slides in. */}
+      <div ref={sentinelRef} aria-hidden="true" className="h-0" />
+
       {/* ---- Thin tier bar ---------------------------------------- */}
-      <div ref={tierRef} role="radiogroup" aria-label="Choose a plan" className="grid gap-2.5 sm:grid-cols-3">
+      <div role="radiogroup" aria-label="Choose a plan" className="grid gap-2.5 sm:grid-cols-3">
         {TIERS.map((t) => {
           const active = tier === t.id;
           return (
