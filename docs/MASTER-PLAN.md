@@ -379,6 +379,46 @@ gate for customer-site content changes — Ben is removed from the change→live
 
 ---
 
+## 0.8 — Automated dependency & template-update pipeline — 🔴 Not started
+
+**Objective:** keep both codebases — the **marketing site** and the shared
+**`customer-site-template`** — up to date, compatible and always working, with
+updates flowing **staging → preflight → auto-deploy to prod when all green**, no
+manual step for routine updates. (This is the "auto-promote on green" the routine
+updates earned; feature/visual changes still keep a human glance — see 4.1.)
+
+**Update sources:**
+- **Dependabot / Renovate** PRs (npm) for both code areas — security patches +
+  minor/patch bumps, grouped. Ties to the existing dependency-freshness cadence.
+- **Framework/runtime tracking:** Next.js, `@opennextjs/cloudflare`, `wrangler`,
+  React — latest stable watched; **majors flagged for human review**, not auto.
+
+**Pipeline (per update PR, via GitHub Actions):**
+1. **Preflight** — `tsc --noEmit` + `vitest run` + `npm audit` + `next build`
+   (+ the T.1 E2E harness once it lands). Red → stop; never proceeds.
+2. **Auto-deploy to staging** (`deploy:staging`).
+3. **Automated smoke on staging** — key pages return 200, critical journeys pass,
+   **Core Web Vitals not regressed** (Lighthouse budget), no new console/Sentry errors.
+4. **All green → auto-merge to `main` → auto-deploy to production.** Zero human
+   action for routine patch/minor/dep updates.
+5. **`customer-site-template` updates additionally run the 0.7 canary** — deploy to
+   a canary customer site → smoke → **batched fleet rollout with kill-switch/rollback**.
+   Never blast the fleet on green-staging alone.
+
+**Safety:**
+- **Major-version bumps excluded from auto-merge** — they open a review PR + manual
+  staging soak.
+- **Rollback:** every auto-deploy is a discrete commit; failed post-deploy smoke →
+  auto-revert + alert. Cloudflare retains prior Worker versions for instant rollback.
+- **Cadence:** weekly dependency run + monthly framework check (`health check`).
+
+**DoD:** a patch/minor dep PR flows green-staging → auto-prod with zero human action ·
+a deliberately-breaking bump is caught at preflight or smoke and never deploys ·
+a template update is canary-gated before fleet · majors require review · a failed
+prod smoke auto-rolls-back.
+
+---
+
 # MODULE T — Onboarding Test Flow & Feedback Loop
 
 *Proves the journey works before real users; surfaces real friction after. The Onboarding Hub is the highest-risk surface (fully self-service, no human mid-flow).*
