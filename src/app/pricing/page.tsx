@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import PricingCalculator from "@/components/PricingCalculator";
+import PricingPuzzle from "@/components/PricingPuzzle";
 import FoundingMemberStrip from "@/components/FoundingMemberStrip";
 import Faq from "@/components/Faq";
 import { site } from "@/lib/site";
@@ -43,33 +43,7 @@ export default function PricingPage() {
             <FoundingMemberStrip />
           </div>
 
-          <PricingCalculator />
-
-          {/* Premium tier — coming soon (anchor; not yet purchasable) */}
-          <div className="mt-12 overflow-hidden rounded-2xl border-2 border-navy-900 bg-navy-900 p-8 text-white md:p-10">
-            <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="font-serif text-2xl font-semibold md:text-3xl">
-                    Premium — Done-for-you
-                  </h2>
-                  <span className="inline-flex items-center rounded-full bg-ember-500 px-3 py-0.5 text-sm font-semibold text-white">
-                    Coming soon
-                  </span>
-                </div>
-                <p className="mt-3 text-[1.05rem] leading-relaxed text-cream-100/90">
-                  Hands-off. I run the lot for you — managed hosting and domain
-                  on your behalf, premium designs, your newsletter written and
-                  sent, monthly review campaigns, a higher change allowance and
-                  priority turnaround.
-                </p>
-              </div>
-              <div className="md:text-right">
-                <p className="font-serif text-3xl font-semibold">£149<span className="text-lg font-normal text-cream-100/70">/mo</span></p>
-                <p className="mt-1 text-sm text-cream-100/70">+ setup · launching soon</p>
-              </div>
-            </div>
-          </div>
+          <PricingPuzzle />
 
           <div className="mt-14 rounded-2xl bg-cream-100 p-8 md:p-10">
             <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
