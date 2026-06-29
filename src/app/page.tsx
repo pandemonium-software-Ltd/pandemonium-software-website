@@ -1,6 +1,5 @@
 import Link from "next/link";
-import HeroOpener from "@/components/HeroOpener";
-import SelfBuildingSite from "@/components/SelfBuildingSite";
+import HeroForge from "@/components/HeroForge";
 import AuroraBackground from "@/components/AuroraBackground";
 import PuzzleAssembly from "@/components/PuzzleAssembly";
 import TemplateCarousel from "@/components/TemplateCarousel";
@@ -40,28 +39,29 @@ const HOMEPAGE_COMBOS: Array<{
 export default function HomePage() {
   return (
     <>
-      {/* Hero */}
-      <section className="relative overflow-hidden bg-cream-50 pb-20 pt-14 md:pb-28 md:pt-20">
+      {/* Hero — clean, animation-led. A short headline sits above the
+          HeroForge centrepiece (modules snap into a site over the
+          aurora). The longer story lives in the sections below. */}
+      <section className="relative overflow-hidden bg-cream-50 pb-16 pt-12 md:pb-24 md:pt-16">
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 top-0 -z-10 h-[520px] bg-gradient-to-b from-cream-100 via-cream-50 to-cream-50"
+          className="absolute inset-x-0 top-0 -z-10 h-[640px] bg-gradient-to-b from-cream-100 via-cream-50 to-cream-50"
         />
         <AuroraBackground />
-        <div className="container-content grid items-center gap-14 lg:grid-cols-[1.15fr_1fr]">
-          <div>
+        <div className="container-content">
+          <div className="mx-auto max-w-2xl text-center">
             <span className="eyebrow">
-              ModuForge — websites for UK trades and small businesses
+              ModuForge — websites for UK trades &amp; small businesses
             </span>
-            <HeroOpener text="Professional websites for UK trades and small businesses. No hassle, no tech headaches, just a site that brings in work." />
-
-            <p className="prose-body mt-6 max-w-[42rem]">
-              I build a smart, mobile-friendly website for your business in
-              two weeks. You get a proper online home, a clear way for
-              customers to find you, and you keep ownership of everything —
-              forever. No lock-in, no lead fees, no jargon. Proudly
-              Oxfordshire-based, serving the UK.
+            <h1 className="heading-1 mt-3">
+              Websites that{" "}
+              <span className="text-ember-600">bring in work.</span>
+            </h1>
+            <p className="prose-body mx-auto mt-5 max-w-xl">
+              Pick the modules your trade needs. I build it in two weeks — and
+              you own every bit of it, forever.
             </p>
-            <div className="mt-10 flex flex-wrap items-center gap-4">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
               <Link href="/pricing" className="btn-primary">
                 See what&apos;s included
               </Link>
@@ -69,21 +69,21 @@ export default function HomePage() {
                 Start your enquiry
               </Link>
             </div>
-            <p className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-navy-600">
-              <span className="inline-flex items-center gap-2">
-                <DotIcon /> Built in two weeks
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <DotIcon /> You own everything
-              </span>
-              <span className="inline-flex items-center gap-2">
-                <DotIcon /> No long contracts
-              </span>
-            </p>
           </div>
-          <div className="relative mx-auto w-full max-w-[560px]">
-            <SelfBuildingSite className="h-auto w-full" />
-          </div>
+
+          <HeroForge className="mt-12 md:mt-16" />
+
+          <p className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-navy-600">
+            <span className="inline-flex items-center gap-2">
+              <DotIcon /> Built in two weeks
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <DotIcon /> You own everything
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <DotIcon /> No long contracts
+            </span>
+          </p>
         </div>
       </section>
 
