@@ -307,6 +307,37 @@ documented cutover so Notion can be switched off.
 
 ---
 
+## 0.7 — Customer-site change safety (preview-all + template canary) — 🔴 Not started
+
+**Objective:** extend the "never push untested to live" discipline to **customer
+sites**, not just the marketing site.
+
+**Today:**
+- ✅ **Per-customer content changes** (monthly change requests) already preview →
+  customer-approve → promote (`customer-site-build` → `customer-site-promote`,
+  `/account/[token]/approve-change/[crId]`). Gated.
+- ⚠️ **Platform-wide template changes** (perf fixes, framework/dep updates, new
+  features in `customer-site-template/`) have **no staging/canary** — a bad change
+  reaches every site on its next rebuild. **Biggest gap.**
+- ⚠️ **Operator one-off fixes** to a single live site *can* use preview→promote but
+  it isn't enforced.
+
+**Remaining:**
+- **Template canary rollout:** deploy `customer-site-template` changes to a
+  **canary customer site** (a dedicated test site, or the first opted-in client)
+  first → automated smoke checks (builds, key pages 200, Core Web Vitals not
+  regressed) → only then roll out to the rest (batched, with a kill-switch/rollback).
+- **Preview-before-live for all customer-site changes**, operator-initiated ones
+  included — never a direct push to a live customer domain.
+- **Per-site smoke check** wired into the build callback (HTTP 200 + basic render)
+  before a promote completes; failure → escalate, don't promote.
+
+**DoD:** a deliberately-broken template change is caught on the canary and never
+reaches other live sites · every customer-site change (content or platform) passes
+through preview/approval or an automated smoke gate before promote.
+
+---
+
 # MODULE T — Onboarding Test Flow & Feedback Loop
 
 *Proves the journey works before real users; surfaces real friction after. The Onboarding Hub is the highest-risk surface (fully self-service, no human mid-flow).*
