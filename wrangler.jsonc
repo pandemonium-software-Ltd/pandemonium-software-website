@@ -10,6 +10,9 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "pandemonium-software-website",
+	// Pin the account (you're logged into two) so every command targets the
+	// account that holds prod — proton (Benpandher@proton.me).
+	"account_id": "4954f6ecbf7c61ae8a227684bbee33e9",
 	"main": ".open-next/worker.js",
 	"compatibility_date": "2026-04-11",
 	"compatibility_flags": [
