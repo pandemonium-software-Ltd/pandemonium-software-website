@@ -95,7 +95,7 @@
 				{
 					"binding": "pandemonium_analytics",
 					"database_name": "pandemonium-analytics-staging",
-					"database_id": "REPLACE_WITH_STAGING_D1_ID",
+					"database_id": "22f31661-2386-4d7f-8ec4-aa2e00e147d2",
 					"remote": true
 				}
 			],
