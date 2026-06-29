@@ -15,7 +15,7 @@
 // Reduced-motion users still get every state; only the easing relaxes.
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { site } from "@/lib/site";
 import {
   CalendarIcon,
@@ -186,12 +186,11 @@ export default function PricingPuzzle() {
   const [extraLocations, setExtraLocations] = useState(0);
   const [infoId, setInfoId] = useState<ModuleId | null>(null);
 
-  // The floating total appears as soon as you scroll below the founding
-  // member offer section (a sentinel sits at the very top of the puzzle).
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  // The floating total appears as soon as the pricing intro text scrolls
+  // off the top (sentinel rendered just after it in pricing/page.tsx).
   const [showFloat, setShowFloat] = useState(false);
   useEffect(() => {
-    const el = sentinelRef.current;
+    const el = document.getElementById("pricing-total-sentinel");
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
@@ -246,10 +245,6 @@ export default function PricingPuzzle() {
 
   return (
     <div>
-      {/* Sentinel — when this passes the top of the viewport (i.e. you're
-          below the founding offer), the floating total slides in. */}
-      <div ref={sentinelRef} aria-hidden="true" className="h-0" />
-
       {/* ---- Thin tier bar ---------------------------------------- */}
       <div role="radiogroup" aria-label="Choose a plan" className="grid gap-2.5 sm:grid-cols-3">
         {TIERS.map((t) => {

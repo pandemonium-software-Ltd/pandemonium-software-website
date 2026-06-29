@@ -34,6 +34,8 @@ export default function PricingPage() {
             time. No contract, no lock-in, no sneaky renewals.
           </p>
         </div>
+        {/* When this scrolls past the top, the floating total appears. */}
+        <div id="pricing-total-sentinel" aria-hidden="true" className="h-0" />
       </section>
 
       {/* Calculator */}
