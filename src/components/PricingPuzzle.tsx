@@ -458,25 +458,36 @@ export default function PricingPuzzle() {
             <SitePreview active={effective} extraLocations={extraLocations} premium={premium} ring={TIER_RING[tier]} />
           </div>
 
-          {/* Running total — desktop */}
-          <div className="mt-4 hidden items-center justify-between gap-4 rounded-2xl bg-navy-950 px-6 py-4 text-white shadow-lift lg:flex">
-            {premium ? (
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-ember-300">Premium · done-for-you</p>
-                <p className="font-serif text-2xl font-semibold">£149<span className="text-sm font-normal text-cream-300/70">/mo</span></p>
-              </div>
-            ) : (
-              <div className="flex items-end gap-6">
-                <Total label="Setup" value={formatGBP(fees.setup)} />
-                <Total label="Monthly" value={`${formatGBP(fees.monthly)}`} suffix="/mo" />
-                <Total label="First year" value={formatGBP(firstYear)} accent />
-              </div>
-            )}
-            <Link href={site.enquiryPath} className="btn-primary flex-none !bg-white !text-navy-900 hover:!bg-ember-400 hover:!text-white">
-              {ctaLabel}
-            </Link>
-          </div>
         </div>
+      </div>
+
+      {/* Running total — desktop: floats bottom-right, always visible */}
+      <div className="fixed bottom-6 right-6 z-50 hidden w-[300px] rounded-2xl bg-navy-950/95 p-5 text-white shadow-lift ring-1 ring-white/10 backdrop-blur lg:block">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ember-300">
+          {premium ? "Premium · done-for-you" : "Your total"}
+        </p>
+        {premium ? (
+          <p className="mt-2 font-serif text-3xl font-semibold">
+            £149<span className="text-base font-normal text-cream-300/70">/mo</span>
+          </p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            <TotalRow label="Setup · one-off" value={formatGBP(fees.setup)} />
+            <TotalRow label="Monthly" value={`${formatGBP(fees.monthly)}/mo`} />
+            <div className="!mt-3 flex items-baseline justify-between border-t border-white/10 pt-3">
+              <span className="text-[12px] font-semibold text-cream-200/80">First year</span>
+              <span className="font-serif text-2xl font-semibold text-ember-400">
+                {formatGBP(firstYear)}
+              </span>
+            </div>
+          </div>
+        )}
+        <Link
+          href={site.enquiryPath}
+          className="btn-primary mt-4 w-full !bg-white !text-navy-900 hover:!bg-ember-400 hover:!text-white"
+        >
+          {ctaLabel}
+        </Link>
       </div>
 
       {/* Running total — mobile sticky */}
@@ -503,14 +514,11 @@ export default function PricingPuzzle() {
   );
 }
 
-function Total({ label, value, suffix, accent }: { label: string; value: string; suffix?: string; accent?: boolean }) {
+function TotalRow({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-[11px] uppercase tracking-wider text-cream-300/60">{label}</p>
-      <p className={["font-serif text-2xl font-semibold leading-none", accent ? "text-ember-400" : "text-white"].join(" ")}>
-        {value}
-        {suffix && <span className="text-sm font-normal text-cream-300/70">{suffix}</span>}
-      </p>
+    <div className="flex items-baseline justify-between">
+      <span className="text-[12px] text-cream-200/70">{label}</span>
+      <span className="font-serif text-lg font-semibold text-white">{value}</span>
     </div>
   );
 }
