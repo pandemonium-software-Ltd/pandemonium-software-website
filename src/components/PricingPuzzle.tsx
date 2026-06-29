@@ -578,38 +578,32 @@ function SitePreview({
           </LabeledBlock>
         </FlyBlock>
 
-        {/* Booking */}
-        <FlyBlock on={active.booking}>
+        {/* Booking — a calendar section */}
+        <FlyBlock on={active.booking} maxH={210}>
           <LabeledBlock icon={<CalendarIcon />} name="Online Booking" tone="navy">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1.5">
-                <div className="h-3 w-24 rounded bg-navy-200" />
-                <div className="h-2.5 w-32 rounded bg-navy-100" />
-              </div>
-              <div className="h-8 w-24 rounded-md" style={{ background: NAVY }} />
-            </div>
+            <MiniCalendar />
           </LabeledBlock>
         </FlyBlock>
 
-        {/* Enquiry */}
-        <FlyBlock on={active.enquiry}>
+        {/* Enquiry — a fuller contact form */}
+        <FlyBlock on={active.enquiry} maxH={210}>
           <LabeledBlock icon={<MailIcon />} name="Enquiry Form" tone="navy">
             <div className="space-y-2">
-              <div className="h-6 w-full rounded bg-cream-100" />
-              <div className="flex items-center justify-between">
-                <div className="h-6 w-2/3 rounded bg-cream-100" />
-                <div className="h-7 w-20 rounded-md" style={{ background: EMBER }} />
+              <div className="grid grid-cols-2 gap-2">
+                <Field placeholder="Your name" />
+                <Field placeholder="Phone" />
               </div>
-            </div>
-          </LabeledBlock>
-        </FlyBlock>
-
-        {/* Newsletter */}
-        <FlyBlock on={active.newsletter}>
-          <LabeledBlock icon={<PlaneIcon />} name="Newsletter" tone="navy">
-            <div className="flex items-center gap-2">
-              <div className="h-7 flex-1 rounded bg-cream-100" />
-              <div className="h-7 w-20 rounded-md" style={{ background: EMBER }} />
+              <Field placeholder="Email address" />
+              <div className="rounded-md border border-navy-200 bg-white px-2.5 py-2">
+                <div className="h-2 w-24 rounded bg-navy-200" />
+                <div className="mt-1.5 h-2 w-full rounded bg-cream-100" />
+                <div className="mt-1 h-2 w-3/4 rounded bg-cream-100" />
+              </div>
+              <div className="flex justify-end">
+                <div className="flex h-7 w-24 items-center justify-center rounded-md text-[10px] font-semibold text-white" style={{ background: EMBER }}>
+                  Send enquiry
+                </div>
+              </div>
             </div>
           </LabeledBlock>
         </FlyBlock>
@@ -622,6 +616,27 @@ function SitePreview({
               <span className="ml-auto h-3 w-14 rounded bg-navy-100" />
             </div>
           </LabeledBlock>
+        </FlyBlock>
+
+        {/* Newsletter — a sign-up section at the bottom of the site */}
+        <FlyBlock on={active.newsletter} maxH={150}>
+          <div className="rounded-lg bg-navy-900 px-4 py-3.5">
+            <div className="mb-2 flex items-center gap-1.5 text-cream-100/70">
+              <span className="scale-[0.8]">
+                <PlaneIcon />
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider">Newsletter</span>
+            </div>
+            <p className="text-[12px] font-semibold text-white">Get tips &amp; offers in your inbox</p>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex h-8 flex-1 items-center rounded-md bg-white/15 px-2.5">
+                <span className="h-2 w-28 rounded bg-white/35" />
+              </div>
+              <div className="flex h-8 w-24 items-center justify-center rounded-md text-[10px] font-semibold text-white" style={{ background: EMBER }}>
+                Subscribe
+              </div>
+            </div>
+          </div>
         </FlyBlock>
 
         {/* Footer (always) */}
@@ -641,12 +656,20 @@ function SitePreview({
 }
 
 // A block that animates in from the left (toward the list) when on.
-function FlyBlock({ on, children }: { on: boolean; children: React.ReactNode }) {
+function FlyBlock({
+  on,
+  children,
+  maxH = 120,
+}: {
+  on: boolean;
+  children: React.ReactNode;
+  maxH?: number;
+}) {
   return (
     <div
       className={FLY}
       style={{
-        maxHeight: on ? 120 : 0,
+        maxHeight: on ? maxH : 0,
         opacity: on ? 1 : 0,
         marginTop: on ? 12 : 0,
         transform: on ? "translateX(0) scale(1)" : "translateX(-28px) scale(0.97)",
@@ -687,6 +710,86 @@ function LabeledBlock({
       </div>
       {children}
     </div>
+  );
+}
+
+// A mock form field that reads as an input (label + placeholder).
+function Field({ placeholder }: { placeholder: string }) {
+  return (
+    <div className="flex h-8 items-center rounded-md border border-navy-200 bg-white px-2.5 text-[10px] text-navy-400">
+      {placeholder}
+    </div>
+  );
+}
+
+// Compact month calendar for the Booking block. A few days are shown as
+// available (cream) with one selected (ember) — enough to read as a real
+// booking calendar without being busy.
+function MiniCalendar() {
+  const lead = 3; // empty cells before day 1 (month starts mid-week)
+  const days = Array.from({ length: 30 }, (_, i) => i + 1);
+  const available = new Set([4, 5, 11, 18, 19, 25]);
+  const selected = 12;
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-navy-800">June 2026</span>
+        <span className="flex gap-1 text-navy-400">
+          <Chevron dir="left" />
+          <Chevron dir="right" />
+        </span>
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center">
+        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+          <span key={i} className="text-[7px] font-semibold uppercase text-navy-400">
+            {d}
+          </span>
+        ))}
+        {Array.from({ length: lead }).map((_, i) => (
+          <span key={`lead-${i}`} />
+        ))}
+        {days.map((d) => {
+          const isSel = d === selected;
+          const isAvail = available.has(d);
+          return (
+            <span
+              key={d}
+              className={[
+                "flex h-4 items-center justify-center rounded text-[8px] leading-none",
+                isSel
+                  ? "font-semibold text-white"
+                  : isAvail
+                    ? "bg-ember-100 text-ember-700"
+                    : "text-navy-400",
+              ].join(" ")}
+              style={isSel ? { background: EMBER } : undefined}
+            >
+              {d}
+            </span>
+          );
+        })}
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="text-[9px] text-navy-500">Thu 12 June · 2:00pm</span>
+        <span className="flex h-6 w-20 items-center justify-center rounded-md text-[10px] font-semibold text-white" style={{ background: NAVY }}>
+          Book
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Chevron({ dir }: { dir: "left" | "right" }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d={dir === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"}
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
