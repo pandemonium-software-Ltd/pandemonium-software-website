@@ -951,20 +951,32 @@ reduced-motion safe; each feature ships as its own revertible commit.*
   soon" anchor card.
 - Mobile pass on hero / aurora / carousel.
 
-**🔴 To build (against staging — see 0.1 — so they're verified before going live):**
-- **Hero opener (recommended #1):** the headline assembles from brand
-  puzzle fragments on scroll, over the aurora. The bold first beat, web + mobile.
-- **Pricing puzzle (frames in):** the pricing page becomes a puzzle board —
-  tier **frames** (Founding / Standard / Premium) you pick, **module pieces**
-  that snap into the board on tap, with **live setup / monthly / first-year
-  totals** (from `fees.ts`) and the assembled board as a mini "your site"
-  preview. **Mobile:** module pieces show name + price + an **(i) info icon**
-  → bottom-sheet explanation; sticky total bar + CTA. Built to polish on both
-  viewports.
+**🟡 Built on STAGING — awaiting Ben's visual sign-off, 2026-06-29:**
+Deployed to `pandemonium-software-website-staging.benpandher.workers.dev`
+(staging D1 + R2, no prod data). Both pages 200; SSR markers verified. The
+motion needs a real browser/device check before promoting to `main`.
+- **Hero opener (#1) — built.** `HeroOpener.tsx`: the homepage h1 assembles
+  from scattered brand fragments on load (easeOutBack overshoot snap,
+  staggered L→R) over the aurora, with a subtle scroll parallax. Full text
+  stays in the real `<h1>` (SEO + a11y); reduced-motion → instant.
+- **Pricing puzzle — built.** `PricingPuzzle.tsx` replaces the linear
+  calculator: tier frames (Founding / Standard / Premium-coming-soon),
+  module pieces that snap in with a mini "your site" preview popping the
+  matching block in/out, live totals via `calculateFees()` (fees.ts =
+  source of truth). Mobile: name + price + (i) bottom-sheet, sticky total
+  bar + CTA. Founding bundles the 4 content modules (locked "Included");
+  GBP + multi-location stay optional on every tier.
+  - *Cleanup pending sign-off:* `PricingCalculator.tsx` left in place as a
+    fallback — remove once the puzzle is promoted.
 
-**Why staging-first:** all of the above shipped blind this session (no
-preview) and mobile issues were caught only in production. 0.1 gives a
-preview loop so these land right the first time.
+**Sign-off checklist (Ben, on device + desktop):** hero assembly reads as
+"snap into place" not jitter; pricing pieces snap + preview pops smoothly;
+mobile bottom-sheet + sticky bar usable; totals match expectations across
+all three tiers. Green → PR `staging` → `main` → `npm run deploy`.
+
+**Why staging-first:** the earlier Phase-M work shipped blind (no preview)
+and mobile issues were caught only in production. 0.1 now gives the preview
+loop — these two landed on staging first.
 
 # Backlog carried from `docs/ROADMAP.md` (mapped into phases)
 
