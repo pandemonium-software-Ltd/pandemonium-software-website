@@ -812,6 +812,38 @@ F. **3.1 Premium + 3.2 Retention → 3.3 Upsell + 3.4 Win-back + 3.5 Annual revi
 
 ---
 
+# PHASE M — Marketing site design & animation
+
+*Make modu-forge.co.uk feel premium and alive. Reuses a shared motion
+language (brand-outlined puzzle pieces, scatter→assemble, aurora). All
+reduced-motion safe; each feature ships as its own revertible commit.*
+
+**✅ Shipped (live, 2026-06):**
+- Scroll-driven puzzle-assembly section on the homepage (assemble down /
+  reverse up).
+- Self-building site hero — scroll-driven (frame fills as you scroll,
+  reverses up) + drifting brand aurora background.
+- 3D coverflow template carousel (single card on mobile, coverflow on
+  desktop).
+- Public pricing display refreshed to target prices; Premium "coming
+  soon" anchor card.
+- Mobile pass on hero / aurora / carousel.
+
+**🔴 To build (against staging — see 0.1 — so they're verified before going live):**
+- **Hero opener (recommended #1):** the headline assembles from brand
+  puzzle fragments on scroll, over the aurora. The bold first beat, web + mobile.
+- **Pricing puzzle (frames in):** the pricing page becomes a puzzle board —
+  tier **frames** (Founding / Standard / Premium) you pick, **module pieces**
+  that snap into the board on tap, with **live setup / monthly / first-year
+  totals** (from `fees.ts`) and the assembled board as a mini "your site"
+  preview. **Mobile:** module pieces show name + price + an **(i) info icon**
+  → bottom-sheet explanation; sticky total bar + CTA. Built to polish on both
+  viewports.
+
+**Why staging-first:** all of the above shipped blind this session (no
+preview) and mobile issues were caught only in production. 0.1 gives a
+preview loop so these land right the first time.
+
 # Backlog carried from `docs/ROADMAP.md` (mapped into phases)
 
 | ROADMAP # | Item | Maps to / status |
