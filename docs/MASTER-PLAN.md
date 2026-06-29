@@ -168,10 +168,37 @@ with **isolated bindings** — staging D1 (`pandemonium-analytics-staging`,
 `22f31661…`) + staging R2 (`moduforge-customer-assets-staging`), separate from
 prod. Deploy with `npm run deploy:staging`. `account_id` pinned to proton
 (`4954…`). `DEPLOY.md` written; `npm run preflight` added.
-**Remaining:** set staging secrets (staging Notion DB token, Stripe **test**
-keys, Resend, Anthropic, SESSION_SECRET) via `wrangler secret put … --env
-staging` to fully exercise dynamic routes; create the `staging` git branch.
-Marketing-site UI work can already be previewed on staging without secrets.
+**Remaining:** set staging secrets (below) to exercise dynamic routes; create
+the `staging` git branch. Marketing-site UI (home, pricing, hero, carousel,
+pricing puzzle) can already be previewed on staging **without** secrets.
+
+**Staging secrets — needed only for the dynamic flow (admin, payments, enquiry
+→ Notion, onboarding). Set on the staging Worker only (`--env staging`):**
+
+| Secret | Staging value | Purpose |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | `sk_test_…` (test mode) | checkout / subscriptions |
+| `STRIPE_WEBHOOK_SECRET` | test webhook secret | webhook verification |
+| `NOTION_API_KEY` | token for a **separate staging Notion DB** | prospect/client store — never the live DB |
+| `RESEND_API_KEY` | test/sandbox sender | emails (sandbox so no real client mail) |
+| `ANTHROPIC_API_KEY` | any key (or reuse) | Haiku classification |
+| `SESSION_SECRET` | any long random string | auth/session signing |
+| `INTERNAL_BUILD_SECRET`, `GITHUB_TOKEN` | as needed | build-callback / dispatch (if testing builds) |
+
+```
+npx wrangler secret put STRIPE_SECRET_KEY --env staging
+npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging
+npx wrangler secret put NOTION_API_KEY --env staging
+npx wrangler secret put RESEND_API_KEY --env staging
+npx wrangler secret put ANTHROPIC_API_KEY --env staging
+npx wrangler secret put SESSION_SECRET --env staging
+```
+
+**The critical isolation:** point `NOTION_API_KEY` at a **separate staging Notion
+database** (duplicate the prospect/client DBs into a staging workspace, share with
+the integration) — so test enquiries/payments on staging never touch live customer
+records. Stripe **test** keys + Resend sandbox give the same isolation for
+payments + email. This is what makes the staging flow safe to exercise end-to-end.
 
 **Objective:** Never test on live clients. Every change proves itself in a full staging
 mirror before production.
@@ -335,6 +362,20 @@ sites**, not just the marketing site.
 **DoD:** a deliberately-broken template change is caught on the canary and never
 reaches other live sites · every customer-site change (content or platform) passes
 through preview/approval or an automated smoke gate before promote.
+
+**Policy decision (Ben, 2026-06): the customer's preview-approval is the SOLE human
+gate for customer-site content changes — Ben is removed from the change→live path.**
+- *Already true for clean changes:* customer Approve → auto-dispatches
+  `customer-site-promote` → live in ~2 min; Ben gets an FYI email only, no action
+  (`/account/[token]/approve-change/[crId]`).
+- *To change:* (a) **stop routing escalated change requests to Ben for approval**
+  where the customer's preview approval already covers the risk — let more changes
+  build a preview the customer approves (keep escalation ONLY for genuinely unsafe /
+  out-of-scope / irreversible cases); (b) **trim operator FYI emails** on the promote
+  path to true exceptions (failures), not every successful promote.
+- *Guardrail kept:* this is content on the customer's own site, customer-approved —
+  low risk. Irreversible/billing actions still guarded. Build/test on **staging**
+  (needs staging Notion secret) before prod, per 0.1.
 
 ---
 
