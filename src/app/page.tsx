@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HeroOpener from "@/components/HeroOpener";
 import SelfBuildingSite from "@/components/SelfBuildingSite";
 import AuroraBackground from "@/components/AuroraBackground";
 import PuzzleAssembly from "@/components/PuzzleAssembly";
@@ -51,10 +52,8 @@ export default function HomePage() {
             <span className="eyebrow">
               ModuForge — websites for UK trades and small businesses
             </span>
-            <h1 className="heading-1">
-              Professional websites for UK trades and small businesses. No
-              hassle, no tech headaches, just a site that brings in work.
-            </h1>
+            <HeroOpener text="Professional websites for UK trades and small businesses. No hassle, no tech headaches, just a site that brings in work." />
+
             <p className="prose-body mt-6 max-w-[42rem]">
               I build a smart, mobile-friendly website for your business in
               two weeks. You get a proper online home, a clear way for
