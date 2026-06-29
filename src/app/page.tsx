@@ -49,11 +49,9 @@ export default function HomePage() {
         />
         <AuroraBackground />
         <div className="container-content">
-          <div className="mx-auto max-w-2xl text-center">
-            <span className="eyebrow">
-              ModuForge — websites for UK trades &amp; small businesses
-            </span>
-            <h1 className="heading-1 mt-3">
+          <div className="text-center">
+            {/* Desktop: full-width single line. Mobile: wraps as before. */}
+            <h1 className="heading-1 md:whitespace-nowrap lg:leading-[1.1] lg:[font-size:clamp(3.5rem,6.1vw,4.4rem)]">
               Websites that{" "}
               <span className="text-ember-600">bring in work.</span>
             </h1>
@@ -61,19 +59,21 @@ export default function HomePage() {
               Pick the modules your trade needs. I build it in two weeks — and
               you own every bit of it, forever.
             </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              <Link href="/pricing" className="btn-primary">
-                See what&apos;s included
-              </Link>
-              <Link href={site.enquiryPath} className="btn-secondary">
-                Start your enquiry
-              </Link>
-            </div>
           </div>
 
           <HeroForge className="mt-12 md:mt-16" />
 
-          <p className="mx-auto mt-10 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-navy-600">
+          {/* CTAs moved below the animation */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <Link href="/pricing" className="btn-primary">
+              See what&apos;s included
+            </Link>
+            <Link href={site.enquiryPath} className="btn-secondary">
+              Start your enquiry
+            </Link>
+          </div>
+
+          <p className="mx-auto mt-8 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-navy-600">
             <span className="inline-flex items-center gap-2">
               <DotIcon /> Built in two weeks
             </span>
