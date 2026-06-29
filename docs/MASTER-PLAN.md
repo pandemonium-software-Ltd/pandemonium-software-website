@@ -161,7 +161,17 @@ The whole **Phase A** track plus 0.5 exists to move from today (happy-path auton
 
 *Prerequisite for everything. The difference between "automation as moat" and "automation as liability."*
 
-## 0.1 — Branch strategy & staging environment — 🔴 Not started · **TOP PRIORITY**
+## 0.1 — Branch strategy & staging environment — 🟡 Staging LIVE (2026-06)
+
+**Live:** staging Worker at `pandemonium-software-website-staging.benpandher.workers.dev`
+with **isolated bindings** — staging D1 (`pandemonium-analytics-staging`,
+`22f31661…`) + staging R2 (`moduforge-customer-assets-staging`), separate from
+prod. Deploy with `npm run deploy:staging`. `account_id` pinned to proton
+(`4954…`). `DEPLOY.md` written; `npm run preflight` added.
+**Remaining:** set staging secrets (staging Notion DB token, Stripe **test**
+keys, Resend, Anthropic, SESSION_SECRET) via `wrangler secret put … --env
+staging` to fully exercise dynamic routes; create the `staging` git branch.
+Marketing-site UI work can already be previewed on staging without secrets.
 
 **Objective:** Never test on live clients. Every change proves itself in a full staging
 mirror before production.
