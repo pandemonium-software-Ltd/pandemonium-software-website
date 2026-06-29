@@ -54,5 +54,51 @@
 			"database_id": "c996208f-8f7f-4040-92b4-7a65e5e364ae",
 			"remote": true
 		}
-	]
+	],
+	// --- Staging environment (master-plan 0.1) ---------------------------
+	// A SEPARATE Worker with isolated bindings. Deploy with:
+	//   npm run deploy:staging
+	// It does NOT affect production — wrangler only uses this block when
+	// `--env staging` is passed. Lives at:
+	//   pandemonium-software-website-staging.<your-subdomain>.workers.dev
+	//
+	// TWO PLACEHOLDERS TO FILL IN (create the resources first):
+	//   1. Staging R2 bucket — create it, then it matches "bucket_name" below:
+	//        npx wrangler r2 bucket create moduforge-customer-assets-staging
+	//   2. Staging D1 — create it and paste the returned id into "database_id":
+	//        npx wrangler d1 create pandemonium-analytics-staging
+	//
+	// Then set staging secrets (test/staging values, NOT production):
+	//   npx wrangler secret put NOTION_API_KEY --env staging
+	//   npx wrangler secret put STRIPE_SECRET_KEY --env staging      (sk_test_…)
+	//   npx wrangler secret put STRIPE_WEBHOOK_SECRET --env staging   (test)
+	//   npx wrangler secret put RESEND_API_KEY --env staging
+	//   npx wrangler secret put ANTHROPIC_API_KEY --env staging
+	//   npx wrangler secret put SESSION_SECRET --env staging
+	"env": {
+		"staging": {
+			"name": "pandemonium-software-website-staging",
+			"vars": {
+				"GITHUB_OWNER": "pandemonium-software-Ltd",
+				"GITHUB_REPO": "pandemonium-software-website"
+			},
+			"r2_buckets": [
+				{
+					"binding": "ASSETS_BUCKET",
+					"bucket_name": "moduforge-customer-assets-staging"
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "pandemonium_analytics",
+					"database_name": "pandemonium-analytics-staging",
+					"database_id": "REPLACE_WITH_STAGING_D1_ID",
+					"remote": true
+				}
+			],
+			"observability": {
+				"enabled": true
+			}
+		}
+	}
 }
