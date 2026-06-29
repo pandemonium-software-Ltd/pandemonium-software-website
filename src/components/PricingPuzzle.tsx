@@ -15,7 +15,7 @@
 // Reduced-motion users still get every state; only the easing relaxes.
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { site } from "@/lib/site";
 import {
   CalendarIcon,
@@ -186,6 +186,23 @@ export default function PricingPuzzle() {
   const [extraLocations, setExtraLocations] = useState(0);
   const [infoId, setInfoId] = useState<ModuleId | null>(null);
 
+  // The floating total appears once the tier options have scrolled out of
+  // view (i.e. you're past Founder / Standard / Premium).
+  const tierRef = useRef<HTMLDivElement>(null);
+  const [showFloat, setShowFloat] = useState(false);
+  useEffect(() => {
+    const el = tierRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        setShowFloat(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+      },
+      { threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   const founding = tier === "founding";
   const premium = tier === "premium";
 
@@ -230,7 +247,7 @@ export default function PricingPuzzle() {
   return (
     <div>
       {/* ---- Thin tier bar ---------------------------------------- */}
-      <div role="radiogroup" aria-label="Choose a plan" className="grid gap-2.5 sm:grid-cols-3">
+      <div ref={tierRef} role="radiogroup" aria-label="Choose a plan" className="grid gap-2.5 sm:grid-cols-3">
         {TIERS.map((t) => {
           const active = tier === t.id;
           return (
@@ -461,8 +478,15 @@ export default function PricingPuzzle() {
         </div>
       </div>
 
-      {/* Running total — desktop: floats bottom-right, always visible */}
-      <div className="fixed bottom-6 right-6 z-50 hidden w-[300px] rounded-2xl bg-navy-950/95 p-5 text-white shadow-lift ring-1 ring-white/10 backdrop-blur lg:block">
+      {/* Running total — desktop: slides in bottom-right once you've
+          scrolled past the tier options. */}
+      <div
+        aria-hidden={!showFloat}
+        className={[
+          "fixed bottom-6 right-6 z-50 hidden w-[300px] rounded-2xl bg-navy-950/95 p-5 text-white shadow-lift ring-1 ring-white/10 backdrop-blur transition-all duration-300 lg:block",
+          showFloat ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
+        ].join(" ")}
+      >
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ember-300">
           {premium ? "Premium · done-for-you" : "Your total"}
         </p>
